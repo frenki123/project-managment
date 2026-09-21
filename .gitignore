@@ -1,0 +1,21 @@
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# Go / app
+tmp/
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Excel
+*.xlsx
+.~lock.*

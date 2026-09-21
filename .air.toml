@@ -1,0 +1,15 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "templ generate && sqlc generate && go build -o ./tmp/server ./cmd/server"
+bin = "./tmp/server"
+include_ext = ["go", "templ", "sql"]
+exclude_dir = ["tmp", "data", "static", "internal/db", ".devenv", ".direnv"]
+exclude_regex = ["_templ\\.go"]
+exclude_unchanged = true
+delay = 500
+kill_delay = "1s"
+
+[misc]
+clean_on_exit = true
