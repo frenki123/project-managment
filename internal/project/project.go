@@ -151,14 +151,14 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Project, error) {
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, error) {
-	in, err := validate(in)
-	if err != nil {
-		return Project{}, err
-	}
-	err = q.InTx(ctx, func(txq *db.Queries) error {
+	err := q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("project not found")
 		} else if err != nil {
+			return err
+		}
+		in, err := validate(in)
+		if err != nil {
 			return err
 		}
 		sum, err := txq.SumSubprojectHoursByProject(ctx, id)

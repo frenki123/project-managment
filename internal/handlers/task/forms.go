@@ -246,7 +246,8 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		if err := taskdomain.Delete(r.Context(), q, id); err != nil {
-			app.WriteError(w, r, err)
+			idStr := strconv.FormatInt(id, 10)
+			renderTaskForm(w, r, q, taskFormValues(t), len(t.Weeks) == 0, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err)
 			return
 		}
 		app.Redirect(w, r, afterTask(t))

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -501,5 +502,159 @@ func TestJSONContractConsistency(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), bytes.NewReader([]byte(`{"name":"Tracked"}`))))
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("omitted project_id on tracked task: got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func postForm(t *testing.T, mux *http.ServeMux, path, form string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(form))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	return rr
+}
+
+func TestUIFormMutationRedirects(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	span := "&start_date=" + start.Format("2006-01-02") + "&end_date=" + start.AddDate(0, 0, 28).Format("2006-01-02")
+
+	rr := postForm(t, mux, "/projects", "name=P&total_hours=50"+span)
+	loc := rr.Header().Get("Location")
+	if rr.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/?project=") {
+		t.Fatalf("project create: %d %s", rr.Code, loc)
+	}
+	pid, err := strconv.ParseInt(strings.TrimPrefix(loc, "/?project="), 10, 64)
+	if err != nil || pid < 1 {
+		t.Fatalf("project create redirect id: %s", loc)
+	}
+
+	rr = postForm(t, mux, "/projects/"+strconv.FormatInt(pid, 10), "name=P2&total_hours=50"+span)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10) {
+		t.Fatalf("project update: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	rr = postForm(t, mux, "/subprojects", "name=SP&project_id="+strconv.FormatInt(pid, 10)+"&total_hours=10")
+	loc = rr.Header().Get("Location")
+	spPrefix := "/?project=" + strconv.FormatInt(pid, 10) + "&subproject="
+	if rr.Code != http.StatusSeeOther || !strings.HasPrefix(loc, spPrefix) {
+		t.Fatalf("subproject create: %d %s", rr.Code, loc)
+	}
+	spID, err := strconv.ParseInt(strings.TrimPrefix(loc, spPrefix), 10, 64)
+	if err != nil || spID < 1 {
+		t.Fatalf("subproject create redirect id: %s", loc)
+	}
+
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
+	rr = postForm(t, mux, "/tasks/"+strconv.FormatInt(taskID, 10), "name=T2&project_id="+strconv.FormatInt(pid, 10)+"&subproject_id="+strconv.FormatInt(spID, 10))
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != spPrefix+strconv.FormatInt(spID, 10) {
+		t.Fatalf("task update: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	rr = postForm(t, mux, "/tasks", "name=Idea")
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project=ideas" {
+		t.Fatalf("idea task create: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	empty := postForm(t, mux, "/projects", "name=Empty&total_hours=10"+span)
+	emptyID, err := strconv.ParseInt(strings.TrimPrefix(empty.Header().Get("Location"), "/?project="), 10, 64)
+	if err != nil || emptyID < 1 {
+		t.Fatalf("empty project create: %s", empty.Header().Get("Location"))
+	}
+	rr = postForm(t, mux, "/projects/"+strconv.FormatInt(emptyID, 10)+"/delete", "")
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/" {
+		t.Fatalf("project delete: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	pid := createProject(t, mux, "P", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+
+	postWeek := func(body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, r)
+		return rr
+	}
+
+	rr := postWeek("planned_hours=-5&project=" + strconv.FormatInt(pid, 10))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
+		t.Fatalf("domain error should be 200 + inline cell error: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = postWeek("planned_hours=abc&project=" + strconv.FormatInt(pid, 10))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("parse error should be 400: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
+	pid1 := createProject(t, mux, "P1", start)
+	pid2 := createProject(t, mux, "P2", start)
+	task1 := createTask(t, mux, []byte(`{"name":"In P1","project_id":`+strconv.FormatInt(pid1, 10)+`}`))
+
+	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid2, 10) + `,"name":"SP2","total_hours":10}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(spBody)))
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create subproject %d %s", rr.Code, rr.Body.String())
+	}
+	var sp2 struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &sp2); err != nil {
+		t.Fatal(err)
+	}
+
+	getTasks := func(query string) []struct {
+		ID int64 `json:"id"`
+	} {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks"+query, nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("list %s: %d %s", query, rr.Code, rr.Body.String())
+		}
+		var out struct {
+			Tasks []struct {
+				ID int64 `json:"id"`
+			} `json:"tasks"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Tasks
+	}
+
+	if tasks := getTasks(""); len(tasks) != 1 || tasks[0].ID != ideaID {
+		t.Fatalf("default view should be ideas only: %#v", tasks)
+	}
+	if tasks := getTasks("?project_id=" + strconv.FormatInt(pid1, 10)); len(tasks) != 1 || tasks[0].ID != task1 {
+		t.Fatalf("project filter: %#v", tasks)
+	}
+	if tasks := getTasks("?project_id=" + strconv.FormatInt(pid1, 10) + "&subproject_id=" + strconv.FormatInt(sp2.ID, 10)); len(tasks) != 1 || tasks[0].ID != task1 {
+		t.Fatalf("mismatched subproject should reset to project scope: %#v", tasks)
+	}
+	if tasks := getTasks("/all"); len(tasks) != 2 {
+		t.Fatalf("all-tasks route should list every task: %#v", tasks)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?subproject_id=999", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("missing subproject filter should be 404: %d %s", rr.Code, rr.Body.String())
 	}
 }

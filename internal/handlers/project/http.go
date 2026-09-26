@@ -144,8 +144,14 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		if err := domain.Delete(r.Context(), q, id); err != nil {
+		p, err := domain.Get(r.Context(), q, id)
+		if err != nil {
 			app.WriteError(w, r, err)
+			return
+		}
+		if err := domain.Delete(r.Context(), q, id); err != nil {
+			httpErr := app.HTTPErrorFrom(err)
+			app.RenderPage(w, r, httpErr.Status, views.ProjectForm(projectFormData(p, httpErr.Message)))
 			return
 		}
 		app.Redirect(w, r, "/")

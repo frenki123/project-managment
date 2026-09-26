@@ -201,7 +201,12 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
-			app.WriteError(w, r, err)
+			idStr := strconv.FormatInt(id, 10)
+			renderSubprojectForm(w, r, q, views.SubprojectFormValues{
+				Name:       s.Name,
+				ProjectID:  strconv.FormatInt(s.ProjectID, 10),
+				TotalHours: strconv.FormatFloat(s.TotalHours, 'f', -1, 64),
+			}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", err)
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))

@@ -34,7 +34,7 @@ func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTi
 		return
 	}
 	if app.IsHTMX(r) {
-		app.RenderPage(w, r, http.StatusOK, views.Grid(grid))
+		app.RenderFragment(w, r, http.StatusOK, views.Grid(grid))
 		return
 	}
 	app.RenderPage(w, r, http.StatusOK, views.GridPage(grid))

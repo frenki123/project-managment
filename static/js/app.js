@@ -58,7 +58,7 @@
 	});
 
 	document.body.addEventListener("htmx:responseError", (event) => {
-		lastActive = null;
+		if (event.detail.elt?.matches(".week-cell input")) lastActive = null;
 		const toast = document.getElementById("toast");
 		if (!toast) {
 			return;

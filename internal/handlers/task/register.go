@@ -2,6 +2,8 @@ package taskhandler
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 
 	"cad-development/internal/app"
@@ -12,6 +14,7 @@ import (
 func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("GET /{$}", gridPage(q))
 	mux.HandleFunc("GET /api/v1/tasks", app.JSONList(q, listTasks))
+	mux.HandleFunc("GET /api/v1/tasks/all", app.JSONList(q, allTasks))
 	mux.HandleFunc("POST /api/v1/tasks", app.JSONCreate(q, taskdomain.Create))
 	mux.HandleFunc("GET /api/v1/tasks/{id}", app.JSONGet(q, taskdomain.Get))
 	mux.HandleFunc("PUT /api/v1/tasks/{id}", app.JSONUpdate(q, taskdomain.Update))
@@ -35,6 +38,18 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	if subprojectErr != nil {
 		return taskdomain.TasksResponse{}, subprojectErr
 	}
+	if subprojectID != nil {
+		sp, err := q.GetSubproject(ctx, *subprojectID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return taskdomain.TasksResponse{}, app.Missing("subproject not found")
+		}
+		if err != nil {
+			return taskdomain.TasksResponse{}, err
+		}
+		if projectID != nil && *projectID != sp.ProjectID {
+			subprojectID = nil
+		}
+	}
 	var (
 		list []taskdomain.Task
 		err  error
@@ -47,8 +62,16 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	case projectID != nil:
 		list, err = taskdomain.ListByProject(ctx, q, *projectID)
 	default:
-		list, err = taskdomain.List(ctx, q)
+		list, err = taskdomain.ListIdeas(ctx, q)
 	}
+	if err != nil {
+		return taskdomain.TasksResponse{}, err
+	}
+	return taskdomain.TasksResponse{Tasks: list}, nil
+}
+
+func allTasks(ctx context.Context, q *db.Queries, _ *http.Request) (taskdomain.TasksResponse, error) {
+	list, err := taskdomain.List(ctx, q)
 	if err != nil {
 		return taskdomain.TasksResponse{}, err
 	}
