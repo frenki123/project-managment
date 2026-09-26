@@ -1,0 +1,130 @@
+body {
+	margin: 0;
+}
+
+.app-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.6rem 1rem;
+	border-bottom: 1px solid var(--pico-muted-border-color, #ccc);
+}
+
+.app-header nav {
+	display: flex;
+	gap: 1rem;
+}
+
+.brand {
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.workspace {
+	display: grid;
+	grid-template-columns: 1fr 26rem;
+	height: calc(100vh - 3.2rem);
+}
+
+.grid-main {
+	min-width: 0;
+	overflow: auto;
+	padding: 0.75rem;
+}
+
+.side-panel {
+	border-left: 1px solid var(--pico-muted-border-color, #ccc);
+	overflow: auto;
+	padding: 0.75rem;
+}
+
+.filters,
+.totals,
+.locks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem 1.25rem;
+	align-items: end;
+	margin-bottom: 0.75rem;
+}
+
+.filters label {
+	margin: 0;
+}
+
+.table-scroll {
+	overflow: auto;
+	max-height: calc(100vh - 14rem);
+}
+
+.week-table {
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 0.8rem;
+	white-space: nowrap;
+}
+
+.week-table th,
+.week-table td {
+	border: 1px solid var(--pico-muted-border-color, #ccc);
+	padding: 0.2rem 0.35rem;
+	background: var(--pico-background-color, #fff);
+}
+
+.week-table .sticky {
+	position: sticky;
+	z-index: 1;
+}
+
+.week-table thead .sticky {
+	z-index: 2;
+}
+
+.c0 { left: 0; min-width: 10rem; }
+.c1 { left: 10rem; min-width: 8rem; }
+.c2 { left: 18rem; min-width: 8rem; }
+.c3 { left: 26rem; min-width: 5rem; }
+.c4 { left: 31rem; min-width: 5rem; }
+.c5 { left: 36rem; min-width: 6rem; }
+
+.week-col,
+.week-cell {
+	min-width: 5.5rem;
+}
+
+.week-cell {
+	vertical-align: top;
+}
+
+.week-cell input {
+	width: 100%;
+	margin: 0 0 0.15rem;
+	padding: 0.15rem;
+}
+
+.linkish {
+	background: none;
+	border: none;
+	padding: 0;
+	color: var(--pico-primary, #0d6efd);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.overrun {
+	color: #b00020;
+	font-weight: 700;
+}
+
+.error {
+	color: #b00020;
+}
+
+.form-page {
+	padding-top: 1rem;
+	max-width: 40rem;
+}
+
+.panel-body h2 {
+	margin-top: 0;
+}

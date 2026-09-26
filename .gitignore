@@ -18,4 +18,13 @@ data/
 
 # Excel
 *.xlsx
+*.ods
 .~lock.*
+
+# sqlc generated (run `just generate`)
+internal/db/db.go
+internal/db/models.go
+internal/db/*.sql.go
+
+# templ generated (run `just generate`)
+internal/views/*_templ.go

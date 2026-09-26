@@ -1,0 +1,122 @@
+package views
+
+templ TaskForm(data TaskFormData) {
+	@Layout(data.Title) {
+		<main class="container form-page">
+			<h1>{ data.Title }</h1>
+			if data.Error != "" {
+				<p class="error">{ data.Error }</p>
+			}
+			<form method="post" action={ templ.URL(data.Action) }>
+				<label>Name<input type="text" name="name" value={ data.Task.Name } required/></label>
+				<label>Description<textarea name="description">{ data.Task.Description }</textarea></label>
+				<label>Implementation notes<textarea name="implementation_notes">{ data.Task.ImplementationNotes }</textarea></label>
+				<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
+				<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
+				<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
+				<label>
+					Project
+					<select name="project_id">
+						<option value="">Ideas</option>
+						for _, o := range data.Projects {
+							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Subproject
+					<select name="subproject_id">
+						<option value="">None</option>
+						for _, o := range data.Subprojects {
+							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+						}
+					</select>
+				</label>
+				<button type="submit">Save</button>
+			</form>
+			if data.DeleteAction != "" {
+				<form method="post" action={ templ.URL(data.DeleteAction) }>
+					<button type="submit" class="secondary">Delete</button>
+				</form>
+			}
+		</main>
+	}
+}
+
+templ ProjectForm(data ProjectFormData) {
+	@Layout(data.Title) {
+		<main class="container form-page">
+			<h1>{ data.Title }</h1>
+			if data.Error != "" {
+				<p class="error">{ data.Error }</p>
+			}
+			<form method="post" action={ templ.URL(data.Action) }>
+				<label>Name<input type="text" name="name" value={ data.Project.Name } required/></label>
+				<label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label>
+				<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
+				<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
+				<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
+				<button type="submit">Save</button>
+			</form>
+			if data.DeleteAction != "" {
+				<form method="post" action={ templ.URL(data.DeleteAction) }>
+					<button type="submit" class="secondary">Delete</button>
+				</form>
+			}
+		</main>
+	}
+}
+
+templ SubprojectForm(data SubprojectFormData) {
+	@Layout(data.Title) {
+		<main class="container form-page">
+			<h1>{ data.Title }</h1>
+			if data.Error != "" {
+				<p class="error">{ data.Error }</p>
+			}
+			<form method="post" action={ templ.URL(data.Action) }>
+				<label>Name<input type="text" name="name" value={ data.Subproject.Name } required/></label>
+				<label>
+					Project
+					<select name="project_id" required>
+						for _, o := range data.Projects {
+							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+						}
+					</select>
+				</label>
+				<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
+				<button type="submit">Save</button>
+			</form>
+			if data.DeleteAction != "" {
+				<form method="post" action={ templ.URL(data.DeleteAction) }>
+					<button type="submit" class="secondary">Delete</button>
+				</form>
+			}
+		</main>
+	}
+}
+
+templ TaskPanelPage(data TaskPanelData) {
+	@Layout("Task") {
+		<main class="container form-page">
+			@TaskPanel(data)
+		</main>
+	}
+}
+
+templ TaskPanel(data TaskPanelData) {
+	<div class="panel-body">
+		<h2>{ data.Task.Name }</h2>
+		<p><strong>Project:</strong> { data.Task.ProjectName }</p>
+		<p><strong>Subproject:</strong> { data.Task.Subproject }</p>
+		<p><strong>Department:</strong> { data.Department }</p>
+		<p><strong>Developers:</strong> { data.Developers }</p>
+		<p><strong>Priority:</strong> { data.Priority }</p>
+		<p><strong>Total h:</strong> { formatNum(data.Task.TotalHours) }</p>
+		<p><strong>Spent h:</strong> { formatNum(data.Task.SpentHours) }</p>
+		<p><strong>Progress:</strong> { formatNum(data.Task.Progress) }%</p>
+		<p>{ data.Desc }</p>
+		<p>{ data.Notes }</p>
+		<p><a href={ templ.URL(data.EditPath) }>EDIT</a></p>
+	</div>
+}

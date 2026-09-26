@@ -1,0 +1,108 @@
+package views
+
+templ GridPage(data GridData) {
+	@Layout("CAD Development") {
+		<div class="workspace">
+			@Grid(data)
+			<aside id="panel" class="side-panel"></aside>
+		</div>
+	}
+}
+
+templ Grid(data GridData) {
+	<section id="grid" class="grid-main">
+		if data.Error != "" {
+			<p class="error">{ data.Error }</p>
+		}
+		<form id="filters" class="filters" hx-get="/" hx-target="#grid" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+			<label>
+				Project
+				<select name="project">
+					for _, o := range data.Projects {
+						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+					}
+				</select>
+			</label>
+			if !data.Ideas {
+				<label>
+					Subproject
+					<select name="subproject">
+						for _, o := range data.Subprojects {
+							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+						}
+					</select>
+				</label>
+			}
+		</form>
+		if !data.Ideas {
+			<div class="totals">
+				<span>PO: { data.POName }</span>
+				<span>Total h: { formatNum(data.BudgetHours) }</span>
+				<span class={ overrunClass(data.Overrun) }>Planned h: { formatNum(data.PlannedHours) }</span>
+				<span>Spent h: { formatNum(data.SpentHours) }</span>
+				if data.ProgressPct != nil {
+					<span>Progress: { formatNum(*data.ProgressPct) }%</span>
+				}
+			</div>
+			<div class="locks">
+				<form hx-post="/month-locks/last/toggle" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+					if data.LastMonthUnlock {
+						<button type="submit">Lock { data.LastMonth }</button>
+					} else {
+						<button type="submit">Unlock last month ({ data.LastMonth })</button>
+					}
+				</form>
+				<form hx-post="/month-locks/unlock" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+					<select name="year_month">
+						for _, o := range data.PastMonths {
+							<option value={ o.Value }>{ o.Label }</option>
+						}
+					</select>
+					<button type="submit">Unlock month</button>
+				</form>
+			</div>
+		}
+		<div class="table-scroll">
+			<table class="week-table">
+				<thead>
+					<tr>
+						<th class="sticky c0">Task</th>
+						<th class="sticky c1">Project</th>
+						<th class="sticky c2">Subproject</th>
+						<th class="sticky c3">total hr</th>
+						<th class="sticky c4">spent hr</th>
+						<th class="sticky c5">progress %</th>
+						if !data.Ideas {
+							for _, w := range data.Weeks {
+								<th class="week-col">{ w }</th>
+							}
+						}
+					</tr>
+				</thead>
+				<tbody>
+					for _, row := range data.Rows {
+						<tr>
+							<td class="sticky c0">
+								<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#panel" hx-swap="innerHTML">{ row.Name }</button>
+							</td>
+							<td class="sticky c1">{ row.ProjectName }</td>
+							<td class="sticky c2">{ row.Subproject }</td>
+							<td class="sticky c3">{ formatNum(row.TotalHours) }</td>
+							<td class="sticky c4">{ formatNum(row.SpentHours) }</td>
+							<td class="sticky c5">{ formatNum(row.Progress) }</td>
+							if !data.Ideas {
+								for _, cell := range row.Cells {
+									<td class="week-cell">
+										<input type="number" step="any" min="0" name="planned_hours" value={ formatNum(cell.Planned) } disabled?={ cell.Locked } title="planned" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
+										<input type="number" step="any" min="0" name="spent_hours" value={ formatNum(cell.Spent) } disabled?={ cell.Locked } title="spent" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
+										<input type="number" step="any" min="0" max="100" name="progress" value={ formatNum(cell.Progress) } disabled?={ cell.Locked } title="progress" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
+									</td>
+								}
+							}
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+}

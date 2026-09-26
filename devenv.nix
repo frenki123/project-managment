@@ -9,6 +9,7 @@
 
   packages = [
     pkgs.git
+    pkgs.just
     pkgs.air
     pkgs.sqlc
     pkgs.goose
@@ -18,7 +19,7 @@
 
   languages.go.enable = true;
 
-  processes.dev.exec = "air -c .air.toml";
+  processes.dev.exec = "just dev";
 
   enterShell = ''
     mkdir -p data tmp
@@ -26,6 +27,7 @@
 
   enterTest = ''
     go version
+    just --version
     air -v
     sqlc version
     goose --version

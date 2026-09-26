@@ -8,13 +8,20 @@ templ Layout(title string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="color-scheme" content="light dark"/>
 			<link rel="stylesheet" href="/static/css/pico.min.css"/>
+			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/js/htmx.min.js" defer></script>
 			<title>{ title }</title>
 		</head>
 		<body>
-			<main class="container">
-				{ children... }
-			</main>
+			<header class="app-header">
+				<a href="/" class="brand">CAD Development</a>
+				<nav>
+					<a href="/tasks/new">New task</a>
+					<a href="/projects/new">New project</a>
+					<a href="/subprojects/new">New subproject</a>
+				</nav>
+			</header>
+			{ children... }
 		</body>
 	</html>
 }

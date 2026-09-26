@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "templ generate && sqlc generate && go build -o ./tmp/server ./cmd/server"
+cmd = "just build"
 bin = "./tmp/server"
 include_ext = ["go", "templ", "sql"]
 exclude_dir = ["tmp", "data", "static", "internal/db", ".devenv", ".direnv"]
