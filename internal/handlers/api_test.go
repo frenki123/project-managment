@@ -181,6 +181,20 @@ func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
 	}
 }
 
+func TestMonthLockHTMLRedirectPreservesFilters(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/toggle", bytes.NewBufferString("project=7&subproject=3"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project=7&subproject=3" {
+		t.Fatalf("got status %d location %q", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
 func TestRegisterServesGridRoot(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

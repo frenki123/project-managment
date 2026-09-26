@@ -17,12 +17,12 @@ func panel(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			handlererrors.WriteHTMXError(w, r, err)
 			return
 		}
 		t, err := taskdomain.Get(r.Context(), q, id)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			handlererrors.WriteHTMXError(w, r, err)
 			return
 		}
 		row := views.TaskRow{
@@ -36,7 +36,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 		if t.ProjectID != nil {
 			p, err := project.Get(r.Context(), q, *t.ProjectID)
 			if err != nil {
-				handlererrors.WriteError(w, r, err)
+				handlererrors.WriteHTMXError(w, r, err)
 				return
 			}
 			row.ProjectName = p.Name
@@ -44,7 +44,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 		if t.SubprojectID != nil {
 			s, err := subproject.Get(r.Context(), q, *t.SubprojectID)
 			if err != nil {
-				handlererrors.WriteError(w, r, err)
+				handlererrors.WriteHTMXError(w, r, err)
 				return
 			}
 			row.Subproject = s.Name
@@ -59,7 +59,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 			EditPath:   "/tasks/" + strconv.FormatInt(t.ID, 10) + "/edit",
 		}
 		if app.IsHTMX(r) {
-			handlererrors.Render(w, r, http.StatusOK, views.TaskPanel(data))
+			handlererrors.RenderHTMX(w, r, http.StatusOK, views.TaskPanel(data))
 			return
 		}
 		handlererrors.Render(w, r, http.StatusOK, views.TaskPanelPage(data))

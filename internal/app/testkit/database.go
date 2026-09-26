@@ -29,6 +29,21 @@ func OpenDatabase(t *testing.T) *app.Database {
 	return database
 }
 
+func OpenFile(t *testing.T) *app.Database {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "app.db")
+	database, err := app.OpenDatabase(app.DatabaseConfig{
+		DSN:           "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
+		MigrationsDir: filepath.Join(repoRoot(t), "sql", "migrations"),
+		MaxOpenConns:  4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	return database
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()

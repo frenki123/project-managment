@@ -16,6 +16,11 @@ type Component interface {
 	Render(context.Context, io.Writer) error
 }
 
+type ResponseError struct{ Err error }
+
+func (e ResponseError) Error() string { return e.Err.Error() }
+func (e ResponseError) Unwrap() error { return e.Err }
+
 func IsAPI(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, "/api/")
 }
@@ -33,11 +38,19 @@ func PathID(r *http.Request, key string) (int64, error) {
 }
 
 func JSON[T any](w http.ResponseWriter, status int, v T) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if err := json.MarshalWrite(w, v); err != nil {
-		log.Printf("write JSON response: %v", err)
+	var body bytes.Buffer
+	if err := json.MarshalWrite(&body, v); err != nil {
+		log.Printf("marshal JSON response: %v", err)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"internal error"}`))
+		return
 	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	_, _ = w.Write(body.Bytes())
 }
 
 func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
@@ -59,7 +72,24 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 	http.Redirect(w, r, url, http.StatusSeeOther)
 }
 
+func RedirectWithFormFilter(w http.ResponseWriter, r *http.Request, path string, names ...string) {
+	query := r.URL.Query()
+	for _, name := range names {
+		if value := r.FormValue(name); value != "" {
+			query.Set(name, value)
+		}
+	}
+	url := path
+	if encoded := query.Encode(); encoded != "" {
+		url += "?" + encoded
+	}
+	Redirect(w, r, url)
+}
+
 func FormInt64Checked(r *http.Request, name string) (*int64, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
+	}
 	s := strings.TrimSpace(r.FormValue(name))
 	if s == "" {
 		return nil, nil
@@ -71,33 +101,33 @@ func FormInt64Checked(r *http.Request, name string) (*int64, error) {
 	return new(n), nil
 }
 
-func FormFloat(r *http.Request, name string) (*float64, error) {
+func FormFloatValue(r *http.Request, name string) (float64, bool, error) {
 	if err := r.ParseForm(); err != nil {
-		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
+		return 0, false, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
 	}
 	if !r.Form.Has(name) && !r.PostForm.Has(name) {
-		return nil, nil
+		return 0, false, nil
 	}
 	s := strings.TrimSpace(r.FormValue(name))
 	if s == "" {
-		return nil, nil
+		return 0, true, nil
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid number"}
+		return 0, true, HTTPError{Status: http.StatusBadRequest, Message: "invalid number"}
 	}
-	return new(f), nil
+	return f, true, nil
 }
 
 func FormFloatRequired(r *http.Request, name string) (float64, error) {
-	value, err := FormFloat(r, name)
+	value, present, err := FormFloatValue(r, name)
 	if err != nil {
 		return 0, err
 	}
-	if value == nil {
+	if !present || strings.TrimSpace(r.FormValue(name)) == "" {
 		return 0, HTTPError{Status: http.StatusBadRequest, Message: name + " is required"}
 	}
-	return *value, nil
+	return value, nil
 }
 
 func Render(w http.ResponseWriter, r *http.Request, status int, component Component) error {
@@ -106,7 +136,11 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 		return err
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_, err := w.Write(body.Bytes())
-	return err
+	if err != nil {
+		return ResponseError{Err: err}
+	}
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +27,16 @@ type textComponent string
 func (c textComponent) Render(_ context.Context, w io.Writer) error {
 	_, err := io.WriteString(w, string(c))
 	return err
+}
+
+type failingWriter struct {
+	header http.Header
+}
+
+func (w *failingWriter) Header() http.Header { return w.header }
+func (w *failingWriter) WriteHeader(int)     {}
+func (w *failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("client disconnected")
 }
 
 func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
@@ -80,6 +91,9 @@ func TestJSONWritesContentTypeAndStatus(t *testing.T) {
 	if got := rr.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
 		t.Fatalf("got content type %q", got)
 	}
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("got nosniff header %q", got)
+	}
 }
 
 func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
@@ -109,10 +123,21 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 		r.Header.Set("HX-Request", "true")
 		r.Header.Set("HX-Target", "#panel")
 		app.WriteError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "missing"})
-		if rr.Code != http.StatusOK || rr.Header().Get("HX-Retarget") != "#panel" || !strings.Contains(rr.Body.String(), "missing") {
+		if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || rr.Header().Get("Content-Type") != "text/plain; charset=utf-8" || rr.Body.String() != "missing" {
 			t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 		}
 	})
+}
+
+func TestWriteHTMXErrorRendersExplicitFragment(t *testing.T) {
+	rr := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-Target", "#panel")
+	app.WriteHTMXError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
+	if rr.Code != http.StatusOK || rr.Header().Get("HX-Retarget") != "#panel" || !strings.Contains(rr.Body.String(), "&lt;missing&gt;") {
+		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
+	}
 }
 
 func TestFormAndPathParsing(t *testing.T) {
@@ -130,6 +155,39 @@ func TestFormAndPathParsing(t *testing.T) {
 	parsed, err := app.PathID(r, "id")
 	if err != nil || parsed != 12 {
 		t.Fatalf("got path ID %d with error %v", parsed, err)
+	}
+}
+
+func TestFormParsingDistinguishesEmptyAndMalformedValues(t *testing.T) {
+	empty := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hours="))
+	empty.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	value, present, err := app.FormFloatValue(empty, "hours")
+	if err != nil || !present || value != 0 {
+		t.Fatalf("empty value: got %v %v %v", value, present, err)
+	}
+
+	malformed := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("project_id=%zz"))
+	malformed.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if _, err := app.FormInt64Checked(malformed, "project_id"); err == nil {
+		t.Fatal("expected malformed form error")
+	}
+}
+
+func TestRedirectWithFormFilter(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("project=7&subproject=3"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.RedirectWithFormFilter(rr, r, "/", "project", "subproject")
+	if got := rr.Header().Get("Location"); got != "/?project=7&subproject=3" {
+		t.Fatalf("got redirect %q", got)
+	}
+}
+
+func TestJSONMarshalFailureReturnsInternalError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	app.JSON(rr, http.StatusOK, math.NaN())
+	if rr.Code != http.StatusInternalServerError || rr.Body.String() != `{"error":"internal error"}` {
+		t.Fatalf("got %d %q", rr.Code, rr.Body.String())
 	}
 }
 
@@ -185,5 +243,24 @@ func TestRenderWritesSuccessfulComponent(t *testing.T) {
 	}
 	if rr.Code != http.StatusCreated || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.String() != "rendered" {
 		t.Fatalf("got %d %q %q", rr.Code, rr.Header().Get("Content-Type"), rr.Body.String())
+	}
+}
+
+func TestRenderClassifiesResponseWriteFailure(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	err := app.Render(&failingWriter{header: make(http.Header)}, r, http.StatusOK, textComponent("rendered"))
+	if _, ok := errors.AsType[app.ResponseError](err); !ok {
+		t.Fatalf("got %T: %v", err, err)
+	}
+}
+
+func TestRecoverReturnsInternalServerError(t *testing.T) {
+	handler := app.Recover(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("test panic")
+	}))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rr.Code != http.StatusInternalServerError || !strings.Contains(rr.Body.String(), "internal server error") {
+		t.Fatalf("got %d %q", rr.Code, rr.Body.String())
 	}
 }

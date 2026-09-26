@@ -55,7 +55,7 @@ func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.Redirect(w, r, "/")
+		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
 	}
 }
 
@@ -66,6 +66,6 @@ func unlockMonth(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.Redirect(w, r, "/")
+		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
 	}
 }

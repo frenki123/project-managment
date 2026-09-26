@@ -120,6 +120,19 @@ body {
 	color: #b00020;
 }
 
+.toast {
+	position: fixed;
+	top: 1rem;
+	right: 1rem;
+	z-index: 10;
+	max-width: 28rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid #b00020;
+	border-radius: 0.25rem;
+	background: var(--pico-background-color, #fff);
+	color: #b00020;
+}
+
 .form-page {
 	padding-top: 1rem;
 	max-width: 40rem;

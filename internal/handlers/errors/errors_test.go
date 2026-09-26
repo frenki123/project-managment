@@ -27,6 +27,7 @@ func TestToHTTPErrorMapsDomainOutcomes(t *testing.T) {
 		{name: "week locked", err: weekly.Locked("week locked"), status: http.StatusForbidden, msg: "week locked"},
 		{name: "month invalid", err: monthlock.Invalid("month invalid"), status: http.StatusBadRequest, msg: "month invalid"},
 		{name: "wrapped", err: fmt.Errorf("wrapped: %w", project.Missing("project missing")), status: http.StatusNotFound, msg: "project missing"},
+		{name: "empty message", err: weekly.Error{Kind: weekly.Forbidden}, status: http.StatusForbidden, msg: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

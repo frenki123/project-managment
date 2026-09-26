@@ -59,8 +59,10 @@ func main() {
 	log.Printf("listening on http://%s", addr)
 	server := &http.Server{
 		Addr:                addr,
-		Handler:             mux,
+		Handler:             app.Recover(mux),
+		ReadTimeout:         30 * time.Second,
 		ReadHeaderTimeout:   5 * time.Second,
+		IdleTimeout:         60 * time.Second,
 		MaxHeaderValueCount: 64,
 	}
 	serveErr := make(chan error, 1)

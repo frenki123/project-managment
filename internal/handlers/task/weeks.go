@@ -41,26 +41,32 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		planned, err := app.FormFloat(r, "planned_hours")
+		plannedValue, plannedPresent, err := app.FormFloatValue(r, "planned_hours")
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		spent, err := app.FormFloat(r, "spent_hours")
+		spentValue, spentPresent, err := app.FormFloatValue(r, "spent_hours")
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		progress, err := app.FormFloat(r, "progress")
+		progressValue, progressPresent, err := app.FormFloatValue(r, "progress")
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		_, err = saveWeek(r, q, id, weekly.Patch{
-			PlannedHours: planned,
-			SpentHours:   spent,
-			Progress:     progress,
-		}, currentTime)
+		var patch weekly.Patch
+		if plannedPresent {
+			patch.PlannedHours = &plannedValue
+		}
+		if spentPresent {
+			patch.SpentHours = &spentValue
+		}
+		if progressPresent {
+			patch.Progress = &progressValue
+		}
+		_, err = saveWeek(r, q, id, patch, currentTime)
 		if err != nil {
 			httpErr := handlererrors.ToHTTPError(err)
 			RenderGrid(w, r, q, httpErr.Message, currentTime)
