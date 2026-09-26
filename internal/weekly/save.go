@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"time"
 
 	"cad-development/internal/db"
@@ -76,13 +77,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			return err
 		}
 		validWeeks := WeekStarts(start, end)
-		inRange := false
-		for _, validWeek := range validWeeks {
-			if validWeek == weekStart {
-				inRange = true
-				break
-			}
-		}
+		inRange := slices.Contains(validWeeks, weekStart)
 		if !inRange {
 			return Invalid("week is outside the project date range")
 		}

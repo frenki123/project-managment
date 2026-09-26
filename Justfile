@@ -16,6 +16,10 @@ tidy:
 fmt:
     git ls-files '*.go' | xargs gofmt -w
 
+# Show Go's reviewed modernization suggestions without changing files.
+modernize:
+    go fix -diff ./...
+
 # Generate code and build the local server binary.
 build: generate
     mkdir -p tmp
