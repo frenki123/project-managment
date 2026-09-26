@@ -207,3 +207,12 @@ body {
 .panel-body h2 {
 	margin-top: 0;
 }
+
+.chart-page {
+	padding: 1rem;
+}
+
+.chart-container {
+	position: relative;
+	height: 60vh;
+}

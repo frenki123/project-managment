@@ -1,0 +1,12 @@
+package views
+
+templ ChartPage(data ChartPageData) {
+	@Layout("S-curve") {
+		<main class="chart-page">
+			<h1>S-curve</h1>
+			<div class="chart-container" data-chart="s-curve" data-series={ templ.JSONString(data.Series) }>
+				<canvas id="s-curve"></canvas>
+			</div>
+		</main>
+	}
+}

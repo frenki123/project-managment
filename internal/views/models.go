@@ -66,3 +66,17 @@ type TaskPanelData struct {
 	EditPath   string
 	DeletePath string
 }
+
+type ChartPageData struct {
+	Series ChartSeries
+}
+
+type ChartSeries struct {
+	Labels   []string       `json:"labels"`
+	Datasets []ChartDataset `json:"datasets"`
+}
+
+type ChartDataset struct {
+	Label string    `json:"label"`
+	Data  []float64 `json:"data"`
+}

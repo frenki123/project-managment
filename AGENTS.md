@@ -4,8 +4,9 @@ Build a local-first web app replacing Excel CAD_Development.xlsx.
 # Development rules
 - One Go executable; embed templates, static assets, and Goose migrations.
 - Single user on localhost; SQLite with modernc.org/sqlite; no auth.
-- Use net/http, sqlc, templ, HTMX 4, hyperscript, and Pico CSS.
+- Use net/http, sqlc, templ, HTMX 4, hyperscript, Pico CSS, and Chart.js.
 - No frontend build system; use plain CSS plus vendored assets.
+- Vendored assets are pinned and committed: `static/js/htmx.min.js` (HTMX 4.0.0), `static/js/chart.umd.min.js` (Chart.js 4.5.1 UMD, exposes the global `Chart`), `static/css/pico.min.css` (Pico 2.1.1). Source maps are not vendored.
 - Design for desktop and laptop screens; mobile support and responsive mobile layouts are not required.
 - Calculated values stay calculated; prefer SQL calculations over Go calculations.
 - No Excel import; provide Excel/XLSX export.
