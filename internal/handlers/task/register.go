@@ -7,7 +7,6 @@ import (
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /{$}", gridPage(q))
 	mux.HandleFunc("GET /api/v1/tasks", listJSON(q))
 	mux.HandleFunc("POST /api/v1/tasks", createJSON(q))
 	mux.HandleFunc("GET /api/v1/tasks/{id}", getJSON(q))
@@ -21,4 +20,8 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("POST /tasks/{id}", updateHTML(q))
 	mux.HandleFunc("POST /tasks/{id}/delete", deleteHTML(q))
 	mux.HandleFunc("POST /tasks/{id}/weeks/{weekStart}", weekHTML(q))
+}
+
+func GridPage(q *db.Queries) http.HandlerFunc {
+	return gridPage(q)
 }

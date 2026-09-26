@@ -76,14 +76,13 @@ func newForm(q *db.Queries) http.HandlerFunc {
 		if pid != nil {
 			vals.ProjectID = strconv.FormatInt(*pid, 10)
 		}
-		app.HTML(w, http.StatusOK)
-		_ = views.TaskForm(views.TaskFormData{
+		handlererrors.Render(w, r, http.StatusOK, views.TaskForm(views.TaskFormData{
 			Action:      "/tasks",
 			Title:       "New task",
 			Task:        vals,
 			Projects:    po,
 			Subprojects: so,
-		}).Render(r.Context(), w)
+		}))
 	}
 }
 
@@ -99,13 +98,12 @@ func editForm(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.HTML(w, http.StatusOK)
 		data, err := taskFormData(r, q, t, "")
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		_ = views.TaskForm(data).Render(r.Context(), w)
+		handlererrors.Render(w, r, http.StatusOK, views.TaskForm(data))
 	}
 }
 
@@ -154,8 +152,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 				Department: in.Department, Developers: in.Developers, Priority: in.Priority,
 				ProjectID: in.ProjectID, SubprojectID: in.SubprojectID,
 			}
-			app.HTML(w, http.StatusBadRequest)
-			data, formErr := taskFormData(r, q, dummy, err.Error())
+			httpErr := handlererrors.ToHTTPError(err)
+			data, formErr := taskFormData(r, q, dummy, httpErr.Message)
 			if formErr != nil {
 				handlererrors.WriteError(w, r, formErr)
 				return
@@ -163,7 +161,7 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 			data.Action = "/tasks"
 			data.Title = "New task"
 			data.DeleteAction = ""
-			_ = views.TaskForm(data).Render(r.Context(), w)
+			handlererrors.Render(w, r, httpErr.Status, views.TaskForm(data))
 			return
 		}
 		app.Redirect(w, r, afterTask(t))
@@ -187,13 +185,13 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			cur := taskdomain.Task{ID: id, Name: in.Name, Description: in.Description, ImplementationNotes: in.ImplementationNotes,
 				Department: in.Department, Developers: in.Developers, Priority: in.Priority,
 				ProjectID: in.ProjectID, SubprojectID: in.SubprojectID}
-			app.HTML(w, http.StatusBadRequest)
-			data, formErr := taskFormData(r, q, cur, err.Error())
+			httpErr := handlererrors.ToHTTPError(err)
+			data, formErr := taskFormData(r, q, cur, httpErr.Message)
 			if formErr != nil {
 				handlererrors.WriteError(w, r, formErr)
 				return
 			}
-			_ = views.TaskForm(data).Render(r.Context(), w)
+			handlererrors.Render(w, r, httpErr.Status, views.TaskForm(data))
 			return
 		}
 		app.Redirect(w, r, afterTask(t))

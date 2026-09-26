@@ -13,13 +13,23 @@ import (
 )
 
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
-	if mapped, ok := mapDomainError(err); ok {
-		err = mapped
-	}
-	app.WriteError(w, r, err)
+	app.WriteError(w, r, ToHTTPError(err))
 }
 
-func mapDomainError(err error) (error, bool) {
+func ToHTTPError(err error) app.HTTPError {
+	if mapped, ok := mapDomainError(err); ok {
+		return mapped
+	}
+	return app.HTTPErrorFrom(err)
+}
+
+func Render(w http.ResponseWriter, r *http.Request, status int, component app.Component) {
+	if err := app.Render(w, r, status, component); err != nil {
+		WriteError(w, r, err)
+	}
+}
+
+func mapDomainError(err error) (app.HTTPError, bool) {
 	status := http.StatusBadRequest
 	message := ""
 	var taskErr task.Error
@@ -66,7 +76,7 @@ func mapDomainError(err error) (error, bool) {
 		message = monthlockErr.Message
 	}
 	if message == "" {
-		return err, false
+		return app.HTTPError{}, false
 	}
 	return app.HTTPError{Status: status, Message: message}, true
 }

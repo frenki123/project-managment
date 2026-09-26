@@ -1,12 +1,19 @@
 package app
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+type Component interface {
+	Render(context.Context, io.Writer) error
+}
 
 func IsAPI(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, "/api/")
@@ -33,11 +40,16 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func DecodeJSON(r *http.Request, v any) error {
+func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	defer r.Body.Close()
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return HTTPError{Status: http.StatusRequestEntityTooLarge, Message: "request body too large"}
+		}
 		return HTTPError{Status: http.StatusBadRequest, Message: "invalid json"}
 	}
 	var extra any
@@ -92,7 +104,13 @@ func FormFloatRequired(r *http.Request, name string) (float64, error) {
 	return *value, nil
 }
 
-func HTML(w http.ResponseWriter, status int) {
+func Render(w http.ResponseWriter, r *http.Request, status int, component Component) error {
+	var body bytes.Buffer
+	if err := component.Render(r.Context(), &body); err != nil {
+		return err
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
+	_, err := w.Write(body.Bytes())
+	return err
 }

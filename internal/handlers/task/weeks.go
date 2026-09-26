@@ -20,7 +20,7 @@ func weekJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		var patch weekly.Patch
-		if err := app.DecodeJSON(r, &patch); err != nil {
+		if err := app.DecodeJSON(w, r, &patch); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -62,7 +62,8 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			Progress:     progress,
 		}, currentTime)
 		if err != nil {
-			RenderGrid(w, r, q, err.Error(), currentTime)
+			httpErr := handlererrors.ToHTTPError(err)
+			RenderGrid(w, r, q, httpErr.Message, currentTime)
 			return
 		}
 		RenderGrid(w, r, q, "", currentTime)

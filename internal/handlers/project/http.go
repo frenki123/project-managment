@@ -54,7 +54,7 @@ func getJSON(q *db.Queries) http.HandlerFunc {
 func createJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in domain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -75,7 +75,7 @@ func updateJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		var in domain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -120,11 +120,10 @@ func formInput(r *http.Request) (domain.Input, error) {
 
 func newForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		app.HTML(w, http.StatusOK)
-		_ = views.ProjectForm(views.ProjectFormData{
+		handlererrors.Render(w, r, http.StatusOK, views.ProjectForm(views.ProjectFormData{
 			Action: "/projects",
 			Title:  "New project",
-		}).Render(r.Context(), w)
+		}))
 	}
 }
 
@@ -140,8 +139,7 @@ func editForm(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.HTML(w, http.StatusOK)
-		_ = views.ProjectForm(projectFormData(p, "")).Render(r.Context(), w)
+		handlererrors.Render(w, r, http.StatusOK, views.ProjectForm(projectFormData(p, "")))
 	}
 }
 
@@ -171,8 +169,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 		}
 		p, err := domain.Create(r.Context(), q, in)
 		if err != nil {
-			app.HTML(w, http.StatusBadRequest)
-			_ = views.ProjectForm(views.ProjectFormData{
+			httpErr := handlererrors.ToHTTPError(err)
+			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{
 				Action: "/projects",
 				Title:  "New project",
 				Project: views.ProjectFormValues{
@@ -182,8 +180,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 					StartDate:         in.StartDate,
 					EndDate:           in.EndDate,
 				},
-				Error: err.Error(),
-			}).Render(r.Context(), w)
+				Error: httpErr.Message,
+			}))
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
@@ -204,7 +202,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 		}
 		p, err := domain.Update(r.Context(), q, id, in)
 		if err != nil {
-			app.HTML(w, http.StatusBadRequest)
+			httpErr := handlererrors.ToHTTPError(err)
 			data := views.ProjectFormData{
 				Action: "/projects/" + strconv.FormatInt(id, 10),
 				Title:  "Edit project",
@@ -213,9 +211,9 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 					TotalHours: strconv.FormatFloat(in.TotalHours, 'f', -1, 64),
 					StartDate:  in.StartDate, EndDate: in.EndDate,
 				},
-				Error: err.Error(), DeleteAction: "/projects/" + strconv.FormatInt(id, 10) + "/delete",
+				Error: httpErr.Message, DeleteAction: "/projects/" + strconv.FormatInt(id, 10) + "/delete",
 			}
-			_ = views.ProjectForm(data).Render(r.Context(), w)
+			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(data))
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))

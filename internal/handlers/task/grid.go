@@ -36,12 +36,11 @@ func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, errMsg st
 		return
 	}
 	data := toViewGrid(grid, errMsg)
-	app.HTML(w, http.StatusOK)
 	if app.IsHTMX(r) {
-		_ = views.Grid(data).Render(r.Context(), w)
+		handlererrors.Render(w, r, http.StatusOK, views.Grid(data))
 		return
 	}
-	_ = views.GridPage(data).Render(r.Context(), w)
+	handlererrors.Render(w, r, http.StatusOK, views.GridPage(data))
 }
 
 func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {

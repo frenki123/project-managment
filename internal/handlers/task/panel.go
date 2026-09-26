@@ -58,11 +58,10 @@ func panel(q *db.Queries) http.HandlerFunc {
 			Desc:       t.Description,
 			EditPath:   "/tasks/" + strconv.FormatInt(t.ID, 10) + "/edit",
 		}
-		app.HTML(w, http.StatusOK)
 		if app.IsHTMX(r) {
-			_ = views.TaskPanel(data).Render(r.Context(), w)
+			handlererrors.Render(w, r, http.StatusOK, views.TaskPanel(data))
 			return
 		}
-		_ = views.TaskPanelPage(data).Render(r.Context(), w)
+		handlererrors.Render(w, r, http.StatusOK, views.TaskPanelPage(data))
 	}
 }

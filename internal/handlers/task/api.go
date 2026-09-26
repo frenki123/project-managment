@@ -62,7 +62,7 @@ func getJSON(q *db.Queries) http.HandlerFunc {
 func createJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in taskdomain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -83,7 +83,7 @@ func updateJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		var in taskdomain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}

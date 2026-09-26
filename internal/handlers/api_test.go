@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/handlers"
@@ -15,7 +16,7 @@ import (
 func TestJSONTaskAndWeek(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
-	handlers.Register(mux, q, t.TempDir())
+	handlers.Register(mux, q)
 
 	projBody := []byte(`{"name":"Alpha","purchase_order_name":"PO-1","total_hours":100,"start_date":"2026-09-07","end_date":"2026-10-05"}`)
 	rr := httptest.NewRecorder()
@@ -110,5 +111,41 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"orphan","project_id":999}`))))
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("missing project status: got %d", rr.Code)
+	}
+}
+
+func TestSubprojectListReturnsDatabaseError(t *testing.T) {
+	database := testkit.OpenDatabase(t)
+	q := database.Q
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/subprojects", nil))
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("got status %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	yearMonth := time.Now().AddDate(0, -1, 0).Format("2006-01")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/month-locks/"+yearMonth+"/unlock", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unlock status %d: %s", rr.Code, rr.Body.String())
+	}
+	var got struct {
+		Unlocked bool `json:"unlocked"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Unlocked {
+		t.Fatalf("expected unlocked=true, got %s", rr.Body.String())
 	}
 }

@@ -11,6 +11,10 @@ import (
 )
 
 func Open(t *testing.T) *db.Queries {
+	return OpenDatabase(t).Q
+}
+
+func OpenDatabase(t *testing.T) *app.Database {
 	t.Helper()
 	name := strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name())
 	database, err := app.OpenDatabase(app.DatabaseConfig{
@@ -22,7 +26,7 @@ func Open(t *testing.T) *db.Queries {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	return database.Q
+	return database
 }
 
 func repoRoot(t *testing.T) string {

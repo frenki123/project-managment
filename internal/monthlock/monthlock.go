@@ -7,6 +7,11 @@ import (
 	"cad-development/internal/db"
 )
 
+type MonthLock struct {
+	YearMonth string `json:"year_month"`
+	Unlocked  bool   `json:"unlocked"`
+}
+
 func YearMonth(t time.Time) string {
 	return t.Format("2006-01")
 }
@@ -59,15 +64,19 @@ func UnlockedSet(ctx context.Context, q *db.Queries) (map[string]bool, error) {
 	return out, nil
 }
 
-func List(ctx context.Context, q *db.Queries) ([]db.MonthLock, error) {
+func List(ctx context.Context, q *db.Queries) ([]MonthLock, error) {
 	rows, err := q.ListMonthLocks(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if rows == nil {
-		return []db.MonthLock{}, nil
+		return []MonthLock{}, nil
 	}
-	return rows, nil
+	out := make([]MonthLock, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, MonthLock{YearMonth: row.YearMonth, Unlocked: row.Unlocked != 0})
+	}
+	return out, nil
 }
 
 func Set(ctx context.Context, q *db.Queries, yearMonth string, unlocked bool, now time.Time) error {
@@ -103,10 +112,7 @@ func MonthRange(from, to time.Time) []string {
 }
 
 func PastMonths(from time.Time, now time.Time) []string {
-	prev, err := time.Parse("2006-01", PreviousMonth(now))
-	if err != nil {
-		return nil
-	}
+	prev, _ := time.Parse("2006-01", PreviousMonth(now))
 	start := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
 	if start.After(prev) {
 		return nil

@@ -31,10 +31,12 @@ func listJSON(q *db.Queries) http.HandlerFunc {
 			list []domain.Subproject
 			err  error
 		)
-		if pid, err := app.FormInt64Checked(r, "project_id"); err != nil {
+		pid, err := app.FormInt64Checked(r, "project_id")
+		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
-		} else if pid != nil {
+		}
+		if pid != nil {
 			list, err = domain.ListByProject(r.Context(), q, *pid)
 		} else {
 			list, err = domain.List(r.Context(), q)
@@ -66,7 +68,7 @@ func getJSON(q *db.Queries) http.HandlerFunc {
 func createJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in domain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -87,7 +89,7 @@ func updateJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		var in domain.Input
-		if err := app.DecodeJSON(r, &in); err != nil {
+		if err := app.DecodeJSON(w, r, &in); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -152,12 +154,11 @@ func newForm(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.HTML(w, http.StatusOK)
-		_ = views.SubprojectForm(views.SubprojectFormData{
+		handlererrors.Render(w, r, http.StatusOK, views.SubprojectForm(views.SubprojectFormData{
 			Action:   "/subprojects",
 			Title:    "New subproject",
 			Projects: opts,
-		}).Render(r.Context(), w)
+		}))
 	}
 }
 
@@ -178,8 +179,7 @@ func editForm(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.HTML(w, http.StatusOK)
-		_ = views.SubprojectForm(subFormData(s, opts, "")).Render(r.Context(), w)
+		handlererrors.Render(w, r, http.StatusOK, views.SubprojectForm(subFormData(s, opts, "")))
 	}
 }
 
@@ -213,8 +213,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 				handlererrors.WriteError(w, r, optsErr)
 				return
 			}
-			app.HTML(w, http.StatusBadRequest)
-			_ = views.SubprojectForm(views.SubprojectFormData{
+			httpErr := handlererrors.ToHTTPError(err)
+			handlererrors.Render(w, r, httpErr.Status, views.SubprojectForm(views.SubprojectFormData{
 				Action:   "/subprojects",
 				Title:    "New subproject",
 				Projects: opts,
@@ -223,8 +223,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 					ProjectID:  strconv.FormatInt(in.ProjectID, 10),
 					TotalHours: r.FormValue("total_hours"),
 				},
-				Error: err.Error(),
-			}).Render(r.Context(), w)
+				Error: httpErr.Message,
+			}))
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10)+"&subproject="+strconv.FormatInt(s.ID, 10))
@@ -251,8 +251,8 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 				return
 			}
 			cur := domain.Subproject{ID: id, ProjectID: in.ProjectID, Name: in.Name, TotalHours: in.TotalHours}
-			app.HTML(w, http.StatusBadRequest)
-			_ = views.SubprojectForm(subFormData(cur, opts, err.Error())).Render(r.Context(), w)
+			httpErr := handlererrors.ToHTTPError(err)
+			handlererrors.Render(w, r, httpErr.Status, views.SubprojectForm(subFormData(cur, opts, httpErr.Message)))
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))
