@@ -7,6 +7,7 @@ import (
 
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
+	"cad-development/internal/subproject"
 	"cad-development/internal/task"
 	"cad-development/internal/weekly"
 )
@@ -83,6 +84,29 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	}
 	if len(projects) != 0 {
 		t.Fatalf("rejected creates persisted projects: %#v", projects)
+	}
+}
+
+func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "SP", TotalHours: 6}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = project.Update(ctx, q, p.ID, project.Input{Name: p.Name, TotalHours: 5, StartDate: p.StartDate, EndDate: p.EndDate})
+	if err == nil {
+		t.Fatal("expected project total below subprojects to be rejected")
+	}
+	got, err := project.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalHours != 10 {
+		t.Fatalf("rejected update changed project total: %v", got.TotalHours)
 	}
 }
 

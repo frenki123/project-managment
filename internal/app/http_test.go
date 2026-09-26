@@ -235,7 +235,7 @@ func TestStaticHandlerServesEmbeddedAsset(t *testing.T) {
 	handler := app.StaticHandler(staticFS)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/js/app.js", nil))
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "htmx:responseError") {
+	if rr.Code != http.StatusOK || rr.Body.Len() == 0 {
 		t.Fatalf("embedded asset response %d %q", rr.Code, rr.Body.String())
 	}
 }

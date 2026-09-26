@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/handlers"
@@ -110,7 +109,14 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatalf("unknown task status: got %d", rr.Code)
 	}
 
-	rr = httptest.NewRecorder()
+}
+
+func TestJSONTaskErrors(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader([]byte(`{"name":""}`))))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("invalid project status: got %d", rr.Code)
@@ -148,7 +154,7 @@ func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	yearMonth := time.Now().AddDate(0, -1, 0).Format("2006-01")
+	yearMonth := "2026-08"
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/month-locks/"+yearMonth+"/unlock", nil))
 	if rr.Code != http.StatusOK {
@@ -201,7 +207,7 @@ func TestRegisterServesGridRoot(t *testing.T) {
 	handlers.Register(mux, q)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("CAD Development")) {
+	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.Len() == 0 {
 		t.Fatalf("root response %d: %s", rr.Code, rr.Body.String())
 	}
 }

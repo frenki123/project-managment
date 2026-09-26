@@ -156,3 +156,29 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 		t.Fatalf("invalid patches should not create weekly data, got %#v", result.Weeks)
 	}
 }
+
+func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	planned, spent, progress := 8.0, 3.0, 25.0
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	updatedSpent := 5.0
+	cell, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{SpentHours: &updatedSpent}, now, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.PlannedHours != planned || cell.SpentHours != updatedSpent || cell.Progress == nil || *cell.Progress != progress {
+		t.Fatalf("partial patch changed untouched values: %#v", cell)
+	}
+}

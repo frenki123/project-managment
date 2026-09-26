@@ -142,3 +142,40 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 		t.Fatalf("unexpected subproject grid: %#v", grid)
 	}
 }
+
+func TestIdeasGridHasNoWeeklyData(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	if _, err := task.Create(ctx, q, task.Input{Name: "Idea"}); err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, "ideas", nil, time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !grid.Ideas || len(grid.Weeks) != 0 || len(grid.Rows) != 1 || grid.Rows[0].ProjectName != "" {
+		t.Fatalf("unexpected ideas grid: %#v", grid)
+	}
+}
+
+func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: second.ID, Name: "Second subproject", TotalHours: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
+	var domainErr task.Error
+	if !errors.As(err, &domainErr) || domainErr.Kind != task.InvalidInput {
+		t.Fatalf("got %v", err)
+	}
+}

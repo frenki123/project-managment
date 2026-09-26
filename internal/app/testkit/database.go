@@ -2,7 +2,6 @@ package testkit
 
 import (
 	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,21 +20,6 @@ func OpenDatabase(t *testing.T) *app.Database {
 		DSN:          "file:" + strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name()) + "?mode=memory&cache=shared&_pragma=foreign_keys(1)",
 		Migrations:   embeddedMigrations(t),
 		MaxOpenConns: 1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-	return database
-}
-
-func OpenFile(t *testing.T) *app.Database {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "app.db")
-	database, err := app.OpenDatabase(app.DatabaseConfig{
-		DSN:          "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
-		Migrations:   embeddedMigrations(t),
-		MaxOpenConns: 4,
 	})
 	if err != nil {
 		t.Fatal(err)
