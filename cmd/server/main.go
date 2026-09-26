@@ -57,7 +57,12 @@ func main() {
 	handlers.Register(mux, database.Q)
 
 	log.Printf("listening on http://%s", addr)
-	server := &http.Server{Addr: addr, Handler: mux}
+	server := &http.Server{
+		Addr:                addr,
+		Handler:             mux,
+		ReadHeaderTimeout:   5 * time.Second,
+		MaxHeaderValueCount: 64,
+	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.ListenAndServe() }()
 
@@ -69,6 +74,7 @@ func main() {
 			log.Printf("server error: %v", err)
 		}
 	case <-stop.Done():
+		log.Printf("shutdown requested: %v", context.Cause(stop))
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
