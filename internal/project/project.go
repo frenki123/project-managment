@@ -4,11 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/http"
 	"strings"
 	"time"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
 	"cad-development/internal/validation"
 	"cad-development/internal/weekly"
@@ -46,21 +44,21 @@ func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.Name == "" {
-		return in, apperr.New(http.StatusBadRequest, "name is required")
+		return in, Invalid("name is required")
 	}
 	if !validation.NonNegativeFinite(in.TotalHours) {
-		return in, apperr.New(http.StatusBadRequest, "hours cannot be negative")
+		return in, Invalid("hours cannot be negative")
 	}
 	start, err := weekly.ParseDate(in.StartDate)
 	if err != nil {
-		return in, apperr.New(http.StatusBadRequest, "invalid start_date")
+		return in, Invalid("invalid start_date")
 	}
 	end, err := weekly.ParseDate(in.EndDate)
 	if err != nil {
-		return in, apperr.New(http.StatusBadRequest, "invalid end_date")
+		return in, Invalid("invalid end_date")
 	}
 	if end.Before(start) {
-		return in, apperr.New(http.StatusBadRequest, "end_date must be on or after start_date")
+		return in, Invalid("end_date must be on or after start_date")
 	}
 	in.StartDate = start.Format("2006-01-02")
 	in.EndDate = end.Format("2006-01-02")
@@ -88,7 +86,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
 	row, err := q.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Project{}, apperr.New(http.StatusNotFound, "project not found")
+		return Project{}, Missing("project not found")
 	}
 	if err != nil {
 		return Project{}, err
@@ -116,7 +114,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 	var result Project
 	err = q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return apperr.New(http.StatusNotFound, "project not found")
+			return Missing("project not found")
 		} else if err != nil {
 			return err
 		}
@@ -125,7 +123,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 			return err
 		}
 		if in.TotalHours < sum {
-			return apperr.New(http.StatusBadRequest, "project hours cannot be less than subproject hours")
+			return ConflictError("project hours cannot be less than subproject hours")
 		}
 		start, _ := time.Parse(time.DateOnly, in.StartDate)
 		end, _ := time.Parse(time.DateOnly, in.EndDate)
@@ -138,7 +136,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 			return err
 		}
 		if outside > 0 {
-			return apperr.New(http.StatusBadRequest, "project dates cannot exclude existing weekly data")
+			return ConflictError("project dates cannot exclude existing weekly data")
 		}
 		row, err := txq.UpdateProject(ctx, db.UpdateProjectParams{
 			Name: in.Name, PurchaseOrderName: in.PurchaseOrderName, TotalHours: in.TotalHours,

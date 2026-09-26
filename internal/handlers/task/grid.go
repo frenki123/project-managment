@@ -1,0 +1,96 @@
+package taskhandler
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"cad-development/internal/app"
+	"cad-development/internal/db"
+	handlererrors "cad-development/internal/handlers/errors"
+	taskdomain "cad-development/internal/task"
+	"cad-development/internal/views"
+)
+
+func ParseFilter(r *http.Request) (projectKey string, subprojectID *int64, err error) {
+	projectKey = r.FormValue("project")
+	subprojectID, err = app.FormInt64Checked(r, "subproject")
+	return projectKey, subprojectID, err
+}
+
+func gridPage(q *db.Queries) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		RenderGrid(w, r, q, "", time.Now())
+	}
+}
+
+func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, errMsg string, currentTime time.Time) {
+	pk, sid, err := ParseFilter(r)
+	if err != nil {
+		handlererrors.WriteError(w, r, err)
+		return
+	}
+	grid, err := taskdomain.LoadGrid(r.Context(), q, pk, sid, currentTime)
+	if err != nil {
+		handlererrors.WriteError(w, r, err)
+		return
+	}
+	data := toViewGrid(grid, errMsg)
+	app.HTML(w, http.StatusOK)
+	if app.IsHTMX(r) {
+		_ = views.Grid(data).Render(r.Context(), w)
+		return
+	}
+	_ = views.GridPage(data).Render(r.Context(), w)
+}
+
+func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
+	data := views.GridData{
+		FilterProject:    grid.FilterProject,
+		FilterSubproject: grid.FilterSubproject,
+		Ideas:            grid.Ideas,
+		Weeks:            grid.Weeks,
+		POName:           grid.POName,
+		BudgetHours:      grid.BudgetHours,
+		PlannedHours:     grid.PlannedHours,
+		SpentHours:       grid.SpentHours,
+		ProgressPct:      grid.ProgressPct,
+		Overrun:          grid.Overrun,
+		LastMonth:        grid.LastMonth,
+		LastMonthUnlock:  grid.LastMonthUnlock,
+		Error:            errMsg,
+	}
+	for _, option := range grid.Projects {
+		data.Projects = append(data.Projects, views.Option{Value: option.Value, Label: option.Label, Selected: option.Selected})
+	}
+	for _, option := range grid.Subprojects {
+		data.Subprojects = append(data.Subprojects, views.Option{Value: option.Value, Label: option.Label, Selected: option.Selected})
+	}
+	for _, month := range grid.PastMonths {
+		data.PastMonths = append(data.PastMonths, views.Option{Value: month, Label: month})
+	}
+	for _, row := range grid.Rows {
+		viewRow := views.TaskRow{
+			ID:          row.ID,
+			Name:        row.Name,
+			ProjectName: row.ProjectName,
+			Subproject:  row.Subproject,
+			TotalHours:  row.TotalHours,
+			SpentHours:  row.SpentHours,
+			Progress:    row.Progress,
+			DetailPath:  "/tasks/" + strconv.FormatInt(row.ID, 10),
+		}
+		for _, cell := range row.Cells {
+			viewRow.Cells = append(viewRow.Cells, views.WeekCell{
+				WeekStart: cell.WeekStart,
+				Planned:   cell.Planned,
+				Spent:     cell.Spent,
+				Progress:  cell.Progress,
+				SavePath:  "/tasks/" + strconv.FormatInt(row.ID, 10) + "/weeks/" + cell.WeekStart,
+				Locked:    cell.Locked,
+			})
+		}
+		data.Rows = append(data.Rows, viewRow)
+	}
+	return data
+}

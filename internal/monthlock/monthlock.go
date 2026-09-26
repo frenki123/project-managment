@@ -2,10 +2,8 @@ package monthlock
 
 import (
 	"context"
-	"net/http"
 	"time"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
 )
 
@@ -16,7 +14,7 @@ func YearMonth(t time.Time) string {
 func ParseYearMonth(s string) (time.Time, error) {
 	t, err := time.Parse("2006-01", s)
 	if err != nil {
-		return time.Time{}, apperr.New(http.StatusBadRequest, "invalid year_month")
+		return time.Time{}, Invalid("invalid year_month")
 	}
 	return t, nil
 }
@@ -61,12 +59,23 @@ func UnlockedSet(ctx context.Context, q *db.Queries) (map[string]bool, error) {
 	return out, nil
 }
 
+func List(ctx context.Context, q *db.Queries) ([]db.MonthLock, error) {
+	rows, err := q.ListMonthLocks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.MonthLock{}, nil
+	}
+	return rows, nil
+}
+
 func Set(ctx context.Context, q *db.Queries, yearMonth string, unlocked bool, now time.Time) error {
 	if _, err := ParseYearMonth(yearMonth); err != nil {
 		return err
 	}
 	if !IsPastMonth(yearMonth, now) {
-		return apperr.New(http.StatusBadRequest, "only past months can be unlocked")
+		return Invalid("only past months can be unlocked")
 	}
 	u := int64(0)
 	if unlocked {

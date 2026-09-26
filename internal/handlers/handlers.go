@@ -2,20 +2,19 @@ package handlers
 
 import (
 	"net/http"
-	"path/filepath"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/monthlock"
-	"cad-development/internal/project"
-	"cad-development/internal/subproject"
-	"cad-development/internal/task"
+	monthlockhandler "cad-development/internal/handlers/monthlock"
+	projecthandler "cad-development/internal/handlers/project"
+	subprojecthandler "cad-development/internal/handlers/subproject"
+	taskhandler "cad-development/internal/handlers/task"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries, root string) {
-	static := http.FileServer(http.Dir(filepath.Join(root, "static")))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", static))
-	project.Register(mux, q)
-	subproject.Register(mux, q)
-	task.Register(mux, q)
-	monthlock.Register(mux, q)
+	mux.Handle("GET /static/", app.StaticHandler(root))
+	projecthandler.Register(mux, q)
+	subprojecthandler.Register(mux, q)
+	taskhandler.Register(mux, q)
+	monthlockhandler.Register(mux, q)
 }

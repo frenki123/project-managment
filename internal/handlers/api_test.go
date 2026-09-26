@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"testing"
 
-	"cad-development/internal/dbtest"
+	"cad-development/internal/app/testkit"
 	"cad-development/internal/handlers"
 )
 
 func TestJSONTaskAndWeek(t *testing.T) {
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q, t.TempDir())
 
@@ -75,9 +75,40 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatalf("got %#v", got)
 	}
 
+	updatedBody := []byte(`{"name":"Updated work","project_id":` + strconv.FormatInt(proj.ID, 10) + `}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), bytes.NewReader(updatedBody)))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("update task %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete task %d %s", rr.Code, rr.Body.String())
+	}
+
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/999", nil))
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("unknown task status: got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader([]byte(`{"name":""}`))))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("invalid project status: got %d", rr.Code)
+	}
+	var apiError struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiError); err != nil || apiError.Error == "" {
+		t.Fatalf("expected JSON error response, got %q", rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"orphan","project_id":999}`))))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("missing project status: got %d", rr.Code)
 	}
 }

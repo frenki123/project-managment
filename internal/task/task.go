@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/http"
 	"strings"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
 	"cad-development/internal/weekly"
 )
@@ -75,7 +73,7 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
 	if in.Name == "" {
-		return in, apperr.New(http.StatusBadRequest, "name is required")
+		return in, Invalid("name is required")
 	}
 	if in.ProjectID != nil && *in.ProjectID < 1 {
 		in.ProjectID = nil
@@ -86,20 +84,20 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	if in.SubprojectID != nil {
 		sp, err := q.GetSubproject(ctx, *in.SubprojectID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return in, apperr.New(http.StatusBadRequest, "subproject not found")
+			return in, Missing("subproject not found")
 		}
 		if err != nil {
 			return in, err
 		}
 		if in.ProjectID != nil && *in.ProjectID != sp.ProjectID {
-			return in, apperr.New(http.StatusBadRequest, "subproject does not belong to project")
+			return in, Invalid("subproject does not belong to project")
 		}
 		pid := sp.ProjectID
 		in.ProjectID = &pid
 	}
 	if in.ProjectID != nil {
 		if _, err := q.GetProject(ctx, *in.ProjectID); errors.Is(err, sql.ErrNoRows) {
-			return in, apperr.New(http.StatusBadRequest, "project not found")
+			return in, Missing("project not found")
 		} else if err != nil {
 			return in, err
 		}
@@ -131,7 +129,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	row, err := q.GetTask(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Task{}, apperr.New(http.StatusNotFound, "task not found")
+		return Task{}, Missing("task not found")
 	}
 	if err != nil {
 		return Task{}, err
@@ -193,7 +191,7 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error) {
 	if _, err := q.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return Task{}, apperr.New(http.StatusNotFound, "task not found")
+		return Task{}, Missing("task not found")
 	} else if err != nil {
 		return Task{}, err
 	}
@@ -220,7 +218,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	if _, err := q.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return apperr.New(http.StatusNotFound, "task not found")
+		return Missing("task not found")
 	} else if err != nil {
 		return err
 	}

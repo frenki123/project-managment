@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/dbtest"
+	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 	"cad-development/internal/weekly"
@@ -14,9 +14,9 @@ import (
 
 func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: 200, StartDate: "2026-09-01", EndDate: "2026-10-31",
+		Name: "P", TotalHours: 300, StartDate: "2026-09-01", EndDate: "2026-10-31",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -32,13 +32,15 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	planned := 100.0
-	spent := 100.0
+	firstPlanned := 150.0
+	firstSpent := 100.0
+	secondPlanned := 50.0
+	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, nil); err != nil {
+	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent}, now, nil); err != nil {
+	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now, nil); err != nil {
 		t.Fatal(err)
 	}
 

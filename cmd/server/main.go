@@ -1,17 +1,13 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	"cad-development/internal/db"
+	"cad-development/internal/app"
 	"cad-development/internal/handlers"
-
-	"github.com/pressly/goose/v3"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -30,22 +26,14 @@ func main() {
 	}
 
 	dbPath := filepath.Join(dataDir, "app.db")
-	conn, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
+	database, err := app.OpenDatabase(app.DatabaseConfig{
+		DSN:           dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)",
+		MigrationsDir: filepath.Join(root, "sql", "migrations"),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
-
-	if err := conn.Ping(); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := goose.SetDialect("sqlite3"); err != nil {
-		log.Fatal(err)
-	}
-	if err := goose.Up(conn, filepath.Join(root, "sql", "migrations")); err != nil {
-		log.Fatal(err)
-	}
+	defer database.Close()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -54,7 +42,7 @@ func main() {
 	addr := "127.0.0.1:" + port
 
 	mux := http.NewServeMux()
-	handlers.Register(mux, db.New(conn), root)
+	handlers.Register(mux, database.Q, root)
 
 	log.Printf("listening on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))

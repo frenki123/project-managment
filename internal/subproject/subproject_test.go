@@ -5,14 +5,14 @@ import (
 	"math"
 	"testing"
 
-	"cad-development/internal/dbtest"
+	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 )
 
 func TestHoursCap(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
 		Name: "P", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01",
 	})
@@ -36,7 +36,7 @@ func TestHoursCap(t *testing.T) {
 
 func TestHoursRejectNonFiniteValues(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)

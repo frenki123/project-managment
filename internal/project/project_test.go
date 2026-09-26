@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/dbtest"
+	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 	"cad-development/internal/weekly"
@@ -14,7 +14,7 @@ import (
 
 func TestDeleteProjectMakesIdeasAndDeletesWeeks(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-07", EndDate: "2026-10-05"})
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestDeleteProjectMakesIdeasAndDeletesWeeks(t *testing.T) {
 
 func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-01", EndDate: "2026-10-31"})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 
 func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	ctx := context.Background()
-	_, q := dbtest.Open(t)
+	q := testkit.Open(t)
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 		if _, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: value, StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 			t.Fatalf("expected non-finite value %v to be rejected", value)

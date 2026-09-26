@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/http"
 	"strings"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
 	"cad-development/internal/validation"
 )
@@ -37,17 +35,17 @@ func FromDB(s db.Subproject) Subproject {
 func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
-		return in, apperr.New(http.StatusBadRequest, "name is required")
+		return in, Invalid("name is required")
 	}
 	if in.ProjectID < 1 {
-		return in, apperr.New(http.StatusBadRequest, "project is required")
+		return in, Invalid("project is required")
 	}
 	if !validation.NonNegativeFinite(in.TotalHours) {
-		return in, apperr.New(http.StatusBadRequest, "hours cannot be negative")
+		return in, Invalid("hours cannot be negative")
 	}
 	proj, err := q.GetProject(ctx, in.ProjectID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return in, apperr.New(http.StatusBadRequest, "project not found")
+		return in, Missing("project not found")
 	}
 	if err != nil {
 		return in, err
@@ -65,7 +63,7 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Inp
 		return in, err
 	}
 	if used+in.TotalHours > proj.TotalHours {
-		return in, apperr.New(http.StatusBadRequest, "subproject hours exceed project hours")
+		return in, ConflictError("subproject hours exceed project hours")
 	}
 	return in, nil
 }
@@ -91,7 +89,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Subproject, error) {
 	row, err := q.GetSubproject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Subproject{}, apperr.New(http.StatusNotFound, "subproject not found")
+		return Subproject{}, Missing("subproject not found")
 	}
 	if err != nil {
 		return Subproject{}, err

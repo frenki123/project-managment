@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/http"
 	"time"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
 	"cad-development/internal/monthlock"
 	"cad-development/internal/validation"
@@ -32,7 +30,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 		return Cell{}, err
 	}
 	if patch.PlannedHours == nil && patch.SpentHours == nil && patch.Progress == nil {
-		return Cell{}, apperr.New(http.StatusBadRequest, "at least one value is required")
+		return Cell{}, Invalid("at least one value is required")
 	}
 	if patch.PlannedHours != nil {
 		if err := validHours(*patch.PlannedHours); err != nil {
@@ -50,20 +48,20 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 		}
 	}
 	if monthlock.WeekLocked(weekStart, now, unlocked) {
-		return Cell{}, apperr.New(http.StatusForbidden, "month is locked")
+		return Cell{}, Locked("month is locked")
 	}
 
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return apperr.New(http.StatusNotFound, "task not found")
+			return Missing("task not found")
 		}
 		if err != nil {
 			return err
 		}
 		if !task.ProjectID.Valid {
-			return apperr.New(http.StatusBadRequest, "ideas cannot be planned")
+			return Invalid("ideas cannot be planned")
 		}
 		project, err := txq.GetProject(ctx, task.ProjectID.Int64)
 		if err != nil {
@@ -86,7 +84,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			}
 		}
 		if !inRange {
-			return apperr.New(http.StatusBadRequest, "week is outside the project date range")
+			return Invalid("week is outside the project date range")
 		}
 
 		existing, err := txq.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: taskID, WeekStart: weekStart})
@@ -108,7 +106,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 				return err
 			}
 			if *patch.Progress < previous {
-				return apperr.New(http.StatusBadRequest, "progress cannot be less than the week before")
+				return Invalid("progress cannot be less than the week before")
 			}
 			progress = sql.NullFloat64{Float64: *patch.Progress, Valid: true}
 		}
@@ -120,7 +118,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			}
 			for _, laterWeek := range later {
 				if laterWeek.Progress.Valid && laterWeek.Progress.Float64 < *patch.Progress && monthlock.WeekLocked(laterWeek.WeekStart, now, unlocked) {
-					return apperr.New(http.StatusConflict, "progress conflicts with a locked later week")
+					return ConflictError("progress conflicts with a locked later week")
 				}
 			}
 		}
@@ -158,14 +156,14 @@ func lastProgressBefore(ctx context.Context, q *db.Queries, taskID int64, weekSt
 
 func validHours(value float64) error {
 	if !validation.NonNegativeFinite(value) {
-		return apperr.New(http.StatusBadRequest, "hours cannot be negative")
+		return Invalid("hours cannot be negative")
 	}
 	return nil
 }
 
 func validProgress(value float64) error {
 	if !validation.NonNegativeFinite(value) || value > 100 {
-		return apperr.New(http.StatusBadRequest, "progress must be between 0 and 100")
+		return Invalid("progress must be between 0 and 100")
 	}
 	return nil
 }

@@ -1,15 +1,11 @@
-package httpx
+package app
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
-
-	"cad-development/internal/apperr"
 )
 
 func IsAPI(r *http.Request) bool {
@@ -23,7 +19,7 @@ func IsHTMX(r *http.Request) bool {
 func PathID(r *http.Request, key string) (int64, error) {
 	id, err := strconv.ParseInt(r.PathValue(key), 10, 64)
 	if err != nil || id < 1 {
-		return 0, apperr.New(http.StatusBadRequest, "invalid id")
+		return 0, HTTPError{Status: http.StatusBadRequest, Message: "invalid id"}
 	}
 	return id, nil
 }
@@ -42,31 +38,13 @@ func DecodeJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		return apperr.New(http.StatusBadRequest, "invalid json")
+		return HTTPError{Status: http.StatusBadRequest, Message: "invalid json"}
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
-		return apperr.New(http.StatusBadRequest, "request must contain one json object")
+		return HTTPError{Status: http.StatusBadRequest, Message: "request must contain one json object"}
 	}
 	return nil
-}
-
-func Error(w http.ResponseWriter, r *http.Request, err error) {
-	var ae apperr.Error
-	if errors.As(err, &ae) {
-		if IsAPI(r) {
-			JSON(w, ae.Status, map[string]string{"error": ae.Message})
-			return
-		}
-		http.Error(w, ae.Message, ae.Status)
-		return
-	}
-	log.Println(err)
-	if IsAPI(r) {
-		JSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
-		return
-	}
-	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {
@@ -80,14 +58,14 @@ func FormInt64Checked(r *http.Request, name string) (*int64, error) {
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil || n < 1 {
-		return nil, apperr.New(http.StatusBadRequest, "invalid "+name)
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + name}
 	}
 	return &n, nil
 }
 
 func FormFloat(r *http.Request, name string) (*float64, error) {
 	if err := r.ParseForm(); err != nil {
-		return nil, apperr.New(http.StatusBadRequest, "invalid form")
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
 	}
 	if !r.Form.Has(name) && !r.PostForm.Has(name) {
 		return nil, nil
@@ -98,7 +76,7 @@ func FormFloat(r *http.Request, name string) (*float64, error) {
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil, apperr.New(http.StatusBadRequest, "invalid number")
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid number"}
 	}
 	return &f, nil
 }
@@ -109,7 +87,7 @@ func FormFloatRequired(r *http.Request, name string) (float64, error) {
 		return 0, err
 	}
 	if value == nil {
-		return 0, apperr.New(http.StatusBadRequest, name+" is required")
+		return 0, HTTPError{Status: http.StatusBadRequest, Message: name + " is required"}
 	}
 	return *value, nil
 }

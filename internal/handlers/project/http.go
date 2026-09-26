@@ -1,11 +1,13 @@
-package project
+package projecthandler
 
 import (
 	"net/http"
 	"strconv"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/httpx"
+	handlererrors "cad-development/internal/handlers/errors"
+	domain "cad-development/internal/project"
 	"cad-development/internal/views"
 )
 
@@ -24,89 +26,89 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 
 func listJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := List(r.Context(), q)
+		list, err := domain.List(r.Context(), q)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"projects": list})
+		app.JSON(w, http.StatusOK, map[string]any{"projects": list})
 	}
 }
 
 func getJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Get(r.Context(), q, id)
+		p, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, p)
+		app.JSON(w, http.StatusOK, p)
 	}
 }
 
 func createJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var in Input
-		if err := httpx.DecodeJSON(r, &in); err != nil {
-			httpx.Error(w, r, err)
+		var in domain.Input
+		if err := app.DecodeJSON(r, &in); err != nil {
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Create(r.Context(), q, in)
+		p, err := domain.Create(r.Context(), q, in)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusCreated, p)
+		app.JSON(w, http.StatusCreated, p)
 	}
 }
 
 func updateJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		var in Input
-		if err := httpx.DecodeJSON(r, &in); err != nil {
-			httpx.Error(w, r, err)
+		var in domain.Input
+		if err := app.DecodeJSON(r, &in); err != nil {
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Update(r.Context(), q, id, in)
+		p, err := domain.Update(r.Context(), q, id, in)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, p)
+		app.JSON(w, http.StatusOK, p)
 	}
 }
 
 func deleteJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		if err := Delete(r.Context(), q, id); err != nil {
-			httpx.Error(w, r, err)
+		if err := domain.Delete(r.Context(), q, id); err != nil {
+			handlererrors.WriteError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func formInput(r *http.Request) (Input, error) {
-	hours, err := httpx.FormFloatRequired(r, "total_hours")
+func formInput(r *http.Request) (domain.Input, error) {
+	hours, err := app.FormFloatRequired(r, "total_hours")
 	if err != nil {
-		return Input{}, err
+		return domain.Input{}, err
 	}
-	in := Input{
+	in := domain.Input{
 		Name:              r.FormValue("name"),
 		PurchaseOrderName: r.FormValue("purchase_order_name"),
 		StartDate:         r.FormValue("start_date"),
@@ -118,7 +120,7 @@ func formInput(r *http.Request) (Input, error) {
 
 func newForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		httpx.HTML(w, http.StatusOK)
+		app.HTML(w, http.StatusOK)
 		_ = views.ProjectForm(views.ProjectFormData{
 			Action: "/projects",
 			Title:  "New project",
@@ -128,22 +130,22 @@ func newForm() http.HandlerFunc {
 
 func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Get(r.Context(), q, id)
+		p, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.HTML(w, http.StatusOK)
+		app.HTML(w, http.StatusOK)
 		_ = views.ProjectForm(projectFormData(p, "")).Render(r.Context(), w)
 	}
 }
 
-func projectFormData(p Project, errMsg string) views.ProjectFormData {
+func projectFormData(p domain.Project, errMsg string) views.ProjectFormData {
 	id := strconv.FormatInt(p.ID, 10)
 	return views.ProjectFormData{
 		Action: "/projects/" + id,
@@ -164,12 +166,12 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := formInput(r)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Create(r.Context(), q, in)
+		p, err := domain.Create(r.Context(), q, in)
 		if err != nil {
-			httpx.HTML(w, http.StatusBadRequest)
+			app.HTML(w, http.StatusBadRequest)
 			_ = views.ProjectForm(views.ProjectFormData{
 				Action: "/projects",
 				Title:  "New project",
@@ -184,25 +186,25 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 			}).Render(r.Context(), w)
 			return
 		}
-		httpx.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
+		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
 	}
 }
 
 func updateHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
 		in, err := formInput(r)
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		p, err := Update(r.Context(), q, id, in)
+		p, err := domain.Update(r.Context(), q, id, in)
 		if err != nil {
-			httpx.HTML(w, http.StatusBadRequest)
+			app.HTML(w, http.StatusBadRequest)
 			data := views.ProjectFormData{
 				Action: "/projects/" + strconv.FormatInt(id, 10),
 				Title:  "Edit project",
@@ -216,21 +218,21 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			_ = views.ProjectForm(data).Render(r.Context(), w)
 			return
 		}
-		httpx.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
+		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
 	}
 }
 
 func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := httpx.PathID(r, "id")
+		id, err := app.PathID(r, "id")
 		if err != nil {
-			httpx.Error(w, r, err)
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		if err := Delete(r.Context(), q, id); err != nil {
-			httpx.Error(w, r, err)
+		if err := domain.Delete(r.Context(), q, id); err != nil {
+			handlererrors.WriteError(w, r, err)
 			return
 		}
-		httpx.Redirect(w, r, "/")
+		app.Redirect(w, r, "/")
 	}
 }

@@ -3,31 +3,64 @@ package task
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
-	"cad-development/internal/apperr"
 	"cad-development/internal/db"
-	"cad-development/internal/httpx"
 	"cad-development/internal/monthlock"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
-	"cad-development/internal/views"
 	"cad-development/internal/weekly"
 )
 
-func ParseFilter(r *http.Request) (projectKey string, subprojectID *int64, err error) {
-	projectKey = r.FormValue("project")
-	subprojectID, err = httpx.FormInt64Checked(r, "subproject")
-	return projectKey, subprojectID, err
+type Grid struct {
+	Projects         []GridOption
+	Subprojects      []GridOption
+	FilterProject    string
+	FilterSubproject string
+	Ideas            bool
+	Weeks            []string
+	Rows             []GridRow
+	POName           string
+	BudgetHours      float64
+	PlannedHours     float64
+	SpentHours       float64
+	ProgressPct      *float64
+	Overrun          bool
+	LastMonth        string
+	LastMonthUnlock  bool
+	PastMonths       []string
 }
 
-func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time) (views.GridData, error) {
+type GridOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+type GridRow struct {
+	ID          int64
+	Name        string
+	ProjectName string
+	Subproject  string
+	TotalHours  float64
+	SpentHours  float64
+	Progress    float64
+	Cells       []GridCell
+}
+
+type GridCell struct {
+	WeekStart string
+	Planned   float64
+	Spent     float64
+	Progress  float64
+	Locked    bool
+}
+
+func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time) (Grid, error) {
 	projects, err := project.List(ctx, q)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	if projectKey == "" && len(projects) > 0 {
 		projectKey = strconv.FormatInt(projects[0].ID, 10)
@@ -36,7 +69,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		projectKey = "ideas"
 	}
 
-	data := views.GridData{
+	data := Grid{
 		FilterProject:    projectKey,
 		FilterSubproject: "",
 		Ideas:            projectKey == "ideas",
@@ -45,22 +78,21 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	unlocked, err := monthlock.UnlockedSet(ctx, q)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	data.LastMonthUnlock = unlocked[data.LastMonth]
 
 	if data.Ideas {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
-			return views.GridData{}, err
+			return Grid{}, err
 		}
 		for _, t := range tasks {
-			data.Rows = append(data.Rows, views.TaskRow{
+			data.Rows = append(data.Rows, GridRow{
 				ID:          t.ID,
 				Name:        t.Name,
 				ProjectName: "",
 				Subproject:  "",
-				DetailPath:  fmt.Sprintf("/tasks/%d", t.ID),
 			})
 		}
 		return data, nil
@@ -68,15 +100,15 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 
 	pid, err := strconv.ParseInt(projectKey, 10, 64)
 	if err != nil || pid < 1 {
-		return views.GridData{}, apperr.New(http.StatusBadRequest, "invalid project")
+		return Grid{}, Invalid("invalid project")
 	}
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	subs, err := subproject.ListByProject(ctx, q, pid)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	data.Subprojects = subprojectOptions(subs, subprojectID)
 	if subprojectID != nil {
@@ -85,11 +117,11 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 
 	start, err := weekly.ParseDate(proj.StartDate)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	end, err := weekly.ParseDate(proj.EndDate)
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	data.Weeks = weekly.WeekStarts(start, end)
 	data.POName = proj.PurchaseOrderName
@@ -104,23 +136,23 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	if subprojectID != nil {
 		sp, err := subproject.Get(ctx, q, *subprojectID)
 		if err != nil {
-			return views.GridData{}, err
+			return Grid{}, err
 		}
 		if sp.ProjectID != pid {
-			return views.GridData{}, apperr.New(http.StatusBadRequest, "subproject does not belong to project")
+			return Grid{}, Invalid("subproject does not belong to project")
 		}
 		data.BudgetHours = sp.TotalHours
 		data.ProgressPct = nil
 		tasks, err = ListBySubproject(ctx, q, *subprojectID)
 		if err != nil {
-			return views.GridData{}, err
+			return Grid{}, err
 		}
 	} else {
 		zero := 0.0
 		data.ProgressPct = &zero
 		tasks, err = ListByProject(ctx, q, pid)
 		if err != nil {
-			return views.GridData{}, err
+			return Grid{}, err
 		}
 	}
 
@@ -131,7 +163,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		weeks, err = q.ListTaskWeeksByProject(ctx, sql.NullInt64{Int64: pid, Valid: true})
 	}
 	if err != nil {
-		return views.GridData{}, err
+		return Grid{}, err
 	}
 	byTask := map[int64][]db.TaskWeek{}
 	for _, w := range weeks {
@@ -146,14 +178,13 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		for _, w := range tweeks {
 			cellByWeek[w.WeekStart] = w
 		}
-		row := views.TaskRow{
+		row := GridRow{
 			ID:          t.ID,
 			Name:        t.Name,
 			ProjectName: proj.Name,
 			TotalHours:  planned,
 			SpentHours:  spent,
 			Progress:    prog,
-			DetailPath:  fmt.Sprintf("/tasks/%d", t.ID),
 		}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
@@ -166,12 +197,11 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			if stored != nil {
 				prev = *stored
 			}
-			row.Cells = append(row.Cells, views.WeekCell{
+			row.Cells = append(row.Cells, GridCell{
 				WeekStart: ws,
 				Planned:   cw.PlannedHours,
 				Spent:     cw.SpentHours,
 				Progress:  eff,
-				SavePath:  fmt.Sprintf("/tasks/%d/weeks/%s", t.ID, ws),
 				Locked:    monthlock.WeekLocked(ws, now, unlocked),
 			})
 		}
@@ -198,26 +228,26 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 	}
 	for _, ym := range monthlock.PastMonths(from, now) {
-		data.PastMonths = append(data.PastMonths, views.Option{Value: ym, Label: ym})
+		data.PastMonths = append(data.PastMonths, ym)
 	}
 	return data, nil
 }
 
-func projectOptions(projects []project.Project, selected string) []views.Option {
-	out := []views.Option{{Value: "ideas", Label: "Ideas", Selected: selected == "ideas"}}
+func projectOptions(projects []project.Project, selected string) []GridOption {
+	out := []GridOption{{Value: "ideas", Label: "Ideas", Selected: selected == "ideas"}}
 	for _, p := range projects {
 		v := strconv.FormatInt(p.ID, 10)
-		out = append(out, views.Option{Value: v, Label: p.Name, Selected: v == selected})
+		out = append(out, GridOption{Value: v, Label: p.Name, Selected: v == selected})
 	}
 	return out
 }
 
-func subprojectOptions(subs []subproject.Subproject, selected *int64) []views.Option {
-	out := []views.Option{{Value: "", Label: "All", Selected: selected == nil}}
+func subprojectOptions(subs []subproject.Subproject, selected *int64) []GridOption {
+	out := []GridOption{{Value: "", Label: "All", Selected: selected == nil}}
 	for _, s := range subs {
 		v := strconv.FormatInt(s.ID, 10)
 		sel := selected != nil && *selected == s.ID
-		out = append(out, views.Option{Value: v, Label: s.Name, Selected: sel})
+		out = append(out, GridOption{Value: v, Label: s.Name, Selected: sel})
 	}
 	return out
 }

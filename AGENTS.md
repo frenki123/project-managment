@@ -15,7 +15,7 @@ Build a local-first web app replacing Excel CAD_Development.xlsx.
 - Keep tests simple and avoid brittle tests that require frequent updates during development. Use Go stdlib.
 - Do not use curl or sqlite3 CLI checks as a substitute for Go tests.
 - Prefer small, stable Go mock tests for important calculations and HTTP handlers.
-- Organize by domain (task, project, subproject, etc.), not by technical layer.
+- Organize by domain (task, project, subproject, etc.), not by technical layer. only exception is `internal\app` that will be used as small web&db framework.
 - Do not commit. Run `just` checks and report results; I will confirm when a commit should be made.
 
 # Original Excel
