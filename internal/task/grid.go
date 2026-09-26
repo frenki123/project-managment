@@ -20,6 +20,7 @@ type Grid struct {
 	FilterSubproject string
 	Ideas            bool
 	Weeks            []weekly.WeekInfo
+	WeekTotals       []GridWeekTotal
 	Rows             []GridRow
 	POName           string
 	BudgetHours      float64
@@ -56,6 +57,15 @@ type GridCell struct {
 	Progress  float64
 	Stored    bool
 	Locked    bool
+}
+
+type GridWeekTotal struct {
+	WeekStart         string
+	Planned           float64
+	Spent             float64
+	Earned            float64
+	CumulativePlanned float64
+	CumulativeSpent   float64
 }
 
 type taskTotal struct {
@@ -150,6 +160,31 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
+	if subprojectID != nil {
+		rows, err := q.ListSubprojectWeekTotals(ctx, *subprojectID)
+		if err != nil {
+			return Grid{}, err
+		}
+		for _, row := range rows {
+			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
+				WeekStart: row.WeekStart, Planned: row.PlannedHours, Spent: row.SpentHours,
+				Earned: row.EarnedHours, CumulativePlanned: row.CumulativePlannedHours,
+				CumulativeSpent: row.CumulativeSpentHours,
+			})
+		}
+	} else {
+		rows, err := q.ListProjectWeekTotals(ctx, pid)
+		if err != nil {
+			return Grid{}, err
+		}
+		for _, row := range rows {
+			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
+				WeekStart: row.WeekStart, Planned: row.PlannedHours, Spent: row.SpentHours,
+				Earned: row.EarnedHours, CumulativePlanned: row.CumulativePlannedHours,
+				CumulativeSpent: row.CumulativeSpentHours,
+			})
+		}
+	}
 
 	subNames := map[int64]string{}
 	for _, s := range subs {

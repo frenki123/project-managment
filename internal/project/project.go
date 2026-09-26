@@ -198,17 +198,27 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	if _, err := Get(ctx, q, id); err != nil {
-		return err
-	}
 	return q.InTx(ctx, func(txq *db.Queries) error {
-		weeks, err := txq.CountTaskWeeksByProject(ctx, sql.NullInt64{Int64: id, Valid: true})
+		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			return Missing("project not found")
+		} else if err != nil {
+			return err
+		}
+		tasks, err := txq.CountTasksByProject(ctx, id)
 		if err != nil {
 			return err
 		}
-		if weeks > 0 {
-			return ConflictError("cannot delete a project with weekly history")
+		if tasks > 0 {
+			return ConflictError("cannot delete a project with tasks")
 		}
-		return txq.DeleteProject(ctx, id)
+		subprojects, err := txq.CountSubprojectsByProject(ctx, id)
+		if err != nil {
+			return err
+		}
+		if subprojects > 0 {
+			return ConflictError("cannot delete a project with subprojects")
+		}
+		_, err = txq.DeleteProject(ctx, id)
+		return err
 	})
 }

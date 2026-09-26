@@ -46,13 +46,8 @@ func setJSON(q *db.Queries, unlocked bool) http.HandlerFunc {
 func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
-		unlocked, err := domain.UnlockedSet(r.Context(), q)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
 		last := domain.PreviousMonth(currentTime)
-		if err := domain.SetMonth(r.Context(), q, last, !unlocked.Contains(last), currentTime); err != nil {
+		if _, err := domain.Toggle(r.Context(), q, last, currentTime); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -68,12 +63,7 @@ func unlockMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
 		ym := domain.YearMonth(r.FormValue("year_month"))
-		unlocked, err := domain.UnlockedSet(r.Context(), q)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		if err := domain.SetMonth(r.Context(), q, ym, !unlocked.Contains(ym), currentTime); err != nil {
+		if _, err := domain.Toggle(r.Context(), q, ym, currentTime); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}

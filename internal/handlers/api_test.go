@@ -94,13 +94,13 @@ func TestJSONTaskAndWeek(t *testing.T) {
 
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
-	if rr.Code != http.StatusNoContent {
-		t.Fatalf("delete task %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("delete task with history %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("deleted task status: got %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("protected task status: got %d", rr.Code)
 	}
 
 	rr = httptest.NewRecorder()

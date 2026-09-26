@@ -9,3 +9,9 @@ INSERT INTO month_locks (year_month, unlocked)
 VALUES (?, ?)
 ON CONFLICT (year_month) DO UPDATE SET unlocked = excluded.unlocked
 RETURNING *;
+
+-- name: ToggleMonthLock :one
+INSERT INTO month_locks (year_month, unlocked)
+VALUES (?, 1)
+ON CONFLICT (year_month) DO UPDATE SET unlocked = 1 - month_locks.unlocked
+RETURNING year_month, unlocked;

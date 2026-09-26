@@ -95,6 +95,28 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 	}
 }
 
+func TestCannotDeleteSubprojectWithTasks(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Tracked", TotalHours: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Create(ctx, q, task.Input{Name: "Task", SubprojectID: &sp.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := subproject.Delete(ctx, q, sp.ID); err == nil {
+		t.Fatal("expected delete with tasks to be rejected")
+	}
+	if _, err := subproject.Get(ctx, q, sp.ID); err != nil {
+		t.Fatal("subproject was deleted after rejected delete")
+	}
+}
+
 func TestDatabaseRejectsMismatchedTaskSubproject(t *testing.T) {
 	ctx := t.Context()
 	database := testkit.OpenDatabase(t)
@@ -112,5 +134,16 @@ func TestDatabaseRejectsMismatchedTaskSubproject(t *testing.T) {
 	}
 	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id, subproject_id) VALUES (?, ?, ?)`, "invalid", second.ID, sp.ID); err == nil {
 		t.Fatal("expected mismatched task relationship to be rejected")
+	}
+	rows, err := database.Conn.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		t.Fatal("database contains foreign-key violations")
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 }

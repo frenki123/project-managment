@@ -106,22 +106,11 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		}
 		data.Rows = append(data.Rows, viewRow)
 	}
-	if len(data.Weeks) > 0 {
-		data.WeekTotals = make([]views.WeekTotal, len(data.Weeks))
-		for _, row := range data.Rows {
-			for i, cell := range row.Cells {
-				data.WeekTotals[i].Planned += cell.Planned
-				data.WeekTotals[i].Spent += cell.Spent
-				data.WeekTotals[i].Earned += row.TotalHours * cell.Progress / 100
-			}
-		}
-		var planned, spent float64
-		for i := range data.WeekTotals {
-			planned += data.WeekTotals[i].Planned
-			spent += data.WeekTotals[i].Spent
-			data.WeekTotals[i].CumulativePlanned = planned
-			data.WeekTotals[i].CumulativeSpent = spent
-		}
+	for _, total := range grid.WeekTotals {
+		data.WeekTotals = append(data.WeekTotals, views.WeekTotal{
+			Planned: total.Planned, Spent: total.Spent, Earned: total.Earned,
+			CumulativePlanned: total.CumulativePlanned, CumulativeSpent: total.CumulativeSpent,
+		})
 	}
 	return data
 }

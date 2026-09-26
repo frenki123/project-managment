@@ -55,6 +55,13 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
+		if unlocked == nil {
+			var err error
+			unlocked, err = monthlock.UnlockedSet(ctx, txq)
+			if err != nil {
+				return err
+			}
+		}
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return Missing("task not found")
@@ -126,14 +133,13 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return err
 		}
 		if patch.Progress != nil {
-			for _, laterWeek := range later {
-				if laterWeek.Progress.Valid && laterWeek.Progress.Float64 < *patch.Progress {
-					if err := txq.UpdateTaskWeekProgress(ctx, db.UpdateTaskWeekProgressParams{
-						Progress: nullable.Float64(patch.Progress), TaskID: taskID, WeekStart: laterWeek.WeekStart,
-					}); err != nil {
-						return err
-					}
-				}
+			if err := txq.UpdateTaskWeeksProgressAfter(ctx, db.UpdateTaskWeeksProgressAfterParams{
+				Progress:   nullable.Float64(patch.Progress),
+				TaskID:     taskID,
+				WeekStart:  string(weekStart),
+				Progress_2: nullable.Float64(patch.Progress),
+			}); err != nil {
+				return err
 			}
 		}
 		result = toCell(row)

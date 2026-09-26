@@ -10,26 +10,20 @@ FROM projects WHERE id = ?;
 
 -- name: GetProjectTotals :one
 WITH task_totals AS (
-    SELECT
-        t.id,
-        COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours,
-        COALESCE(MAX(tw.progress), 0) AS progress
-    FROM tasks t
-    LEFT JOIN task_weeks tw ON tw.task_id = t.id
-    WHERE t.project_id = CAST(sqlc.arg(project_id) AS INTEGER)
-    GROUP BY t.id
+    SELECT project_id, planned_hours, spent_hours, progress
+    FROM v_task_totals
+    WHERE project_id = CAST(sqlc.arg(project_id) AS INTEGER)
 )
 SELECT
     CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
     CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / 100.0) * 100.0 / p.total_hours, 0)
         ELSE 0 END AS REAL) AS progress
 FROM projects p
-LEFT JOIN task_totals tt ON TRUE
+LEFT JOIN task_totals tt ON tt.project_id = p.id
 WHERE p.id = CAST(sqlc.arg(project_id) AS INTEGER)
-GROUP BY p.total_hours;
+GROUP BY p.id, p.total_hours;
 
 -- name: ListProjects :many
 SELECT id, name, purchase_order_name, total_hours, start_date, end_date
@@ -37,23 +31,16 @@ FROM projects ORDER BY name COLLATE NOCASE, id;
 
 -- name: ListProjectsWithTotals :many
 WITH task_totals AS (
-    SELECT
-        t.project_id,
-        t.id,
-        COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours,
-        COALESCE(MAX(tw.progress), 0) AS progress
-    FROM tasks t
-    LEFT JOIN task_weeks tw ON tw.task_id = t.id
-    WHERE t.project_id IS NOT NULL
-    GROUP BY t.project_id, t.id
+    SELECT project_id, planned_hours, spent_hours, progress
+    FROM v_task_totals
+    WHERE project_id IS NOT NULL
 )
 SELECT
     p.id, p.name, p.purchase_order_name, p.total_hours, p.start_date, p.end_date,
     CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
     CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / 100.0) * 100.0 / p.total_hours, 0)
         ELSE 0 END AS REAL) AS progress
 FROM projects p
 LEFT JOIN task_totals tt ON tt.project_id = p.id
@@ -70,14 +57,18 @@ UPDATE projects SET
 WHERE id = ?
 RETURNING id, name, purchase_order_name, total_hours, start_date, end_date;
 
--- name: DeleteProject :exec
-DELETE FROM projects WHERE id = ?;
+-- name: DeleteProject :one
+DELETE FROM projects
+WHERE projects.id = ?
+  AND NOT EXISTS (SELECT 1 FROM tasks WHERE project_id = projects.id)
+  AND NOT EXISTS (SELECT 1 FROM subprojects WHERE project_id = projects.id)
+RETURNING projects.id;
 
--- name: CountTaskWeeksByProject :one
-SELECT COUNT(*)
-FROM task_weeks tw
-JOIN tasks t ON t.id = tw.task_id
-WHERE t.project_id = ?;
+-- name: CountTasksByProject :one
+SELECT COUNT(*) FROM tasks WHERE project_id = CAST(? AS INTEGER);
+
+-- name: CountSubprojectsByProject :one
+SELECT COUNT(*) FROM subprojects WHERE project_id = CAST(? AS INTEGER);
 
 -- name: CountTaskWeeksOutsideRange :one
 SELECT COUNT(*) FROM task_weeks tw

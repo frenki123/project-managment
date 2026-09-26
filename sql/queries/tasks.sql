@@ -44,5 +44,8 @@ UPDATE tasks SET
 WHERE id = ?
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 
--- name: DeleteTask :exec
-DELETE FROM tasks WHERE id = ?;
+-- name: DeleteTask :one
+DELETE FROM tasks
+WHERE id = ?
+  AND NOT EXISTS (SELECT 1 FROM task_weeks WHERE task_id = tasks.id)
+RETURNING id;

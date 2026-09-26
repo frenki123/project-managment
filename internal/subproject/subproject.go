@@ -180,7 +180,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 			return err
 		}
 		if current.ProjectID != validated.ProjectID {
-			taskCount, err := txq.CountTasksBySubproject(ctx, sql.NullInt64{Int64: id, Valid: true})
+			taskCount, err := txq.CountTasksBySubproject(ctx, id)
 			if err != nil {
 				return err
 			}
@@ -200,15 +200,20 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	if _, err := Get(ctx, q, id); err != nil {
+	return q.InTx(ctx, func(txq *db.Queries) error {
+		if _, err := txq.GetSubproject(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			return Missing("subproject not found")
+		} else if err != nil {
+			return err
+		}
+		tasks, err := txq.CountTasksBySubproject(ctx, id)
+		if err != nil {
+			return err
+		}
+		if tasks > 0 {
+			return ConflictError("cannot delete a subproject with tasks")
+		}
+		_, err = txq.DeleteSubproject(ctx, id)
 		return err
-	}
-	weeks, err := q.CountTaskWeeksBySubproject(ctx, sql.NullInt64{Int64: id, Valid: true})
-	if err != nil {
-		return err
-	}
-	if weeks > 0 {
-		return ConflictError("cannot delete a subproject with weekly history")
-	}
-	return q.DeleteSubproject(ctx, id)
+	})
 }

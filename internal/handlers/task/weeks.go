@@ -7,7 +7,6 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	handlererrors "cad-development/internal/handlers/errors"
-	"cad-development/internal/monthlock"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 	"cad-development/internal/weekly"
@@ -108,9 +107,5 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 }
 
 func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time) (weekly.Cell, error) {
-	unlocked, err := monthlock.UnlockedSet(r.Context(), q)
-	if err != nil {
-		return weekly.Cell{}, err
-	}
-	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now, unlocked)
+	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now, nil)
 }

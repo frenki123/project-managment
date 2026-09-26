@@ -50,6 +50,10 @@ func OpenDatabase(config DatabaseConfig) (*Database, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	if _, err := conn.ExecContext(context.Background(), "PRAGMA optimize"); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return &Database{Conn: conn, Q: db.New(conn)}, nil
 }
 

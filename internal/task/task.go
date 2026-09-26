@@ -97,24 +97,29 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
-	in, err := validate(ctx, q, in)
-	if err != nil {
-		return Task{}, err
-	}
-	row, err := q.CreateTask(ctx, db.CreateTaskParams{
-		Name:                in.Name,
-		Description:         in.Description,
-		ImplementationNotes: in.ImplementationNotes,
-		Department:          in.Department,
-		Developers:          in.Developers,
-		Priority:            in.Priority,
-		ProjectID:           nullable.Int64(in.ProjectID),
-		SubprojectID:        nullable.Int64(in.SubprojectID),
+	var result Task
+	err := q.InTx(ctx, func(txq *db.Queries) error {
+		validated, err := validate(ctx, txq, in)
+		if err != nil {
+			return err
+		}
+		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
+			Name:                validated.Name,
+			Description:         validated.Description,
+			ImplementationNotes: validated.ImplementationNotes,
+			Department:          validated.Department,
+			Developers:          validated.Developers,
+			Priority:            validated.Priority,
+			ProjectID:           nullable.Int64(validated.ProjectID),
+			SubprojectID:        nullable.Int64(validated.SubprojectID),
+		})
+		if err != nil {
+			return err
+		}
+		result = FromDB(row)
+		return nil
 	})
-	if err != nil {
-		return Task{}, err
-	}
-	return FromDB(row), nil
+	return result, err
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
@@ -229,12 +234,22 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	if _, err := q.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return Missing("task not found")
-	} else if err != nil {
+	return q.InTx(ctx, func(txq *db.Queries) error {
+		if _, err := txq.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			return Missing("task not found")
+		} else if err != nil {
+			return err
+		}
+		weeks, err := txq.CountTaskWeeksByTask(ctx, id)
+		if err != nil {
+			return err
+		}
+		if weeks > 0 {
+			return ConflictError("cannot delete a task with weekly history")
+		}
+		_, err = txq.DeleteTask(ctx, id)
 		return err
-	}
-	return q.DeleteTask(ctx, id)
+	})
 }
 
 func mapTasks(rows []db.Task) []Task {
