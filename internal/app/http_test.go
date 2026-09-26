@@ -38,6 +38,39 @@ func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONRejectsTrailingContent(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"ok"}{"known":"second"}`))
+	var value struct {
+		Known string `json:"known"`
+	}
+	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err == nil {
+		t.Fatal("expected trailing JSON to be rejected")
+	}
+}
+
+func TestDecodeJSONMatchesFieldNamesCaseInsensitively(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"KNOWN":"ok"}`))
+	var value struct {
+		Known string `json:"known"`
+	}
+	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err != nil {
+		t.Fatal(err)
+	}
+	if value.Known != "ok" {
+		t.Fatalf("got %q", value.Known)
+	}
+}
+
+func TestDecodeJSONRejectsDuplicateNames(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"first","known":"second"}`))
+	var value struct {
+		Known string `json:"known"`
+	}
+	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err == nil {
+		t.Fatal("expected duplicate JSON names to be rejected")
+	}
+}
+
 func TestJSONWritesContentTypeAndStatus(t *testing.T) {
 	rr := httptest.NewRecorder()
 	app.JSON(rr, http.StatusCreated, map[string]string{"status": "created"})

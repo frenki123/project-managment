@@ -3,7 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -37,24 +37,20 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	if v == nil {
 		return
 	}
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.MarshalWrite(w, v)
 }
 
 func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	defer r.Body.Close()
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
+	if err := json.UnmarshalRead(r.Body, v,
+		json.RejectUnknownMembers(true),
+		json.MatchCaseInsensitiveNames(true),
+	); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return HTTPError{Status: http.StatusRequestEntityTooLarge, Message: "request body too large"}
 		}
 		return HTTPError{Status: http.StatusBadRequest, Message: "invalid json"}
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		return HTTPError{Status: http.StatusBadRequest, Message: "request must contain one json object"}
 	}
 	return nil
 }

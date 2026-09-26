@@ -38,8 +38,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func HTTPErrorFrom(err error) HTTPError {
-	var httpErr HTTPError
-	if errors.As(err, &httpErr) {
+	if httpErr, ok := errors.AsType[HTTPError](err); ok {
 		return httpErr
 	}
 	log.Println(err)
