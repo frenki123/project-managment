@@ -10,13 +10,17 @@ Build a local-first web app replacing Excel CAD_Development.xlsx.
 - Calculated values stay calculated; prefer SQL calculations over Go calculations.
 - No Excel import; provide Excel/XLSX export.
 - Do not edit applied migrations after deployment; add a migration when needed.
-- Enter the dev environment with `devenv shell` before running anything.
-- All commands go through `just` — run `just --list` to see available recipes.
+- Use Go `1.27.1` through `devenv`; run project commands via `just` — run `just --list` to see available recipes.
 - Keep tests simple and avoid brittle tests that require frequent updates during development. Use Go stdlib.
 - Do not use curl or sqlite3 CLI checks as a substitute for Go tests.
 - Prefer small, stable Go mock tests for important calculations and HTTP handlers.
 - Organize by domain (task, project, subproject, etc.), not by technical layer. only exception is `internal\app` that will be used as small web&db framework.
 - Do not commit. Run `just` checks and report results; I will confirm when a commit should be made.
+
+# Go 1.27
+- Prefer `errors.AsType`, `new(expr)`, `t.Context()`, and `slices` helpers when they improve clarity.
+- Use `encoding/json/v2` at HTTP boundaries; test its stricter behavior and preserve API contracts.
+- Do not add generic abstractions unless they clearly simplify the code; generic methods cannot implement interface methods.
 
 # Original Excel
 This Excel separates planning, execution, and progress into three linked sheets (`Plan`, `Actual`, `Progress`) so that estimated hours, real hours spent, and task completion can
