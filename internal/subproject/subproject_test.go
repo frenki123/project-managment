@@ -32,6 +32,20 @@ func TestHoursCap(t *testing.T) {
 	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: 5}); err == nil {
 		t.Fatal("expected update cap")
 	}
+	got, err := subproject.Get(ctx, q, sp.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalHours != 4 {
+		t.Fatalf("rejected update changed hours: %v", got.TotalHours)
+	}
+	list, err := subproject.ListByProject(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("unexpected subproject count: %d", len(list))
+	}
 }
 
 func TestHoursRejectNonFiniteValues(t *testing.T) {

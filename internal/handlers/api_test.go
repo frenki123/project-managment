@@ -82,11 +82,25 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("update task %d %s", rr.Code, rr.Body.String())
 	}
+	var updated struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Updated work" {
+		t.Fatalf("updated task name: %q", updated.Name)
+	}
 
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("delete task %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("deleted task status: got %d", rr.Code)
 	}
 
 	rr = httptest.NewRecorder()
@@ -103,7 +117,7 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	var apiError struct {
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &apiError); err != nil || apiError.Error == "" {
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiError); err != nil || apiError.Error != "name is required" {
 		t.Fatalf("expected JSON error response, got %q", rr.Body.String())
 	}
 
@@ -147,5 +161,32 @@ func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
 	}
 	if !got.Unlocked {
 		t.Fatalf("expected unlocked=true, got %s", rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/month-locks", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list status %d: %s", rr.Code, rr.Body.String())
+	}
+	var list struct {
+		Locks []struct {
+			Unlocked bool `json:"unlocked"`
+		} `json:"month_locks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Locks) != 1 || !list.Locks[0].Unlocked {
+		t.Fatalf("unexpected list response %s", rr.Body.String())
+	}
+}
+
+func TestRegisterServesGridRoot(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("CAD Development")) {
+		t.Fatalf("root response %d: %s", rr.Code, rr.Body.String())
 	}
 }

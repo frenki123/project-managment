@@ -21,6 +21,13 @@ func (failingComponent) Render(context.Context, io.Writer) error {
 	return errors.New("render failed")
 }
 
+type textComponent string
+
+func (c textComponent) Render(_ context.Context, w io.Writer) error {
+	_, err := io.WriteString(w, string(c))
+	return err
+}
+
 func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"ok","unknown":true}`))
 	var value struct {
@@ -135,5 +142,16 @@ func TestRenderDoesNotCommitOnFailure(t *testing.T) {
 	}
 	if rr.Header().Get("Content-Type") != "" || rr.Body.Len() != 0 {
 		t.Fatalf("response was committed: headers=%v body=%q", rr.Header(), rr.Body.String())
+	}
+}
+
+func TestRenderWritesSuccessfulComponent(t *testing.T) {
+	rr := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	if err := app.Render(rr, r, http.StatusCreated, textComponent("rendered")); err != nil {
+		t.Fatal(err)
+	}
+	if rr.Code != http.StatusCreated || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.String() != "rendered" {
+		t.Fatalf("got %d %q %q", rr.Code, rr.Header().Get("Content-Type"), rr.Body.String())
 	}
 }

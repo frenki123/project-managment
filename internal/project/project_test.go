@@ -61,6 +61,13 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 	if _, err := project.Update(ctx, q, p.ID, project.Input{Name: p.Name, TotalHours: p.TotalHours, StartDate: p.StartDate, EndDate: p.EndDate}); err == nil {
 		t.Fatal("expected date change to be rejected")
 	}
+	got, err := project.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StartDate != p.StartDate || got.EndDate != "2026-10-31" {
+		t.Fatalf("rejected update changed dates: %#v", got)
+	}
 }
 
 func TestCreateRejectsNonFiniteHours(t *testing.T) {
@@ -70,6 +77,13 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 		if _, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: value, StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 			t.Fatalf("expected non-finite value %v to be rejected", value)
 		}
+	}
+	projects, err := project.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 0 {
+		t.Fatalf("rejected creates persisted projects: %#v", projects)
 	}
 }
 
