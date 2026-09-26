@@ -19,7 +19,7 @@ type Grid struct {
 	FilterProject    string
 	FilterSubproject string
 	Ideas            bool
-	Weeks            []string
+	Weeks            []weekly.WeekStart
 	Rows             []GridRow
 	POName           string
 	BudgetHours      float64
@@ -50,11 +50,17 @@ type GridRow struct {
 }
 
 type GridCell struct {
-	WeekStart string
+	WeekStart weekly.WeekStart
 	Planned   float64
 	Spent     float64
 	Progress  float64
 	Locked    bool
+}
+
+type projectFilter struct {
+	Value string
+	ID    int64
+	Ideas bool
 }
 
 func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time) (Grid, error) {
@@ -62,27 +68,25 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	if err != nil {
 		return Grid{}, err
 	}
-	if projectKey == "" && len(projects) > 0 {
-		projectKey = strconv.FormatInt(projects[0].ID, 10)
-	}
-	if projectKey == "" {
-		projectKey = "ideas"
+	filter, err := parseProjectFilter(projectKey, projects)
+	if err != nil {
+		return Grid{}, err
 	}
 
 	data := Grid{
-		FilterProject:    projectKey,
+		FilterProject:    filter.Value,
 		FilterSubproject: "",
-		Ideas:            projectKey == "ideas",
-		Projects:         projectOptions(projects, projectKey),
-		LastMonth:        monthlock.PreviousMonth(now),
+		Ideas:            filter.Ideas,
+		Projects:         projectOptions(projects, filter.Value),
+		LastMonth:        string(monthlock.PreviousMonth(now)),
 	}
 	unlocked, err := monthlock.UnlockedSet(ctx, q)
 	if err != nil {
 		return Grid{}, err
 	}
-	data.LastMonthUnlock = unlocked[data.LastMonth]
+	data.LastMonthUnlock = unlocked.Contains(monthlock.YearMonth(data.LastMonth))
 
-	if data.Ideas {
+	if filter.Ideas {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
 			return Grid{}, err
@@ -98,10 +102,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		return data, nil
 	}
 
-	pid, err := strconv.ParseInt(projectKey, 10, 64)
-	if err != nil || pid < 1 {
-		return Grid{}, Invalid("invalid project")
-	}
+	pid := filter.ID
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {
 		return Grid{}, err
@@ -190,7 +191,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 		prev := 0.0
 		for _, ws := range data.Weeks {
-			cw := cellByWeek[ws]
+			cw := cellByWeek[string(ws)]
 			stored := weekly.StoredProgress(cw)
 			eff := weekly.EffectiveFromPrev(prev, stored)
 			if stored != nil {
@@ -201,7 +202,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 				Planned:   cw.PlannedHours,
 				Spent:     cw.SpentHours,
 				Progress:  eff,
-				Locked:    monthlock.WeekLocked(ws, now, unlocked),
+				Locked:    monthlock.WeekLocked(string(ws), now, unlocked),
 			})
 		}
 		data.Rows = append(data.Rows, row)
@@ -227,7 +228,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 	}
 	for _, ym := range monthlock.PastMonths(from, now) {
-		data.PastMonths = append(data.PastMonths, ym)
+		data.PastMonths = append(data.PastMonths, string(ym))
 	}
 	return data, nil
 }
@@ -239,6 +240,20 @@ func projectOptions(projects []project.Project, selected string) []GridOption {
 		out = append(out, GridOption{Value: v, Label: p.Name, Selected: v == selected})
 	}
 	return out
+}
+
+func parseProjectFilter(value string, projects []project.Project) (projectFilter, error) {
+	if value == "" && len(projects) > 0 {
+		value = strconv.FormatInt(projects[0].ID, 10)
+	}
+	if value == "" || value == "ideas" {
+		return projectFilter{Value: "ideas", Ideas: true}, nil
+	}
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id < 1 {
+		return projectFilter{}, Invalid("invalid project")
+	}
+	return projectFilter{Value: value, ID: id}, nil
 }
 
 func subprojectOptions(subs []subproject.Subproject, selected *int64) []GridOption {

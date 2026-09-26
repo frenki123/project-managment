@@ -26,7 +26,7 @@ func listJSON(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, map[string]any{"month_locks": rows, "last_month": domain.PreviousMonth(currentTime)})
+		app.JSON(w, http.StatusOK, domain.LocksResponse{MonthLocks: rows, LastMonth: domain.PreviousMonth(currentTime)})
 	}
 }
 
@@ -34,11 +34,11 @@ func setJSON(q *db.Queries, unlocked bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
 		ym := r.PathValue("yearMonth")
-		if err := domain.Set(r.Context(), q, ym, unlocked, currentTime); err != nil {
+		if err := domain.SetMonth(r.Context(), q, domain.YearMonth(ym), unlocked, currentTime); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, map[string]any{"year_month": ym, "unlocked": unlocked})
+		app.JSON(w, http.StatusOK, domain.SetResponse{YearMonth: domain.YearMonth(ym), Unlocked: unlocked})
 	}
 }
 
@@ -51,7 +51,7 @@ func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		last := domain.PreviousMonth(currentTime)
-		if err := domain.Set(r.Context(), q, last, !unlocked[last], currentTime); err != nil {
+		if err := domain.SetMonth(r.Context(), q, last, !unlocked.Contains(last), currentTime); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
@@ -62,7 +62,7 @@ func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 func unlockMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
-		if err := domain.Set(r.Context(), q, r.FormValue("year_month"), true, currentTime); err != nil {
+		if err := domain.SetMonth(r.Context(), q, domain.YearMonth(r.FormValue("year_month")), true, currentTime); err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
 		}

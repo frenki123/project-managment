@@ -29,6 +29,10 @@ type Input struct {
 	EndDate           string  `json:"end_date"`
 }
 
+type ProjectsResponse struct {
+	Projects []Project `json:"projects"`
+}
+
 func FromDB(p db.Project) Project {
 	return Project{
 		ID:                p.ID,
@@ -125,8 +129,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 		if in.TotalHours < sum {
 			return ConflictError("project hours cannot be less than subproject hours")
 		}
-		start, _ := time.Parse(time.DateOnly, in.StartDate)
-		end, _ := time.Parse(time.DateOnly, in.EndDate)
+		start, err := weekly.ParseDate(in.StartDate)
+		if err != nil {
+			return err
+		}
+		end, err := weekly.ParseDate(in.EndDate)
+		if err != nil {
+			return err
+		}
 		outside, err := txq.CountTaskWeeksOutsideRange(ctx, db.CountTaskWeeksOutsideRangeParams{
 			ProjectID: id,
 			FirstWeek: weekly.MondayOnOrBefore(start).Format(time.DateOnly),

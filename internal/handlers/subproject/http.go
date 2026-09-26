@@ -45,7 +45,7 @@ func listJSON(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, map[string]any{"subprojects": list})
+		app.JSON(w, http.StatusOK, domain.SubprojectsResponse{Subprojects: list})
 	}
 }
 

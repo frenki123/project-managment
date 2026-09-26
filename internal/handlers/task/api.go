@@ -39,7 +39,7 @@ func listJSON(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, map[string]any{"tasks": list})
+		app.JSON(w, http.StatusOK, taskdomain.TasksResponse{Tasks: list})
 	}
 }
 

@@ -48,7 +48,6 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		FilterProject:    grid.FilterProject,
 		FilterSubproject: grid.FilterSubproject,
 		Ideas:            grid.Ideas,
-		Weeks:            grid.Weeks,
 		POName:           grid.POName,
 		BudgetHours:      grid.BudgetHours,
 		PlannedHours:     grid.PlannedHours,
@@ -58,6 +57,9 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		LastMonth:        grid.LastMonth,
 		LastMonthUnlock:  grid.LastMonthUnlock,
 		Error:            errMsg,
+	}
+	for _, week := range grid.Weeks {
+		data.Weeks = append(data.Weeks, string(week))
 	}
 	for _, option := range grid.Projects {
 		data.Projects = append(data.Projects, views.Option{Value: option.Value, Label: option.Label, Selected: option.Selected})
@@ -81,11 +83,11 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		}
 		for _, cell := range row.Cells {
 			viewRow.Cells = append(viewRow.Cells, views.WeekCell{
-				WeekStart: cell.WeekStart,
+				WeekStart: string(cell.WeekStart),
 				Planned:   cell.Planned,
 				Spent:     cell.Spent,
 				Progress:  cell.Progress,
-				SavePath:  "/tasks/" + strconv.FormatInt(row.ID, 10) + "/weeks/" + cell.WeekStart,
+				SavePath:  "/tasks/" + strconv.FormatInt(row.ID, 10) + "/weeks/" + string(cell.WeekStart),
 				Locked:    cell.Locked,
 			})
 		}

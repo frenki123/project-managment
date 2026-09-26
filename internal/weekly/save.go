@@ -9,6 +9,7 @@ import (
 
 	"cad-development/internal/db"
 	"cad-development/internal/monthlock"
+	"cad-development/internal/nullable"
 	"cad-development/internal/validation"
 )
 
@@ -19,15 +20,15 @@ type Patch struct {
 }
 
 type Cell struct {
-	TaskID       int64    `json:"task_id"`
-	WeekStart    string   `json:"week_start"`
-	PlannedHours float64  `json:"planned_hours"`
-	SpentHours   float64  `json:"spent_hours"`
-	Progress     *float64 `json:"progress"`
+	TaskID       int64     `json:"task_id"`
+	WeekStart    WeekStart `json:"week_start"`
+	PlannedHours float64   `json:"planned_hours"`
+	SpentHours   float64   `json:"spent_hours"`
+	Progress     *float64  `json:"progress"`
 }
 
-func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, patch Patch, now time.Time, unlocked map[string]bool) (Cell, error) {
-	if _, err := ParseMonday(weekStart); err != nil {
+func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time, unlocked monthlock.Set) (Cell, error) {
+	if _, err := ParseWeekStart(weekStart); err != nil {
 		return Cell{}, err
 	}
 	if patch.PlannedHours == nil && patch.SpentHours == nil && patch.Progress == nil {
@@ -48,7 +49,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			return Cell{}, err
 		}
 	}
-	if monthlock.WeekLocked(weekStart, now, unlocked) {
+	if monthlock.WeekLocked(string(weekStart), now, unlocked) {
 		return Cell{}, Locked("month is locked")
 	}
 
@@ -82,9 +83,9 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			return Invalid("week is outside the project date range")
 		}
 
-		existing, err := txq.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: taskID, WeekStart: weekStart})
+		existing, err := txq.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: taskID, WeekStart: string(weekStart)})
 		if errors.Is(err, sql.ErrNoRows) {
-			existing = db.TaskWeek{TaskID: taskID, WeekStart: weekStart}
+			existing = db.TaskWeek{TaskID: taskID, WeekStart: string(weekStart)}
 		} else if err != nil {
 			return err
 		}
@@ -103,11 +104,11 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			if *patch.Progress < previous {
 				return Invalid("progress cannot be less than the week before")
 			}
-			progress = sql.NullFloat64{Float64: *patch.Progress, Valid: true}
+			progress = nullable.Float64(patch.Progress)
 		}
 		var later []db.TaskWeek
 		if patch.Progress != nil {
-			later, err = txq.ListTaskWeeksAfter(ctx, db.ListTaskWeeksAfterParams{TaskID: taskID, WeekStart: weekStart})
+			later, err = txq.ListTaskWeeksAfter(ctx, db.ListTaskWeeksAfterParams{TaskID: taskID, WeekStart: string(weekStart)})
 			if err != nil {
 				return err
 			}
@@ -119,7 +120,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 		}
 
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
-			TaskID: taskID, WeekStart: weekStart, PlannedHours: planned, SpentHours: spent, Progress: progress,
+			TaskID: taskID, WeekStart: string(weekStart), PlannedHours: planned, SpentHours: spent, Progress: progress,
 		})
 		if err != nil {
 			return err
@@ -128,7 +129,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 			for _, laterWeek := range later {
 				if laterWeek.Progress.Valid && laterWeek.Progress.Float64 < *patch.Progress {
 					if err := txq.UpdateTaskWeekProgress(ctx, db.UpdateTaskWeekProgressParams{
-						Progress: sql.NullFloat64{Float64: *patch.Progress, Valid: true}, TaskID: taskID, WeekStart: laterWeek.WeekStart,
+						Progress: nullable.Float64(patch.Progress), TaskID: taskID, WeekStart: laterWeek.WeekStart,
 					}); err != nil {
 						return err
 					}
@@ -141,8 +142,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart string, pa
 	return result, err
 }
 
-func lastProgressBefore(ctx context.Context, q *db.Queries, taskID int64, weekStart string) (float64, error) {
-	progress, err := q.GetLastProgressBefore(ctx, db.GetLastProgressBeforeParams{TaskID: taskID, WeekStart: weekStart})
+func lastProgressBefore(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart) (float64, error) {
+	progress, err := q.GetLastProgressBefore(ctx, db.GetLastProgressBeforeParams{TaskID: taskID, WeekStart: string(weekStart)})
 	if errors.Is(err, sql.ErrNoRows) || !progress.Valid {
 		return 0, nil
 	}
@@ -164,10 +165,8 @@ func validProgress(value float64) error {
 }
 
 func toCell(week db.TaskWeek) Cell {
-	cell := Cell{TaskID: week.TaskID, WeekStart: week.WeekStart, PlannedHours: week.PlannedHours, SpentHours: week.SpentHours}
-	if week.Progress.Valid {
-		cell.Progress = new(week.Progress.Float64)
-	}
+	cell := Cell{TaskID: week.TaskID, WeekStart: WeekStart(week.WeekStart), PlannedHours: week.PlannedHours, SpentHours: week.SpentHours}
+	cell.Progress = nullable.Float64Pointer(week.Progress)
 	return cell
 }
 

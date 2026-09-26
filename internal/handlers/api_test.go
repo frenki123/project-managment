@@ -31,6 +31,7 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Keep this map to pin the request wire shape independently of domain types.
 	taskBody, err := json.Marshal(map[string]any{"name": "Do work", "project_id": proj.ID, "developers": "Ada", "priority": "high"})
 	if err != nil {
 		t.Fatal(err)

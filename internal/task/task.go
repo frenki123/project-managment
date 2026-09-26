@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/weekly"
 )
 
@@ -37,6 +38,10 @@ type Input struct {
 	SubprojectID        *int64 `json:"subproject_id"`
 }
 
+type TasksResponse struct {
+	Tasks []Task `json:"tasks"`
+}
+
 func FromDB(t db.Task) Task {
 	out := Task{
 		ID:                  t.ID,
@@ -47,22 +52,9 @@ func FromDB(t db.Task) Task {
 		Developers:          t.Developers,
 		Priority:            t.Priority,
 	}
-	if t.ProjectID.Valid {
-		id := t.ProjectID.Int64
-		out.ProjectID = &id
-	}
-	if t.SubprojectID.Valid {
-		id := t.SubprojectID.Int64
-		out.SubprojectID = &id
-	}
+	out.ProjectID = nullable.Int64Pointer(t.ProjectID)
+	out.SubprojectID = nullable.Int64Pointer(t.SubprojectID)
 	return out
-}
-
-func nullID(p *int64) sql.NullInt64 {
-	if p == nil || *p < 1 {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: *p, Valid: true}
 }
 
 func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
@@ -116,8 +108,8 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 		Department:          in.Department,
 		Developers:          in.Developers,
 		Priority:            in.Priority,
-		ProjectID:           nullID(in.ProjectID),
-		SubprojectID:        nullID(in.SubprojectID),
+		ProjectID:           nullable.Int64(in.ProjectID),
+		SubprojectID:        nullable.Int64(in.SubprojectID),
 	})
 	if err != nil {
 		return Task{}, err
@@ -143,13 +135,11 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	for _, w := range weeks {
 		c := weekly.Cell{
 			TaskID:       w.TaskID,
-			WeekStart:    w.WeekStart,
+			WeekStart:    weekly.WeekStart(w.WeekStart),
 			PlannedHours: w.PlannedHours,
 			SpentHours:   w.SpentHours,
 		}
-		if w.Progress.Valid {
-			c.Progress = new(w.Progress.Float64)
-		}
+		c.Progress = nullable.Float64Pointer(w.Progress)
 		out.Weeks = append(out.Weeks, c)
 	}
 	return out, nil
@@ -172,7 +162,7 @@ func ListIdeas(ctx context.Context, q *db.Queries) ([]Task, error) {
 }
 
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task, error) {
-	rows, err := q.ListTasksByProject(ctx, sql.NullInt64{Int64: projectID, Valid: true})
+	rows, err := q.ListTasksByProject(ctx, nullable.Int64(&projectID))
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +170,7 @@ func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task,
 }
 
 func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([]Task, error) {
-	rows, err := q.ListTasksBySubproject(ctx, sql.NullInt64{Int64: subprojectID, Valid: true})
+	rows, err := q.ListTasksBySubproject(ctx, nullable.Int64(&subprojectID))
 	if err != nil {
 		return nil, err
 	}
@@ -204,8 +194,8 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 		Department:          in.Department,
 		Developers:          in.Developers,
 		Priority:            in.Priority,
-		ProjectID:           nullID(in.ProjectID),
-		SubprojectID:        nullID(in.SubprojectID),
+		ProjectID:           nullable.Int64(in.ProjectID),
+		SubprojectID:        nullable.Int64(in.SubprojectID),
 		ID:                  id,
 	})
 	if err != nil {

@@ -19,7 +19,10 @@ func (e HTTPError) Error() string {
 }
 
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
-	httpErr := HTTPErrorFrom(err)
+	WriteHTTPError(w, r, HTTPErrorFrom(err))
+}
+
+func WriteHTTPError(w http.ResponseWriter, r *http.Request, httpErr HTTPError) {
 	if IsAPI(r) {
 		JSON(w, httpErr.Status, map[string]string{"error": httpErr.Message})
 		return

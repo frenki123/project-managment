@@ -6,6 +6,7 @@ import (
 	json "encoding/json/v2"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,16 +32,15 @@ func PathID(r *http.Request, key string) (int64, error) {
 	return id, nil
 }
 
-func JSON(w http.ResponseWriter, status int, v any) {
+func JSON[T any](w http.ResponseWriter, status int, v T) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	if v == nil {
-		return
+	if err := json.MarshalWrite(w, v); err != nil {
+		log.Printf("write JSON response: %v", err)
 	}
-	_ = json.MarshalWrite(w, v)
 }
 
-func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
+func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	defer r.Body.Close()
 	if err := json.UnmarshalRead(r.Body, v,

@@ -13,7 +13,7 @@ import (
 )
 
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
-	app.WriteError(w, r, ToHTTPError(err))
+	app.WriteHTTPError(w, r, ToHTTPError(err))
 }
 
 func ToHTTPError(err error) app.HTTPError {

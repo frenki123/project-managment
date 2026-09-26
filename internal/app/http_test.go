@@ -140,8 +140,7 @@ func TestDecodeJSONRejectsOversizedBody(t *testing.T) {
 		Known string `json:"known"`
 	}
 	err := app.DecodeJSON(httptest.NewRecorder(), r, &value)
-	var httpErr app.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusRequestEntityTooLarge {
+	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("got %v", err)
 	}
 }

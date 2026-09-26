@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+type WeekStart string
+
 func ParseDate(s string) (time.Time, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil {
@@ -32,12 +34,16 @@ func ParseMonday(s string) (time.Time, error) {
 	return t, nil
 }
 
-func WeekStarts(start, end time.Time) []string {
+func ParseWeekStart(s WeekStart) (time.Time, error) {
+	return ParseMonday(string(s))
+}
+
+func WeekStarts(start, end time.Time) []WeekStart {
 	w := MondayOnOrBefore(start)
 	last := MondayOnOrBefore(end)
-	var out []string
+	var out []WeekStart
 	for !w.After(last) {
-		out = append(out, w.Format(time.DateOnly))
+		out = append(out, WeekStart(w.Format(time.DateOnly)))
 		w = w.AddDate(0, 0, 7)
 	}
 	return out

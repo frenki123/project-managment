@@ -7,7 +7,7 @@ import (
 
 func TestLocked(t *testing.T) {
 	now := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
-	unlocked := map[string]bool{}
+	unlocked := NewSet()
 	if !Locked("2026-04", now, unlocked) {
 		t.Fatal("April should be locked on 2 May")
 	}
@@ -17,7 +17,7 @@ func TestLocked(t *testing.T) {
 	if Locked("2026-06", now, unlocked) {
 		t.Fatal("future month should be editable")
 	}
-	unlocked["2026-04"] = true
+	unlocked = NewSet("2026-04")
 	if Locked("2026-04", now, unlocked) {
 		t.Fatal("unlocked April should be editable")
 	}

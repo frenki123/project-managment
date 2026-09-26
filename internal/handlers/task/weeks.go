@@ -75,5 +75,5 @@ func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, 
 	if err != nil {
 		return weekly.Cell{}, err
 	}
-	return weekly.Save(r.Context(), q, taskID, r.PathValue("weekStart"), patch, now, unlocked)
+	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now, unlocked)
 }

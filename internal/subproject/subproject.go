@@ -23,6 +23,10 @@ type Input struct {
 	TotalHours float64 `json:"total_hours"`
 }
 
+type SubprojectsResponse struct {
+	Subprojects []Subproject `json:"subprojects"`
+}
+
 func FromDB(s db.Subproject) Subproject {
 	return Subproject{
 		ID:         s.ID,

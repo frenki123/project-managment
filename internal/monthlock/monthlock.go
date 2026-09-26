@@ -9,59 +9,85 @@ import (
 
 const yearMonthLayout = "2006-01"
 
+type YearMonth string
+
 type MonthLock struct {
-	YearMonth string `json:"year_month"`
-	Unlocked  bool   `json:"unlocked"`
+	YearMonth YearMonth `json:"year_month"`
+	Unlocked  bool      `json:"unlocked"`
 }
 
-func YearMonth(t time.Time) string {
-	return t.Format(yearMonthLayout)
+type Set map[YearMonth]bool
+
+func (s Set) Contains(month YearMonth) bool {
+	return s[month]
 }
 
-func ParseYearMonth(s string) (time.Time, error) {
-	t, err := time.Parse(yearMonthLayout, s)
+func NewSet(months ...YearMonth) Set {
+	set := make(Set, len(months))
+	for _, month := range months {
+		set[month] = true
+	}
+	return set
+}
+
+type LocksResponse struct {
+	MonthLocks []MonthLock `json:"month_locks"`
+	LastMonth  YearMonth   `json:"last_month"`
+}
+
+type SetResponse struct {
+	YearMonth YearMonth `json:"year_month"`
+	Unlocked  bool      `json:"unlocked"`
+}
+
+func Of(t time.Time) YearMonth {
+	return YearMonth(t.Format(yearMonthLayout))
+}
+
+func ParseYearMonth(s YearMonth) (time.Time, error) {
+	t, err := time.Parse(yearMonthLayout, string(s))
 	if err != nil {
 		return time.Time{}, Invalid("invalid year_month")
 	}
 	return t, nil
 }
 
-func PreviousMonth(now time.Time) string {
+func PreviousMonth(now time.Time) YearMonth {
 	y, m, _ := now.Date()
 	if m == time.January {
-		return time.Date(y-1, time.December, 1, 0, 0, 0, 0, now.Location()).Format(yearMonthLayout)
+		return Of(time.Date(y-1, time.December, 1, 0, 0, 0, 0, now.Location()))
 	}
-	return time.Date(y, m-1, 1, 0, 0, 0, 0, now.Location()).Format(yearMonthLayout)
+	return Of(time.Date(y, m-1, 1, 0, 0, 0, 0, now.Location()))
 }
 
-func IsPastMonth(yearMonth string, now time.Time) bool {
+func IsPastMonth(yearMonth YearMonth, now time.Time) bool {
 	parsed, err := ParseYearMonth(yearMonth)
-	return err == nil && parsed.Format(yearMonthLayout) < YearMonth(now)
+	return err == nil && parsed.Format(yearMonthLayout) < string(Of(now))
 }
 
-func Locked(yearMonth string, now time.Time, unlocked map[string]bool) bool {
+func Locked(yearMonth YearMonth, now time.Time, unlocked Set) bool {
 	if !IsPastMonth(yearMonth, now) {
 		return false
 	}
-	return !unlocked[yearMonth]
+	return !unlocked.Contains(yearMonth)
 }
 
-func WeekLocked(weekStart string, now time.Time, unlocked map[string]bool) bool {
+func WeekLocked(weekStart string, now time.Time, unlocked Set) bool {
 	week, err := time.Parse(time.DateOnly, weekStart)
 	if err != nil || week.Weekday() != time.Monday {
 		return true
 	}
-	return Locked(week.Format(yearMonthLayout), now, unlocked)
+	return Locked(YearMonth(week.Format(yearMonthLayout)), now, unlocked)
 }
 
-func UnlockedSet(ctx context.Context, q *db.Queries) (map[string]bool, error) {
+func UnlockedSet(ctx context.Context, q *db.Queries) (Set, error) {
 	months, err := q.ListUnlockedMonths(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]bool, len(months))
-	for _, m := range months {
-		out[m] = true
+	out := make(Set, len(months))
+	for _, month := range months {
+		out[YearMonth(month)] = true
 	}
 	return out, nil
 }
@@ -76,45 +102,45 @@ func List(ctx context.Context, q *db.Queries) ([]MonthLock, error) {
 	}
 	out := make([]MonthLock, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, MonthLock{YearMonth: row.YearMonth, Unlocked: row.Unlocked != 0})
+		out = append(out, MonthLock{YearMonth: YearMonth(row.YearMonth), Unlocked: row.Unlocked != 0})
 	}
 	return out, nil
 }
 
-func Set(ctx context.Context, q *db.Queries, yearMonth string, unlocked bool, now time.Time) error {
+func SetMonth(ctx context.Context, q *db.Queries, yearMonth YearMonth, unlocked bool, now time.Time) error {
 	if _, err := ParseYearMonth(yearMonth); err != nil {
 		return err
 	}
 	if !IsPastMonth(yearMonth, now) {
 		return Invalid("only past months can be unlocked")
 	}
-	u := int64(0)
+	unlockedValue := int64(0)
 	if unlocked {
-		u = 1
+		unlockedValue = 1
 	}
 	_, err := q.UpsertMonthLock(ctx, db.UpsertMonthLockParams{
-		YearMonth: yearMonth,
-		Unlocked:  u,
+		YearMonth: string(yearMonth),
+		Unlocked:  unlockedValue,
 	})
 	return err
 }
 
-func MonthRange(from, to time.Time) []string {
+func MonthRange(from, to time.Time) []YearMonth {
 	if to.Before(from) {
 		from, to = to, from
 	}
 	cur := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, time.UTC)
-	var out []string
+	var out []YearMonth
 	for !cur.After(end) {
-		out = append(out, YearMonth(cur))
+		out = append(out, Of(cur))
 		cur = cur.AddDate(0, 1, 0)
 	}
 	return out
 }
 
-func PastMonths(from time.Time, now time.Time) []string {
-	prev, _ := time.Parse(yearMonthLayout, PreviousMonth(now))
+func PastMonths(from time.Time, now time.Time) []YearMonth {
+	prev := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
 	start := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
 	if start.After(prev) {
 		return nil
