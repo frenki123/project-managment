@@ -160,17 +160,19 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
+	addWeekTotal := func(weekStart string, planned, spent, earned, cumulativePlanned, cumulativeSpent float64) {
+		data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
+			WeekStart: weekStart, Planned: planned, Spent: spent, Earned: earned,
+			CumulativePlanned: cumulativePlanned, CumulativeSpent: cumulativeSpent,
+		})
+	}
 	if subprojectID != nil {
 		rows, err := q.ListSubprojectWeekTotals(ctx, *subprojectID)
 		if err != nil {
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-				WeekStart: row.WeekStart, Planned: row.PlannedHours, Spent: row.SpentHours,
-				Earned: row.EarnedHours, CumulativePlanned: row.CumulativePlannedHours,
-				CumulativeSpent: row.CumulativeSpentHours,
-			})
+			addWeekTotal(row.WeekStart, row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
 		}
 	} else {
 		rows, err := q.ListProjectWeekTotals(ctx, pid)
@@ -178,11 +180,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-				WeekStart: row.WeekStart, Planned: row.PlannedHours, Spent: row.SpentHours,
-				Earned: row.EarnedHours, CumulativePlanned: row.CumulativePlannedHours,
-				CumulativeSpent: row.CumulativeSpentHours,
-			})
+			addWeekTotal(row.WeekStart, row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
 		}
 	}
 

@@ -18,7 +18,7 @@ SELECT
     CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
     CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / 100.0) * 100.0 / p.total_hours, 0)
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
         ELSE 0 END AS REAL) AS progress
 FROM projects p
 LEFT JOIN task_totals tt ON tt.project_id = p.id
@@ -40,7 +40,7 @@ SELECT
     CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
     CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / 100.0) * 100.0 / p.total_hours, 0)
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
         ELSE 0 END AS REAL) AS progress
 FROM projects p
 LEFT JOIN task_totals tt ON tt.project_id = p.id

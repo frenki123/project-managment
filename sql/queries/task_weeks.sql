@@ -7,10 +7,9 @@ SELECT task_id, week_start, planned_hours, spent_hours, progress
 FROM task_weeks WHERE task_id = ? ORDER BY week_start;
 
 -- name: GetTaskTotals :one
-SELECT
-    CAST(COALESCE(SUM(planned_hours), 0) AS REAL) AS planned_hours,
-    CAST(COALESCE(SUM(spent_hours), 0) AS REAL) AS spent_hours,
-    CAST(COALESCE(MAX(progress), 0) AS REAL) AS progress
+SELECT CAST(planned_hours AS REAL) AS planned_hours,
+       CAST(spent_hours AS REAL) AS spent_hours,
+       CAST(progress AS REAL) AS progress
 FROM v_task_totals
 WHERE task_id = ?;
 

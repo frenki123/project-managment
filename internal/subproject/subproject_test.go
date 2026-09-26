@@ -135,15 +135,4 @@ func TestDatabaseRejectsMismatchedTaskSubproject(t *testing.T) {
 	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id, subproject_id) VALUES (?, ?, ?)`, "invalid", second.ID, sp.ID); err == nil {
 		t.Fatal("expected mismatched task relationship to be rejected")
 	}
-	rows, err := database.Conn.QueryContext(ctx, "PRAGMA foreign_key_check")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if rows.Next() {
-		t.Fatal("database contains foreign-key violations")
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
 }

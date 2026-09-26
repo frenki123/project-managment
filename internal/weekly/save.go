@@ -49,10 +49,6 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return Cell{}, err
 		}
 	}
-	if monthlock.WeekLocked(string(weekStart), now, unlocked) {
-		return Cell{}, Locked("month is locked")
-	}
-
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		if unlocked == nil {
@@ -61,6 +57,9 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			if err != nil {
 				return err
 			}
+		}
+		if monthlock.WeekLocked(string(weekStart), now, unlocked) {
+			return Locked("month is locked")
 		}
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {

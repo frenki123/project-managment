@@ -97,29 +97,24 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
-	var result Task
-	err := q.InTx(ctx, func(txq *db.Queries) error {
-		validated, err := validate(ctx, txq, in)
-		if err != nil {
-			return err
-		}
-		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
-			Name:                validated.Name,
-			Description:         validated.Description,
-			ImplementationNotes: validated.ImplementationNotes,
-			Department:          validated.Department,
-			Developers:          validated.Developers,
-			Priority:            validated.Priority,
-			ProjectID:           nullable.Int64(validated.ProjectID),
-			SubprojectID:        nullable.Int64(validated.SubprojectID),
-		})
-		if err != nil {
-			return err
-		}
-		result = FromDB(row)
-		return nil
+	validated, err := validate(ctx, q, in)
+	if err != nil {
+		return Task{}, err
+	}
+	row, err := q.CreateTask(ctx, db.CreateTaskParams{
+		Name:                validated.Name,
+		Description:         validated.Description,
+		ImplementationNotes: validated.ImplementationNotes,
+		Department:          validated.Department,
+		Developers:          validated.Developers,
+		Priority:            validated.Priority,
+		ProjectID:           nullable.Int64(validated.ProjectID),
+		SubprojectID:        nullable.Int64(validated.SubprojectID),
 	})
-	return result, err
+	if err != nil {
+		return Task{}, err
+	}
+	return FromDB(row), nil
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
