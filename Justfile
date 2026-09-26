@@ -8,6 +8,10 @@ generate:
     templ generate
     sqlc generate
 
+# Tidy module dependencies.
+tidy:
+    go mod tidy
+
 # Generate code and build the local server binary.
 build: generate
     mkdir -p tmp
@@ -17,8 +21,12 @@ build: generate
 test: generate
     go test ./...
 
+# Run Go's static analysis after generating code.
+vet: generate
+    go vet ./...
+
 # Run tests and build the application.
-check: test build
+check: test vet build
 
 # Reset and recreate the development database.
 db-reset:
