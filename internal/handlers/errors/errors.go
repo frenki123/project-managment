@@ -32,48 +32,51 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component app.Co
 func mapDomainError(err error) (app.HTTPError, bool) {
 	status := http.StatusBadRequest
 	message := ""
-	var taskErr task.Error
-	if errors.As(err, &taskErr) {
+	if taskErr, ok := errors.AsType[task.Error](err); ok {
 		message = taskErr.Message
 		if taskErr.Kind == task.NotFound {
 			status = http.StatusNotFound
 		}
 	}
-	var projectErr project.Error
-	if message == "" && errors.As(err, &projectErr) {
-		message = projectErr.Message
-		switch projectErr.Kind {
-		case project.NotFound:
-			status = http.StatusNotFound
-		case project.Conflict:
-			status = http.StatusConflict
+	if message == "" {
+		if projectErr, ok := errors.AsType[project.Error](err); ok {
+			message = projectErr.Message
+			switch projectErr.Kind {
+			case project.NotFound:
+				status = http.StatusNotFound
+			case project.Conflict:
+				status = http.StatusConflict
+			}
 		}
 	}
-	var subprojectErr subproject.Error
-	if message == "" && errors.As(err, &subprojectErr) {
-		message = subprojectErr.Message
-		switch subprojectErr.Kind {
-		case subproject.NotFound:
-			status = http.StatusNotFound
-		case subproject.Conflict:
-			status = http.StatusConflict
+	if message == "" {
+		if subprojectErr, ok := errors.AsType[subproject.Error](err); ok {
+			message = subprojectErr.Message
+			switch subprojectErr.Kind {
+			case subproject.NotFound:
+				status = http.StatusNotFound
+			case subproject.Conflict:
+				status = http.StatusConflict
+			}
 		}
 	}
-	var weeklyErr weekly.Error
-	if message == "" && errors.As(err, &weeklyErr) {
-		message = weeklyErr.Message
-		switch weeklyErr.Kind {
-		case weekly.NotFound:
-			status = http.StatusNotFound
-		case weekly.Forbidden:
-			status = http.StatusForbidden
-		case weekly.Conflict:
-			status = http.StatusConflict
+	if message == "" {
+		if weeklyErr, ok := errors.AsType[weekly.Error](err); ok {
+			message = weeklyErr.Message
+			switch weeklyErr.Kind {
+			case weekly.NotFound:
+				status = http.StatusNotFound
+			case weekly.Forbidden:
+				status = http.StatusForbidden
+			case weekly.Conflict:
+				status = http.StatusConflict
+			}
 		}
 	}
-	var monthlockErr monthlock.Error
-	if message == "" && errors.As(err, &monthlockErr) {
-		message = monthlockErr.Message
+	if message == "" {
+		if monthlockErr, ok := errors.AsType[monthlock.Error](err); ok {
+			message = monthlockErr.Message
+		}
 	}
 	if message == "" {
 		return app.HTTPError{}, false
