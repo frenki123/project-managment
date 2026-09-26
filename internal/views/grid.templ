@@ -155,7 +155,7 @@ templ TaskGridRow(row TaskRow, ideas bool) {
 		<td class="sticky c5">{ formatNum(row.Progress) }</td>
 		if !ideas {
 			for _, cell := range row.Cells {
-				@WeekCellEditor(WeekCellData{Cell: cell})
+				@WeekCellEditor(cell)
 			}
 		}
 	</tr>

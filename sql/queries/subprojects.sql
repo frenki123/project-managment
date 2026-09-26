@@ -61,6 +61,5 @@ RETURNING id, project_id, name, total_hours;
 
 -- name: DeleteSubproject :one
 DELETE FROM subprojects
-WHERE subprojects.id = ?
-  AND NOT EXISTS (SELECT 1 FROM tasks WHERE subproject_id = subprojects.id)
-RETURNING subprojects.id;
+WHERE id = ?
+RETURNING id;

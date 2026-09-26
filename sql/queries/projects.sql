@@ -59,10 +59,8 @@ RETURNING id, name, purchase_order_name, total_hours, start_date, end_date;
 
 -- name: DeleteProject :one
 DELETE FROM projects
-WHERE projects.id = ?
-  AND NOT EXISTS (SELECT 1 FROM tasks WHERE project_id = projects.id)
-  AND NOT EXISTS (SELECT 1 FROM subprojects WHERE project_id = projects.id)
-RETURNING projects.id;
+WHERE id = ?
+RETURNING id;
 
 -- name: CountTasksByProject :one
 SELECT COUNT(*) FROM tasks WHERE project_id = CAST(? AS INTEGER);

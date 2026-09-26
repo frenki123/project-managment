@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/db"
 	"cad-development/internal/monthlock"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
@@ -56,6 +57,27 @@ func TestSaveProgressAndLock(t *testing.T) {
 	h := 1.0
 	if _, err = weekly.Save(ctx, q, idea.ID, "2026-05-04", weekly.Patch{PlannedHours: &h}, now, unlocked); err == nil {
 		t.Fatal("ideas cannot be planned")
+	}
+}
+
+func TestSaveReadsUnlockedPastMonthInsideTransaction(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-04-06", EndDate: "2026-05-04"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskID := p.ID
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &taskID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.UpsertMonthLock(ctx, db.UpsertMonthLockParams{YearMonth: "2026-04", Unlocked: 1}); err != nil {
+		t.Fatal(err)
+	}
+	hours := 1.0
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), nil); err != nil {
+		t.Fatalf("unlocked historical week was rejected: %v", err)
 	}
 }
 

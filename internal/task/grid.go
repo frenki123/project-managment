@@ -60,7 +60,6 @@ type GridCell struct {
 }
 
 type GridWeekTotal struct {
-	WeekStart         string
 	Planned           float64
 	Spent             float64
 	Earned            float64
@@ -160,9 +159,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
-	addWeekTotal := func(weekStart string, planned, spent, earned, cumulativePlanned, cumulativeSpent float64) {
+	addWeekTotal := func(planned, spent, earned, cumulativePlanned, cumulativeSpent float64) {
 		data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-			WeekStart: weekStart, Planned: planned, Spent: spent, Earned: earned,
+			Planned: planned, Spent: spent, Earned: earned,
 			CumulativePlanned: cumulativePlanned, CumulativeSpent: cumulativeSpent,
 		})
 	}
@@ -172,7 +171,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(row.WeekStart, row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
+			addWeekTotal(row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
 		}
 	} else {
 		rows, err := q.ListProjectWeekTotals(ctx, pid)
@@ -180,7 +179,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(row.WeekStart, row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
+			addWeekTotal(row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
 		}
 	}
 

@@ -44,7 +44,7 @@ templ TaskForm(data TaskFormData) {
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this task? Its weekly history will also be deleted.')">
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this task?')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -68,7 +68,7 @@ templ ProjectForm(data ProjectFormData) {
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this project? Projects with weekly history cannot be deleted.')">
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this project?')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -97,7 +97,7 @@ templ SubprojectForm(data SubprojectFormData) {
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this subproject? Tasks will become unassigned.')">
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this subproject?')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -127,6 +127,6 @@ templ TaskPanel(data TaskPanelData) {
 		<p><strong>Progress:</strong> { formatNum(data.Task.Progress) }%</p>
 		<p>{ data.Desc }</p>
 		<p>{ data.Notes }</p>
-		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } onsubmit="return confirm('Delete this task and its weekly history?')"><button type="submit" class="secondary">DELETE</button></form></p>
+		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } onsubmit="return confirm('Delete this task?')"><button type="submit" class="secondary">DELETE</button></form></p>
 	</div>
 }

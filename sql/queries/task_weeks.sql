@@ -72,10 +72,6 @@ ON CONFLICT (task_id, week_start) DO UPDATE SET
     progress = excluded.progress
 RETURNING task_id, week_start, planned_hours, spent_hours, progress;
 
--- name: UpdateTaskWeekProgress :exec
-UPDATE task_weeks SET progress = ?
-WHERE task_id = ? AND week_start = ?;
-
 -- name: UpdateTaskWeeksProgressAfter :exec
 UPDATE task_weeks
 SET progress = ?

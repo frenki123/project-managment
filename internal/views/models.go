@@ -15,12 +15,6 @@ type GridData struct {
 	Weeks            []WeekHeader
 	WeekTotals       []WeekTotal
 	Rows             []TaskRow
-	POName           string
-	BudgetHours      float64
-	PlannedHours     float64
-	SpentHours       float64
-	ProgressPct      *float64
-	Overrun          bool
 	LastMonth        string
 	LastMonthUnlock  bool
 	PastMonths       []Option
@@ -60,10 +54,6 @@ type WeekCell struct {
 	SavePath  string
 	Locked    bool
 	Error     string
-}
-
-type WeekCellData struct {
-	Cell WeekCell
 }
 
 type WeekRowResponseData struct {

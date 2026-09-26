@@ -21,6 +21,10 @@
 		if (event.target.id === "task-project-filter") {
 			const subproject = document.getElementById("task-subproject-filter");
 			if (!subproject) return;
+			if (!event.target.value) {
+				subproject.replaceChildren(new Option("None", ""));
+				return;
+			}
 			loadSubprojects(subproject, event.target.value, "None");
 		}
 	});
@@ -53,6 +57,7 @@
 	});
 
 	document.body.addEventListener("htmx:responseError", (event) => {
+		lastActive = null;
 		const toast = document.getElementById("toast");
 		if (!toast) {
 			return;
