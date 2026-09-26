@@ -7,6 +7,7 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	handlererrors "cad-development/internal/handlers/errors"
+	taskhandler "cad-development/internal/handlers/task"
 	domain "cad-development/internal/monthlock"
 )
 
@@ -55,6 +56,10 @@ func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
+		if app.IsHTMX(r) {
+			taskhandler.RenderGrid(w, r, q, "", currentTime)
+			return
+		}
 		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
 	}
 }
@@ -62,8 +67,18 @@ func toggleLastMonth(q *db.Queries) http.HandlerFunc {
 func unlockMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
-		if err := domain.SetMonth(r.Context(), q, domain.YearMonth(r.FormValue("year_month")), true, currentTime); err != nil {
+		ym := domain.YearMonth(r.FormValue("year_month"))
+		unlocked, err := domain.UnlockedSet(r.Context(), q)
+		if err != nil {
 			handlererrors.WriteError(w, r, err)
+			return
+		}
+		if err := domain.SetMonth(r.Context(), q, ym, !unlocked.Contains(ym), currentTime); err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
+		if app.IsHTMX(r) {
+			taskhandler.RenderGrid(w, r, q, "", currentTime)
 			return
 		}
 		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")

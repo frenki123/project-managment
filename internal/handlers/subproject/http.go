@@ -37,9 +37,9 @@ func listJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		if pid != nil {
-			list, err = domain.ListByProject(r.Context(), q, *pid)
+			list, err = domain.ListByProjectWithTotals(r.Context(), q, *pid)
 		} else {
-			list, err = domain.List(r.Context(), q)
+			list, err = domain.ListWithTotals(r.Context(), q)
 		}
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
@@ -77,6 +77,11 @@ func createJSON(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
+		s, err = domain.Get(r.Context(), q, s.ID)
+		if err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
 		app.JSON(w, http.StatusCreated, s)
 	}
 }
@@ -94,6 +99,11 @@ func updateJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		s, err := domain.Update(r.Context(), q, id, in)
+		if err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
+		s, err = domain.Get(r.Context(), q, s.ID)
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
@@ -149,7 +159,16 @@ func projectOpts(ctxq *db.Queries, r *http.Request, selected int64) ([]views.Opt
 
 func newForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		opts, err := projectOpts(q, r, 0)
+		pid, err := app.FormInt64Checked(r, "project_id")
+		if err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
+		selected := int64(0)
+		if pid != nil {
+			selected = *pid
+		}
+		opts, err := projectOpts(q, r, selected)
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
@@ -199,11 +218,21 @@ func subFormData(s domain.Subproject, opts []views.Option, errMsg string) views.
 	}
 }
 
+func submittedFormValues(r *http.Request) views.SubprojectFormValues {
+	return views.SubprojectFormValues{Name: r.FormValue("name"), ProjectID: r.FormValue("project_id"), TotalHours: r.FormValue("total_hours")}
+}
+
 func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			opts, optsErr := projectOpts(q, r, 0)
+			if optsErr != nil {
+				handlererrors.WriteError(w, r, optsErr)
+				return
+			}
+			handlererrors.Render(w, r, httpErr.Status, views.SubprojectForm(views.SubprojectFormData{Action: "/subprojects", Title: "New subproject", Projects: opts, Subproject: submittedFormValues(r), Error: httpErr.Message}))
 			return
 		}
 		s, err := domain.Create(r.Context(), q, in)
@@ -240,7 +269,13 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 		}
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			opts, optsErr := projectOpts(q, r, 0)
+			if optsErr != nil {
+				handlererrors.WriteError(w, r, optsErr)
+				return
+			}
+			handlererrors.Render(w, r, httpErr.Status, views.SubprojectForm(views.SubprojectFormData{Action: "/subprojects/" + strconv.FormatInt(id, 10), Title: "Edit subproject", Projects: opts, Subproject: submittedFormValues(r), Error: httpErr.Message, DeleteAction: "/subprojects/" + strconv.FormatInt(id, 10) + "/delete"}))
 			return
 		}
 		s, err := domain.Update(r.Context(), q, id, in)

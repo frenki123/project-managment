@@ -26,7 +26,7 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 
 func listJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := domain.List(r.Context(), q)
+		list, err := domain.ListWithTotals(r.Context(), q)
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
@@ -63,6 +63,11 @@ func createJSON(q *db.Queries) http.HandlerFunc {
 			handlererrors.WriteError(w, r, err)
 			return
 		}
+		p, err = domain.Get(r.Context(), q, p.ID)
+		if err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
 		app.JSON(w, http.StatusCreated, p)
 	}
 }
@@ -80,6 +85,11 @@ func updateJSON(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		p, err := domain.Update(r.Context(), q, id, in)
+		if err != nil {
+			handlererrors.WriteError(w, r, err)
+			return
+		}
+		p, err = domain.Get(r.Context(), q, p.ID)
 		if err != nil {
 			handlererrors.WriteError(w, r, err)
 			return
@@ -116,6 +126,10 @@ func formInput(r *http.Request) (domain.Input, error) {
 	}
 	in.TotalHours = hours
 	return in, nil
+}
+
+func submittedFormValues(r *http.Request) views.ProjectFormValues {
+	return views.ProjectFormValues{Name: r.FormValue("name"), PurchaseOrderName: r.FormValue("purchase_order_name"), TotalHours: r.FormValue("total_hours"), StartDate: r.FormValue("start_date"), EndDate: r.FormValue("end_date")}
 }
 
 func newForm() http.HandlerFunc {
@@ -164,7 +178,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{Action: "/projects", Title: "New project", Project: submittedFormValues(r), Error: httpErr.Message}))
 			return
 		}
 		p, err := domain.Create(r.Context(), q, in)
@@ -197,7 +212,8 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 		}
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{Action: "/projects/" + strconv.FormatInt(id, 10), Title: "Edit project", Project: submittedFormValues(r), Error: httpErr.Message, DeleteAction: "/projects/" + strconv.FormatInt(id, 10) + "/delete"}))
 			return
 		}
 		p, err := domain.Update(r.Context(), q, id, in)

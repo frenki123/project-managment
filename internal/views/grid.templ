@@ -1,5 +1,7 @@
 package views
 
+import "strconv"
+
 templ GridPage(data GridData) {
 	@Layout("CAD Development") {
 		<div class="workspace">
@@ -9,15 +11,15 @@ templ GridPage(data GridData) {
 	}
 }
 
-templ Grid(data GridData) {
-	<section id="grid" class="grid-main">
-		if data.Error != "" {
-			<p class="error">{ data.Error }</p>
+	templ Grid(data GridData) {
+		<section id="grid" class="grid-main">
+			if data.Error != "" {
+				<div class="grid-alert" role="alert">{ data.Error }</div>
 		}
 		<form id="filters" class="filters" hx-get="/" hx-target="#grid" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
 			<label>
 				Project
-				<select name="project">
+			<select name="project" id="project-filter">
 					for _, o := range data.Projects {
 						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 					}
@@ -26,7 +28,7 @@ templ Grid(data GridData) {
 			if !data.Ideas {
 				<label>
 					Subproject
-					<select name="subproject">
+					<select name="subproject" id="subproject-filter">
 						for _, o := range data.Subprojects {
 							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 						}
@@ -35,15 +37,7 @@ templ Grid(data GridData) {
 			}
 		</form>
 		if !data.Ideas {
-			<div class="totals">
-				<span>PO: { data.POName }</span>
-				<span>Total h: { formatNum(data.BudgetHours) }</span>
-				<span class={ overrunClass(data.Overrun) }>Planned h: { formatNum(data.PlannedHours) }</span>
-				<span>Spent h: { formatNum(data.SpentHours) }</span>
-				if data.ProgressPct != nil {
-					<span>Progress: { formatNum(*data.ProgressPct) }%</span>
-				}
-			</div>
+			@GridTotals(data.Totals)
 			<div class="locks">
 				<form hx-post="/month-locks/last/toggle" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
 					if data.LastMonthUnlock {
@@ -53,18 +47,28 @@ templ Grid(data GridData) {
 					}
 				</form>
 				<form hx-post="/month-locks/unlock" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+					<label>Historical month
 					<select name="year_month">
 						for _, o := range data.PastMonths {
-							<option value={ o.Value }>{ o.Label }</option>
+						<option value={ o.Value }>{ o.Label }</option>
 						}
 					</select>
-					<button type="submit">Unlock month</button>
+					</label>
+					<button type="submit">Toggle month lock</button>
 				</form>
 			</div>
 		}
 		<div class="table-scroll">
 			<table class="week-table">
 				<thead>
+					if !data.Ideas {
+						<tr class="month-row">
+							<th colspan="6" class="sticky c0">Month</th>
+							for _, month := range distinctMonths(data.Weeks) {
+								<th colspan={ month.Count } class="month-group">{ month.Label }</th>
+							}
+						</tr>
+					}
 					<tr>
 						<th class="sticky c0">Task</th>
 						<th class="sticky c1">Project</th>
@@ -74,35 +78,85 @@ templ Grid(data GridData) {
 						<th class="sticky c5">progress %</th>
 						if !data.Ideas {
 							for _, w := range data.Weeks {
-								<th class="week-col">{ w }</th>
+								<th class="week-col" title={ w.Start }><span>W{ strconv.Itoa(w.Number) }</span><small>{ w.Date }</small></th>
 							}
 						}
 					</tr>
 				</thead>
 				<tbody>
 					for _, row := range data.Rows {
-						<tr>
-							<td class="sticky c0">
-								<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#panel" hx-swap="innerHTML">{ row.Name }</button>
-							</td>
-							<td class="sticky c1">{ row.ProjectName }</td>
-							<td class="sticky c2">{ row.Subproject }</td>
-							<td class="sticky c3">{ formatNum(row.TotalHours) }</td>
-							<td class="sticky c4">{ formatNum(row.SpentHours) }</td>
-							<td class="sticky c5">{ formatNum(row.Progress) }</td>
-							if !data.Ideas {
-								for _, cell := range row.Cells {
-									<td class="week-cell">
-										<input type="number" step="any" min="0" name="planned_hours" value={ formatNum(cell.Planned) } disabled?={ cell.Locked } title="planned" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
-										<input type="number" step="any" min="0" name="spent_hours" value={ formatNum(cell.Spent) } disabled?={ cell.Locked } title="spent" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
-										<input type="number" step="any" min="0" max="100" name="progress" value={ formatNum(cell.Progress) } disabled?={ cell.Locked } title="progress" hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="#grid" hx-swap="outerHTML" hx-include="this, #filters"/>
-									</td>
-								}
-							}
-						</tr>
+						@TaskGridRow(row, data.Ideas)
 					}
 				</tbody>
+				if !data.Ideas {
+					<tfoot>
+						<tr>
+							<th colspan="6" class="sticky c0">Totals</th>
+			for i, total := range data.WeekTotals {
+				@WeekTotalCell(i, total)
+							}
+						</tr>
+					</tfoot>
+				}
 			</table>
 		</div>
 	</section>
+}
+
+templ GridTotals(data GridTotalsData) {
+	<div id="grid-totals" class="totals">
+		@GridTotalsContent(data)
+	</div>
+}
+
+templ GridTotalsOOB(data GridTotalsData) {
+	<div id="grid-totals" class="totals" hx-swap-oob="outerHTML">
+		@GridTotalsContent(data)
+	</div>
+}
+
+templ GridTotalsContent(data GridTotalsData) {
+		<span>PO: { data.POName }</span>
+		<a href={ templ.URL("/projects/" + data.FilterProject + "/edit") }>Edit project</a>
+		if data.FilterSubproject != "" {
+			<a href={ templ.URL("/subprojects/" + data.FilterSubproject + "/edit") }>Edit subproject</a>
+		}
+		<a href={ templ.URL("/subprojects/new?project_id=" + data.FilterProject) }>+ subproject</a>
+		<a href={ templ.URL("/tasks/new?project_id=" + data.FilterProject) }>+ task</a>
+		<span>Total h: { formatNum(data.BudgetHours) }</span>
+		<span class={ overrunClass(data.Overrun) }>Planned h: { formatNum(data.PlannedHours) }</span>
+		<span>Spent h: { formatNum(data.SpentHours) }</span>
+		if data.ProgressPct != nil {
+			<span>Progress: { formatNum(*data.ProgressPct) }%</span>
+		}
+}
+
+templ WeekTotalCell(index int, total WeekTotal) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total)</td>
+}
+
+templ WeekTotalCellOOB(index int, total WeekTotal) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total)</td>
+}
+
+templ WeekTotalContent(total WeekTotal) {
+	<small>Plan { formatNum(total.Planned) }</small><small>Spent { formatNum(total.Spent) }</small><small>Earned { formatNum(total.Earned) }</small><small>Cum plan { formatNum(total.CumulativePlanned) }</small><small>Cum spent { formatNum(total.CumulativeSpent) }</small>
+}
+
+templ TaskGridRow(row TaskRow, ideas bool) {
+	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row" data-detail-path={ row.DetailPath }>
+		<td class="sticky c0">
+			<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#panel" hx-swap="innerHTML">{ row.Name }</button>
+		</td>
+		<td class="sticky c1">{ row.ProjectName }</td>
+		<td class="sticky c2">{ row.Subproject }</td>
+		<td class="sticky c3">{ formatNum(row.TotalHours) }</td>
+		<td class="sticky c4">{ formatNum(row.SpentHours) }</td>
+		<td class="sticky c5">{ formatNum(row.Progress) }</td>
+		if !ideas {
+			for _, cell := range row.Cells {
+				@WeekCellEditor(WeekCellData{Cell: cell})
+			}
+		}
+	</tr>
 }

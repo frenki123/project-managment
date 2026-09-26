@@ -1,0 +1,20 @@
+package views
+
+templ WeekCellEditor(data WeekCellData) {
+	<td class="week-cell">
+		if data.Cell.Error != "" {
+			<div class="cell-error" role="alert">{ data.Cell.Error }</div>
+		}
+		<input data-save-path={ data.Cell.SavePath } type="number" step="any" min="0" name="planned_hours" value={ formatNum(data.Cell.Planned) } disabled?={ data.Cell.Locked } title="planned" hx-post={ templ.URL(data.Cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+		<input data-save-path={ data.Cell.SavePath } type="number" step="any" min="0" name="spent_hours" value={ formatNum(data.Cell.Spent) } disabled?={ data.Cell.Locked } title="spent" hx-post={ templ.URL(data.Cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+		<input class={ progressClass(data.Cell.Stored) } data-save-path={ data.Cell.SavePath } type="number" step="any" min="0" max="100" name="progress" value={ formatNum(data.Cell.Progress) } disabled?={ data.Cell.Locked } title={ progressTitle(data.Cell.Stored) } hx-post={ templ.URL(data.Cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+	</td>
+}
+
+templ WeekRowResponse(data WeekRowResponseData) {
+	@TaskGridRow(data.Row, false)
+	for i, total := range data.WeekTotals {
+		@WeekTotalCellOOB(i, total)
+	}
+	@GridTotalsOOB(data.Totals)
+}

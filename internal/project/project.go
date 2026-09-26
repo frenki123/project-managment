@@ -19,6 +19,10 @@ type Project struct {
 	TotalHours        float64 `json:"total_hours"`
 	StartDate         string  `json:"start_date"`
 	EndDate           string  `json:"end_date"`
+	PlannedHours      float64 `json:"planned_hours"`
+	SpentHours        float64 `json:"spent_hours"`
+	ProgressPct       float64 `json:"progress_pct"`
+	EarnedHours       float64 `json:"earned_hours"`
 }
 
 type Input struct {
@@ -95,7 +99,23 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
 	if err != nil {
 		return Project{}, err
 	}
-	return FromDB(row), nil
+	result := FromDB(row)
+	if err := populateTotals(ctx, q, &result); err != nil {
+		return Project{}, err
+	}
+	return result, nil
+}
+
+func populateTotals(ctx context.Context, q *db.Queries, p *Project) error {
+	totals, err := q.GetProjectTotals(ctx, p.ID)
+	if err != nil {
+		return err
+	}
+	p.PlannedHours = totals.PlannedHours
+	p.SpentHours = totals.SpentHours
+	p.ProgressPct = totals.Progress
+	p.EarnedHours = totals.Progress * p.TotalHours / 100
+	return nil
 }
 
 func List(ctx context.Context, q *db.Queries) ([]Project, error) {
@@ -106,6 +126,23 @@ func List(ctx context.Context, q *db.Queries) ([]Project, error) {
 	out := make([]Project, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, FromDB(row))
+	}
+	return out, nil
+}
+
+func ListWithTotals(ctx context.Context, q *db.Queries) ([]Project, error) {
+	rows, err := q.ListProjectsWithTotals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Project, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Project{
+			ID: row.ID, Name: row.Name, PurchaseOrderName: row.PurchaseOrderName,
+			TotalHours: row.TotalHours, StartDate: row.StartDate, EndDate: row.EndDate,
+			PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
+			ProgressPct: row.Progress, EarnedHours: row.Progress * row.TotalHours / 100,
+		})
 	}
 	return out, nil
 }
@@ -165,8 +202,12 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 		return err
 	}
 	return q.InTx(ctx, func(txq *db.Queries) error {
-		if err := txq.ClearTaskWeeksByProject(ctx, id); err != nil {
+		weeks, err := txq.CountTaskWeeksByProject(ctx, sql.NullInt64{Int64: id, Valid: true})
+		if err != nil {
 			return err
+		}
+		if weeks > 0 {
+			return ConflictError("cannot delete a project with weekly history")
 		}
 		return txq.DeleteProject(ctx, id)
 	})

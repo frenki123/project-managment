@@ -12,7 +12,7 @@ import (
 	"cad-development/internal/weekly"
 )
 
-func TestDeleteProjectMakesIdeasAndDeletesWeeks(t *testing.T) {
+func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-07", EndDate: "2026-10-05"})
@@ -27,18 +27,18 @@ func TestDeleteProjectMakesIdeasAndDeletesWeeks(t *testing.T) {
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, testNow(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := project.Delete(ctx, q, p.ID); err != nil {
-		t.Fatal(err)
+	if err := project.Delete(ctx, q, p.ID); err == nil {
+		t.Fatal("expected project deletion to be rejected")
 	}
 	result, err := task.Get(ctx, q, tk.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ProjectID != nil {
-		t.Fatal("task should become an idea")
+	if result.ProjectID == nil {
+		t.Fatal("rejected deletion changed task assignment")
 	}
-	if len(result.Weeks) != 0 {
-		t.Fatalf("expected weekly data to be deleted, got %d rows", len(result.Weeks))
+	if len(result.Weeks) != 1 {
+		t.Fatalf("expected weekly data to remain, got %d rows", len(result.Weeks))
 	}
 }
 

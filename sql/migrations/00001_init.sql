@@ -48,6 +48,8 @@ CREATE TABLE month_locks (
 
 CREATE INDEX idx_tasks_project_id ON tasks (project_id);
 CREATE INDEX idx_tasks_subproject_id ON tasks (subproject_id);
+CREATE INDEX idx_task_weeks_week_start ON task_weeks (week_start);
+CREATE INDEX idx_task_weeks_task_week ON task_weeks (task_id, week_start);
 
 -- +goose Down
 DROP TABLE task_weeks;

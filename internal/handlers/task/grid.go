@@ -57,9 +57,17 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		LastMonth:        grid.LastMonth,
 		LastMonthUnlock:  grid.LastMonthUnlock,
 		Error:            errMsg,
+		Totals: views.GridTotalsData{
+			FilterProject: grid.FilterProject, FilterSubproject: grid.FilterSubproject,
+			POName: grid.POName, BudgetHours: grid.BudgetHours, PlannedHours: grid.PlannedHours,
+			SpentHours: grid.SpentHours, ProgressPct: grid.ProgressPct, Overrun: grid.Overrun,
+		},
 	}
 	for _, week := range grid.Weeks {
-		data.Weeks = append(data.Weeks, string(week))
+		data.Weeks = append(data.Weeks, views.WeekHeader{
+			Start: string(week.Start), Number: week.Number, Date: week.Date,
+			Month: week.Month, MonthLabel: week.MonthLabel,
+		})
 	}
 	for _, option := range grid.Projects {
 		data.Projects = append(data.Projects, views.Option{Value: option.Value, Label: option.Label, Selected: option.Selected})
@@ -68,7 +76,11 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 		data.Subprojects = append(data.Subprojects, views.Option{Value: option.Value, Label: option.Label, Selected: option.Selected})
 	}
 	for _, month := range grid.PastMonths {
-		data.PastMonths = append(data.PastMonths, views.Option{Value: month, Label: month})
+		label := month
+		if parsed, err := time.Parse("2006-01", month); err == nil {
+			label = parsed.Format("January 2006")
+		}
+		data.PastMonths = append(data.PastMonths, views.Option{Value: month, Label: label})
 	}
 	for _, row := range grid.Rows {
 		viewRow := views.TaskRow{
@@ -87,11 +99,29 @@ func toViewGrid(grid taskdomain.Grid, errMsg string) views.GridData {
 				Planned:   cell.Planned,
 				Spent:     cell.Spent,
 				Progress:  cell.Progress,
+				Stored:    cell.Stored,
 				SavePath:  "/tasks/" + strconv.FormatInt(row.ID, 10) + "/weeks/" + string(cell.WeekStart),
 				Locked:    cell.Locked,
 			})
 		}
 		data.Rows = append(data.Rows, viewRow)
+	}
+	if len(data.Weeks) > 0 {
+		data.WeekTotals = make([]views.WeekTotal, len(data.Weeks))
+		for _, row := range data.Rows {
+			for i, cell := range row.Cells {
+				data.WeekTotals[i].Planned += cell.Planned
+				data.WeekTotals[i].Spent += cell.Spent
+				data.WeekTotals[i].Earned += row.TotalHours * cell.Progress / 100
+			}
+		}
+		var planned, spent float64
+		for i := range data.WeekTotals {
+			planned += data.WeekTotals[i].Planned
+			spent += data.WeekTotals[i].Spent
+			data.WeekTotals[i].CumulativePlanned = planned
+			data.WeekTotals[i].CumulativeSpent = spent
+		}
 	}
 	return data
 }

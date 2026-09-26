@@ -16,26 +16,35 @@ templ TaskForm(data TaskFormData) {
 				<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
 				<label>
 					Project
-					<select name="project_id">
+					<select name="project_id" id="task-project-filter" disabled?={ !data.CanReassign }>
 						<option value="">Ideas</option>
 						for _, o := range data.Projects {
 							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 						}
 					</select>
+					if !data.CanReassign {
+						<input type="hidden" name="project_id" value={ data.Task.ProjectID }/>
+					}
 				</label>
 				<label>
 					Subproject
-					<select name="subproject_id">
+					<select name="subproject_id" id="task-subproject-filter" disabled?={ !data.CanReassign }>
 						<option value="">None</option>
 						for _, o := range data.Subprojects {
 							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 						}
 					</select>
+					if !data.CanReassign {
+						<input type="hidden" name="subproject_id" value={ data.Task.SubprojectID }/>
+					}
 				</label>
+				if !data.CanReassign {
+					<small>{ data.ReassignNote }</small>
+				}
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) }>
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this task? Its weekly history will also be deleted.')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -59,7 +68,7 @@ templ ProjectForm(data ProjectFormData) {
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) }>
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this project? Projects with weekly history cannot be deleted.')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -88,7 +97,7 @@ templ SubprojectForm(data SubprojectFormData) {
 				<button type="submit">Save</button>
 			</form>
 			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) }>
+				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this subproject? Tasks will become unassigned.')">
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
@@ -106,6 +115,7 @@ templ TaskPanelPage(data TaskPanelData) {
 
 templ TaskPanel(data TaskPanelData) {
 	<div class="panel-body">
+		<button type="button" class="panel-close" data-close-panel aria-label="Close">Close</button>
 		<h2>{ data.Task.Name }</h2>
 		<p><strong>Project:</strong> { data.Task.ProjectName }</p>
 		<p><strong>Subproject:</strong> { data.Task.Subproject }</p>
@@ -117,6 +127,6 @@ templ TaskPanel(data TaskPanelData) {
 		<p><strong>Progress:</strong> { formatNum(data.Task.Progress) }%</p>
 		<p>{ data.Desc }</p>
 		<p>{ data.Notes }</p>
-		<p><a href={ templ.URL(data.EditPath) }>EDIT</a></p>
+		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } onsubmit="return confirm('Delete this task and its weekly history?')"><button type="submit" class="secondary">DELETE</button></form></p>
 	</div>
 }

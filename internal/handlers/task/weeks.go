@@ -8,6 +8,8 @@ import (
 	"cad-development/internal/db"
 	handlererrors "cad-development/internal/handlers/errors"
 	"cad-development/internal/monthlock"
+	taskdomain "cad-development/internal/task"
+	"cad-development/internal/views"
 	"cad-development/internal/weekly"
 )
 
@@ -69,11 +71,40 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 		_, err = saveWeek(r, q, id, patch, currentTime)
 		if err != nil {
 			httpErr := handlererrors.ToHTTPError(err)
-			RenderGrid(w, r, q, httpErr.Message, currentTime)
+			renderWeekRow(w, r, q, id, httpErr.Message, currentTime)
 			return
 		}
-		RenderGrid(w, r, q, "", currentTime)
+		renderWeekRow(w, r, q, id, "", currentTime)
 	}
+}
+
+func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID int64, errMsg string, now time.Time) {
+	projectKey, subprojectID, err := ParseFilter(r)
+	if err != nil {
+		handlererrors.WriteError(w, r, err)
+		return
+	}
+	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now)
+	if err != nil {
+		handlererrors.WriteError(w, r, err)
+		return
+	}
+	data := toViewGrid(grid, "")
+	weekStart := r.PathValue("weekStart")
+	for i := range data.Rows {
+		if data.Rows[i].ID != taskID {
+			continue
+		}
+		for j := range data.Rows[i].Cells {
+			if data.Rows[i].Cells[j].WeekStart != weekStart {
+				continue
+			}
+			data.Rows[i].Cells[j].Error = errMsg
+			handlererrors.Render(w, r, http.StatusOK, views.WeekRowResponse(views.WeekRowResponseData{Row: data.Rows[i], WeekTotals: data.WeekTotals, Totals: data.Totals}))
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time) (weekly.Cell, error) {

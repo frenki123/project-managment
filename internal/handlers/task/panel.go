@@ -57,6 +57,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 			Notes:      t.ImplementationNotes,
 			Desc:       t.Description,
 			EditPath:   "/tasks/" + strconv.FormatInt(t.ID, 10) + "/edit",
+			DeletePath: "/tasks/" + strconv.FormatInt(t.ID, 10) + "/delete",
 		}
 		if app.IsHTMX(r) {
 			handlererrors.RenderHTMX(w, r, http.StatusOK, views.TaskPanel(data))

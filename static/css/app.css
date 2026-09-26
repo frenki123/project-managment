@@ -2,6 +2,15 @@ body {
 	margin: 0;
 }
 
+:root {
+	--task-col: 10rem;
+	--project-col: 8rem;
+	--subproject-col: 8rem;
+	--total-col: 5rem;
+	--spent-col: 5rem;
+	--progress-col: 6rem;
+}
+
 .app-header {
 	display: flex;
 	align-items: center;
@@ -78,18 +87,57 @@ body {
 
 .week-table thead .sticky {
 	z-index: 2;
+	top: 0;
 }
 
-.c0 { left: 0; min-width: 10rem; }
-.c1 { left: 10rem; min-width: 8rem; }
-.c2 { left: 18rem; min-width: 8rem; }
-.c3 { left: 26rem; min-width: 5rem; }
-.c4 { left: 31rem; min-width: 5rem; }
-.c5 { left: 36rem; min-width: 6rem; }
+.week-table thead tr:nth-child(2) th:not(.sticky) {
+	position: sticky;
+	top: 2.1rem;
+	z-index: 2;
+}
+
+.week-table thead tr:nth-child(2) th.sticky {
+	top: 2.1rem;
+}
+
+.c0 { left: 0; min-width: var(--task-col); }
+.c1 { left: var(--task-col); min-width: var(--project-col); }
+.c2 { left: calc(var(--task-col) + var(--project-col)); min-width: var(--subproject-col); }
+.c3 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col)); min-width: var(--total-col); }
+.c4 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col)); min-width: var(--spent-col); }
+.c5 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col) + var(--spent-col)); min-width: var(--progress-col); }
 
 .week-col,
 .week-cell {
 	min-width: 5.5rem;
+}
+
+.cell-error {
+	margin-bottom: 0.2rem;
+	color: #b00020;
+	white-space: normal;
+}
+
+.week-col span,
+.week-col small {
+	display: block;
+}
+
+.week-col small {
+	font-weight: 400;
+}
+
+.month-group {
+	text-align: center;
+	background: var(--pico-secondary-background, #eee) !important;
+}
+
+.month-row th {
+	top: 0;
+}
+
+.week-total small {
+	display: block;
 }
 
 .week-cell {
@@ -118,6 +166,35 @@ body {
 
 .error {
 	color: #b00020;
+}
+
+.grid-alert {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	margin-bottom: 0.75rem;
+	padding: 0.65rem 0.8rem;
+	border: 1px solid #b00020;
+	background: var(--pico-background-color, #fff);
+	color: #b00020;
+}
+
+.carried-progress {
+	border-left: 3px dotted var(--pico-muted-color, #888);
+}
+
+.stored-progress {
+	border-left: 3px solid var(--pico-primary, #0d6efd);
+}
+
+.panel-close {
+	float: right;
+}
+
+.panel-actions {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
 }
 
 .toast {

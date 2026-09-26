@@ -158,7 +158,7 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	}
 }
 
-func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
+func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
@@ -173,9 +173,11 @@ func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
-	var domainErr task.Error
-	if !errors.As(err, &domainErr) || domainErr.Kind != task.InvalidInput {
-		t.Fatalf("got %v", err)
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid.FilterSubproject != "" || grid.Subprojects[0].Selected == false {
+		t.Fatalf("expected subproject filter reset: %#v", grid)
 	}
 }

@@ -12,7 +12,8 @@ type GridData struct {
 	FilterProject    string
 	FilterSubproject string
 	Ideas            bool
-	Weeks            []string
+	Weeks            []WeekHeader
+	WeekTotals       []WeekTotal
 	Rows             []TaskRow
 	POName           string
 	BudgetHours      float64
@@ -24,6 +25,18 @@ type GridData struct {
 	LastMonthUnlock  bool
 	PastMonths       []Option
 	Error            string
+	Totals           GridTotalsData
+}
+
+type GridTotalsData struct {
+	FilterProject    string
+	FilterSubproject string
+	POName           string
+	BudgetHours      float64
+	PlannedHours     float64
+	SpentHours       float64
+	ProgressPct      *float64
+	Overrun          bool
 }
 
 type TaskRow struct {
@@ -43,8 +56,42 @@ type WeekCell struct {
 	Planned   float64
 	Spent     float64
 	Progress  float64
+	Stored    bool
 	SavePath  string
 	Locked    bool
+	Error     string
+}
+
+type WeekCellData struct {
+	Cell WeekCell
+}
+
+type WeekRowResponseData struct {
+	Row        TaskRow
+	WeekTotals []WeekTotal
+	Totals     GridTotalsData
+}
+
+type WeekHeader struct {
+	Start      string
+	Number     int
+	Date       string
+	Month      string
+	MonthLabel string
+}
+
+type WeekTotal struct {
+	Planned           float64
+	Spent             float64
+	CumulativePlanned float64
+	CumulativeSpent   float64
+	Earned            float64
+}
+
+type MonthGroup struct {
+	Month string
+	Label string
+	Count int
 }
 
 type TaskFormData struct {
@@ -53,6 +100,8 @@ type TaskFormData struct {
 	Task         TaskFormValues
 	Projects     []Option
 	Subprojects  []Option
+	CanReassign  bool
+	ReassignNote string
 	Error        string
 	DeleteAction string
 }
@@ -107,4 +156,5 @@ type TaskPanelData struct {
 	Notes      string
 	Desc       string
 	EditPath   string
+	DeletePath string
 }

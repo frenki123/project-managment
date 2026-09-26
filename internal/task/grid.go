@@ -19,7 +19,7 @@ type Grid struct {
 	FilterProject    string
 	FilterSubproject string
 	Ideas            bool
-	Weeks            []weekly.WeekStart
+	Weeks            []weekly.WeekInfo
 	Rows             []GridRow
 	POName           string
 	BudgetHours      float64
@@ -54,6 +54,7 @@ type GridCell struct {
 	Planned   float64
 	Spent     float64
 	Progress  float64
+	Stored    bool
 	Locked    bool
 }
 
@@ -119,6 +120,16 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.Subprojects = subprojectOptions(subs, subprojectID)
 	if subprojectID != nil {
+		sp, err := subproject.Get(ctx, q, *subprojectID)
+		if err != nil {
+			return Grid{}, err
+		}
+		if sp.ProjectID != pid {
+			subprojectID = nil
+			data.Subprojects = subprojectOptions(subs, nil)
+		}
+	}
+	if subprojectID != nil {
 		data.FilterSubproject = strconv.FormatInt(*subprojectID, 10)
 	}
 
@@ -130,7 +141,13 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	if err != nil {
 		return Grid{}, err
 	}
-	data.Weeks = weekly.WeekStarts(start, end)
+	for _, ws := range weekly.WeekStarts(start, end) {
+		info, err := weekly.Info(ws)
+		if err != nil {
+			return Grid{}, err
+		}
+		data.Weeks = append(data.Weeks, info)
+	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
 
@@ -145,9 +162,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		sp, err := subproject.Get(ctx, q, *subprojectID)
 		if err != nil {
 			return Grid{}, err
-		}
-		if sp.ProjectID != pid {
-			return Grid{}, Invalid("subproject does not belong to project")
 		}
 		data.BudgetHours = sp.TotalHours
 		data.ProgressPct = nil
@@ -223,7 +237,8 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			row.Subproject = subNames[*t.SubprojectID]
 		}
 		prev := 0.0
-		for _, ws := range data.Weeks {
+		for _, info := range data.Weeks {
+			ws := info.Start
 			cw := cellByWeek[string(ws)]
 			stored := weekly.StoredProgress(cw)
 			eff := weekly.EffectiveFromPrev(prev, stored)
@@ -235,6 +250,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 				Planned:   cw.PlannedHours,
 				Spent:     cw.SpentHours,
 				Progress:  eff,
+				Stored:    stored != nil,
 				Locked:    monthlock.WeekLocked(string(ws), now, unlocked),
 			})
 		}
@@ -268,9 +284,6 @@ func projectOptions(projects []project.Project, selected string) []GridOption {
 }
 
 func parseProjectFilter(value string, projects []project.Project) (projectFilter, error) {
-	if value == "" && len(projects) > 0 {
-		value = strconv.FormatInt(projects[0].ID, 10)
-	}
 	if value == "" || value == "ideas" {
 		return projectFilter{Value: "ideas", Ideas: true}, nil
 	}

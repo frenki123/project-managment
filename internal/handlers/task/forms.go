@@ -39,9 +39,12 @@ func taskSelects(r *http.Request, q *db.Queries, selectedProject, selectedSub *i
 	if err != nil {
 		return nil, nil, err
 	}
-	subs, err := subproject.List(r.Context(), q)
-	if err != nil {
-		return nil, nil, err
+	var subs []subproject.Subproject
+	if selectedProject != nil {
+		subs, err = subproject.ListByProject(r.Context(), q, *selectedProject)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	projNames := map[int64]string{}
 	var po []views.Option
@@ -82,6 +85,7 @@ func newForm(q *db.Queries) http.HandlerFunc {
 			Task:        vals,
 			Projects:    po,
 			Subprojects: so,
+			CanReassign: true,
 		}))
 	}
 }
@@ -135,6 +139,8 @@ func taskFormData(r *http.Request, q *db.Queries, t taskdomain.Task, errMsg stri
 		Subprojects:  so,
 		Error:        errMsg,
 		DeleteAction: "/tasks/" + id + "/delete",
+		CanReassign:  len(t.Weeks) == 0,
+		ReassignNote: "Project and subproject cannot be changed after weekly data is entered.",
 	}, nil
 }
 
@@ -142,7 +148,15 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			dummy := taskdomain.Task{Name: r.FormValue("name"), Description: r.FormValue("description"), ImplementationNotes: r.FormValue("implementation_notes"), Department: r.FormValue("department"), Developers: r.FormValue("developers"), Priority: r.FormValue("priority")}
+			data, formErr := taskFormData(r, q, dummy, httpErr.Message)
+			if formErr != nil {
+				handlererrors.WriteError(w, r, formErr)
+				return
+			}
+			data.Action, data.Title, data.DeleteAction = "/tasks", "New task", ""
+			handlererrors.Render(w, r, httpErr.Status, views.TaskForm(data))
 			return
 		}
 		t, err := taskdomain.Create(r.Context(), q, in)
@@ -177,7 +191,20 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 		}
 		in, err := formInput(r)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			httpErr := handlererrors.ToHTTPError(err)
+			current, getErr := taskdomain.Get(r.Context(), q, id)
+			if getErr != nil {
+				handlererrors.WriteError(w, r, getErr)
+				return
+			}
+			current.Name, current.Description, current.ImplementationNotes = r.FormValue("name"), r.FormValue("description"), r.FormValue("implementation_notes")
+			current.Department, current.Developers, current.Priority = r.FormValue("department"), r.FormValue("developers"), r.FormValue("priority")
+			data, formErr := taskFormData(r, q, current, httpErr.Message)
+			if formErr != nil {
+				handlererrors.WriteError(w, r, formErr)
+				return
+			}
+			handlererrors.Render(w, r, httpErr.Status, views.TaskForm(data))
 			return
 		}
 		t, err := taskdomain.Update(r.Context(), q, id, in)
@@ -185,6 +212,9 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			cur := taskdomain.Task{ID: id, Name: in.Name, Description: in.Description, ImplementationNotes: in.ImplementationNotes,
 				Department: in.Department, Developers: in.Developers, Priority: in.Priority,
 				ProjectID: in.ProjectID, SubprojectID: in.SubprojectID}
+			if current, getErr := taskdomain.Get(r.Context(), q, id); getErr == nil {
+				cur.ProjectID, cur.SubprojectID, cur.Weeks = current.ProjectID, current.SubprojectID, current.Weeks
+			}
 			httpErr := handlererrors.ToHTTPError(err)
 			data, formErr := taskFormData(r, q, cur, httpErr.Message)
 			if formErr != nil {

@@ -187,17 +187,17 @@ func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
 	}
 }
 
-func TestMonthLockHTMLRedirectPreservesFilters(t *testing.T) {
+func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/toggle", bytes.NewBufferString("project=7&subproject=3"))
+	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/toggle", bytes.NewBufferString("project=ideas"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project=7&subproject=3" {
-		t.Fatalf("got status %d location %q", rr.Code, rr.Header().Get("Location"))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`<section id="grid"`)) || bytes.Contains(rr.Body.Bytes(), []byte("<!DOCTYPE html>")) {
+		t.Fatalf("got status %d body %q", rr.Code, rr.Body.String())
 	}
 }
 
@@ -209,5 +209,24 @@ func TestRegisterServesGridRoot(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.Len() == 0 {
 		t.Fatalf("root response %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHTMXGridReturnsFragment(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	r := httptest.NewRequest(http.MethodGet, "/?project=ideas", nil)
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("grid status %d: %s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`<section id="grid"`)) {
+		t.Fatalf("expected grid fragment: %s", rr.Body.String())
+	}
+	if bytes.Contains(rr.Body.Bytes(), []byte("<!DOCTYPE html>")) || bytes.Contains(rr.Body.Bytes(), []byte("<html")) {
+		t.Fatalf("HTMX grid response contains a document: %s", rr.Body.String())
 	}
 }

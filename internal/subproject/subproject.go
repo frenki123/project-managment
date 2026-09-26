@@ -11,10 +11,12 @@ import (
 )
 
 type Subproject struct {
-	ID         int64   `json:"id"`
-	ProjectID  int64   `json:"project_id"`
-	Name       string  `json:"name"`
-	TotalHours float64 `json:"total_hours"`
+	ID           int64   `json:"id"`
+	ProjectID    int64   `json:"project_id"`
+	Name         string  `json:"name"`
+	TotalHours   float64 `json:"total_hours"`
+	PlannedHours float64 `json:"planned_hours"`
+	SpentHours   float64 `json:"spent_hours"`
 }
 
 type Input struct {
@@ -98,7 +100,21 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Subproject, error) {
 	if err != nil {
 		return Subproject{}, err
 	}
-	return FromDB(row), nil
+	result := FromDB(row)
+	if err := populateTotals(ctx, q, &result); err != nil {
+		return Subproject{}, err
+	}
+	return result, nil
+}
+
+func populateTotals(ctx context.Context, q *db.Queries, s *Subproject) error {
+	totals, err := q.GetSubprojectTotals(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	s.PlannedHours = totals.PlannedHours
+	s.SpentHours = totals.SpentHours
+	return nil
 }
 
 func List(ctx context.Context, q *db.Queries) ([]Subproject, error) {
@@ -113,6 +129,18 @@ func List(ctx context.Context, q *db.Queries) ([]Subproject, error) {
 	return out, nil
 }
 
+func ListWithTotals(ctx context.Context, q *db.Queries) ([]Subproject, error) {
+	rows, err := q.ListSubprojectsWithTotals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Subproject, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Subproject{ID: row.ID, ProjectID: row.ProjectID, Name: row.Name, TotalHours: row.TotalHours, PlannedHours: row.PlannedHours, SpentHours: row.SpentHours})
+	}
+	return out, nil
+}
+
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Subproject, error) {
 	rows, err := q.ListSubprojectsByProject(ctx, projectID)
 	if err != nil {
@@ -121,6 +149,18 @@ func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Subpr
 	out := make([]Subproject, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, FromDB(row))
+	}
+	return out, nil
+}
+
+func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64) ([]Subproject, error) {
+	rows, err := q.ListSubprojectsByProjectWithTotals(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Subproject, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Subproject{ID: row.ID, ProjectID: row.ProjectID, Name: row.Name, TotalHours: row.TotalHours, PlannedHours: row.PlannedHours, SpentHours: row.SpentHours})
 	}
 	return out, nil
 }
@@ -162,6 +202,13 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	if _, err := Get(ctx, q, id); err != nil {
 		return err
+	}
+	weeks, err := q.CountTaskWeeksBySubproject(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return err
+	}
+	if weeks > 0 {
+		return ConflictError("cannot delete a subproject with weekly history")
 	}
 	return q.DeleteSubproject(ctx, id)
 }

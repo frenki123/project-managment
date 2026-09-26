@@ -6,6 +6,14 @@ import (
 
 type WeekStart string
 
+type WeekInfo struct {
+	Start      WeekStart
+	Number     int
+	Date       string
+	Month      string
+	MonthLabel string
+}
+
 func ParseDate(s string) (time.Time, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil {
@@ -47,4 +55,19 @@ func WeekStarts(start, end time.Time) []WeekStart {
 		w = w.AddDate(0, 0, 7)
 	}
 	return out
+}
+
+func Info(week WeekStart) (WeekInfo, error) {
+	t, err := ParseWeekStart(week)
+	if err != nil {
+		return WeekInfo{}, err
+	}
+	_, number := t.ISOWeek()
+	return WeekInfo{
+		Start:      week,
+		Number:     number,
+		Date:       t.Format("02.01"),
+		Month:      t.Format("2006-01"),
+		MonthLabel: t.Format("January 2006"),
+	}, nil
 }
