@@ -14,7 +14,6 @@
     pkgs.sqlc
     pkgs.goose
     pkgs.templ
-    pkgs.sqlite
   ];
 
   languages.go.enable = true;
@@ -33,6 +32,5 @@
     sqlc version
     goose --version
     templ version
-    sqlite3 --version
   '';
 }

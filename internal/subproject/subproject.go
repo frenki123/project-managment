@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/validation"
 )
 
 type Subproject struct {
@@ -41,17 +41,17 @@ func FromDB(s db.Subproject) Subproject {
 func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
-		return in, Invalid("name is required")
+		return in, app.Invalid("name is required")
 	}
 	if in.ProjectID < 1 {
-		return in, Invalid("project is required")
+		return in, app.Invalid("project is required")
 	}
-	if !validation.NonNegativeFinite(in.TotalHours) {
-		return in, Invalid("hours cannot be negative")
+	if !app.NonNegativeFinite(in.TotalHours) {
+		return in, app.Invalid("hours cannot be negative")
 	}
 	proj, err := q.GetProject(ctx, in.ProjectID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return in, Missing("project not found")
+		return in, app.Missing("project not found")
 	}
 	if err != nil {
 		return in, err
@@ -69,7 +69,7 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Inp
 		return in, err
 	}
 	if used+in.TotalHours > proj.TotalHours {
-		return in, ConflictError("subproject hours exceed project hours")
+		return in, app.Conflict("subproject hours exceed project hours")
 	}
 	return in, nil
 }
@@ -95,7 +95,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Subproject, error) {
 	row, err := q.GetSubproject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Subproject{}, Missing("subproject not found")
+		return Subproject{}, app.Missing("subproject not found")
 	}
 	if err != nil {
 		return Subproject{}, err
@@ -115,18 +115,6 @@ func populateTotals(ctx context.Context, q *db.Queries, s *Subproject) error {
 	s.PlannedHours = totals.PlannedHours
 	s.SpentHours = totals.SpentHours
 	return nil
-}
-
-func List(ctx context.Context, q *db.Queries) ([]Subproject, error) {
-	rows, err := q.ListSubprojects(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Subproject, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, FromDB(row))
-	}
-	return out, nil
 }
 
 func ListWithTotals(ctx context.Context, q *db.Queries) ([]Subproject, error) {
@@ -166,11 +154,10 @@ func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject, error) {
-	var result Subproject
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return Missing("subproject not found")
+			return app.Missing("subproject not found")
 		}
 		if err != nil {
 			return err
@@ -185,24 +172,24 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 				return err
 			}
 			if taskCount > 0 {
-				return ConflictError("cannot move subproject with tasks")
+				return app.Conflict("cannot move subproject with tasks")
 			}
 		}
-		row, err := txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
+		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
 			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: validated.TotalHours, ID: id,
 		})
-		if err == nil {
-			result = FromDB(row)
-		}
 		return err
 	})
-	return result, err
+	if err != nil {
+		return Subproject{}, err
+	}
+	return Get(ctx, q, id)
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	return q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetSubproject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return Missing("subproject not found")
+			return app.Missing("subproject not found")
 		} else if err != nil {
 			return err
 		}
@@ -211,7 +198,7 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 			return err
 		}
 		if tasks > 0 {
-			return ConflictError("cannot delete a subproject with tasks")
+			return app.Conflict("cannot delete a subproject with tasks")
 		}
 		_, err = txq.DeleteSubproject(ctx, id)
 		return err

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/validation"
 	"cad-development/internal/weekly"
 )
 
@@ -52,21 +52,21 @@ func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.Name == "" {
-		return in, Invalid("name is required")
+		return in, app.Invalid("name is required")
 	}
-	if !validation.NonNegativeFinite(in.TotalHours) {
-		return in, Invalid("hours cannot be negative")
+	if !app.NonNegativeFinite(in.TotalHours) {
+		return in, app.Invalid("hours cannot be negative")
 	}
 	start, err := weekly.ParseDate(in.StartDate)
 	if err != nil {
-		return in, Invalid("invalid start_date")
+		return in, app.Invalid("invalid start_date")
 	}
 	end, err := weekly.ParseDate(in.EndDate)
 	if err != nil {
-		return in, Invalid("invalid end_date")
+		return in, app.Invalid("invalid end_date")
 	}
 	if end.Before(start) {
-		return in, Invalid("end_date must be on or after start_date")
+		return in, app.Invalid("end_date must be on or after start_date")
 	}
 	in.StartDate = start.Format(time.DateOnly)
 	in.EndDate = end.Format(time.DateOnly)
@@ -94,7 +94,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
 	row, err := q.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Project{}, Missing("project not found")
+		return Project{}, app.Missing("project not found")
 	}
 	if err != nil {
 		return Project{}, err
@@ -152,10 +152,9 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 	if err != nil {
 		return Project{}, err
 	}
-	var result Project
 	err = q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return Missing("project not found")
+			return app.Missing("project not found")
 		} else if err != nil {
 			return err
 		}
@@ -164,7 +163,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 			return err
 		}
 		if in.TotalHours < sum {
-			return ConflictError("project hours cannot be less than subproject hours")
+			return app.Conflict("project hours cannot be less than subproject hours")
 		}
 		start, err := weekly.ParseDate(in.StartDate)
 		if err != nil {
@@ -183,24 +182,24 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 			return err
 		}
 		if outside > 0 {
-			return ConflictError("project dates cannot exclude existing weekly data")
+			return app.Conflict("project dates cannot exclude existing weekly data")
 		}
-		row, err := txq.UpdateProject(ctx, db.UpdateProjectParams{
+		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{
 			Name: in.Name, PurchaseOrderName: in.PurchaseOrderName, TotalHours: in.TotalHours,
 			StartDate: in.StartDate, EndDate: in.EndDate, ID: id,
 		})
-		if err == nil {
-			result = FromDB(row)
-		}
 		return err
 	})
-	return result, err
+	if err != nil {
+		return Project{}, err
+	}
+	return Get(ctx, q, id)
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	return q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return Missing("project not found")
+			return app.Missing("project not found")
 		} else if err != nil {
 			return err
 		}
@@ -209,14 +208,14 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 			return err
 		}
 		if tasks > 0 {
-			return ConflictError("cannot delete a project with tasks")
+			return app.Conflict("cannot delete a project with tasks")
 		}
 		subprojects, err := txq.CountSubprojectsByProject(ctx, id)
 		if err != nil {
 			return err
 		}
 		if subprojects > 0 {
-			return ConflictError("cannot delete a project with subprojects")
+			return app.Conflict("cannot delete a project with subprojects")
 		}
 		_, err = txq.DeleteProject(ctx, id)
 		return err

@@ -1,22 +1,22 @@
 package projecthandler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	handlererrors "cad-development/internal/handlers/errors"
 	domain "cad-development/internal/project"
 	"cad-development/internal/views"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /api/v1/projects", listJSON(q))
-	mux.HandleFunc("POST /api/v1/projects", createJSON(q))
-	mux.HandleFunc("GET /api/v1/projects/{id}", getJSON(q))
-	mux.HandleFunc("PUT /api/v1/projects/{id}", updateJSON(q))
-	mux.HandleFunc("DELETE /api/v1/projects/{id}", deleteJSON(q))
+	mux.HandleFunc("GET /api/v1/projects", app.JSONList(q, listProjects))
+	mux.HandleFunc("POST /api/v1/projects", app.JSONCreate(q, domain.Create))
+	mux.HandleFunc("GET /api/v1/projects/{id}", app.JSONGet(q, domain.Get))
+	mux.HandleFunc("PUT /api/v1/projects/{id}", app.JSONUpdate(q, domain.Update))
+	mux.HandleFunc("DELETE /api/v1/projects/{id}", app.JSONDelete(q, domain.Delete))
 	mux.HandleFunc("GET /projects/new", newForm())
 	mux.HandleFunc("POST /projects", createHTML(q))
 	mux.HandleFunc("GET /projects/{id}/edit", editForm(q))
@@ -24,93 +24,12 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("POST /projects/{id}/delete", deleteHTML(q))
 }
 
-func listJSON(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := domain.ListWithTotals(r.Context(), q)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		app.JSON(w, http.StatusOK, domain.ProjectsResponse{Projects: list})
+func listProjects(ctx context.Context, q *db.Queries, _ *http.Request) (domain.ProjectsResponse, error) {
+	list, err := domain.ListWithTotals(ctx, q)
+	if err != nil {
+		return domain.ProjectsResponse{}, err
 	}
-}
-
-func getJSON(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		p, err := domain.Get(r.Context(), q, id)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		app.JSON(w, http.StatusOK, p)
-	}
-}
-
-func createJSON(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var in domain.Input
-		if err := app.DecodeJSON(w, r, &in); err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		p, err := domain.Create(r.Context(), q, in)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		p, err = domain.Get(r.Context(), q, p.ID)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		app.JSON(w, http.StatusCreated, p)
-	}
-}
-
-func updateJSON(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		var in domain.Input
-		if err := app.DecodeJSON(w, r, &in); err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		p, err := domain.Update(r.Context(), q, id, in)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		p, err = domain.Get(r.Context(), q, p.ID)
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		app.JSON(w, http.StatusOK, p)
-	}
-}
-
-func deleteJSON(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		if err := domain.Delete(r.Context(), q, id); err != nil {
-			handlererrors.WriteError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return domain.ProjectsResponse{Projects: list}, nil
 }
 
 func formInput(r *http.Request) (domain.Input, error) {
@@ -132,9 +51,16 @@ func submittedFormValues(r *http.Request) views.ProjectFormValues {
 	return views.ProjectFormValues{Name: r.FormValue("name"), PurchaseOrderName: r.FormValue("purchase_order_name"), TotalHours: r.FormValue("total_hours"), StartDate: r.FormValue("start_date"), EndDate: r.FormValue("end_date")}
 }
 
+func renderProjectForm(w http.ResponseWriter, r *http.Request, vals views.ProjectFormValues, action, title, deleteAction string, err error) {
+	httpErr := app.HTTPErrorFrom(err)
+	app.RenderPage(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{
+		Action: action, Title: title, Project: vals, Error: httpErr.Message, DeleteAction: deleteAction,
+	}))
+}
+
 func newForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		handlererrors.Render(w, r, http.StatusOK, views.ProjectForm(views.ProjectFormData{
+		app.RenderPage(w, r, http.StatusOK, views.ProjectForm(views.ProjectFormData{
 			Action: "/projects",
 			Title:  "New project",
 		}))
@@ -145,15 +71,15 @@ func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			app.WriteError(w, r, err)
 			return
 		}
 		p, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			app.WriteError(w, r, err)
 			return
 		}
-		handlererrors.Render(w, r, http.StatusOK, views.ProjectForm(projectFormData(p, "")))
+		app.RenderPage(w, r, http.StatusOK, views.ProjectForm(projectFormData(p, "")))
 	}
 }
 
@@ -178,25 +104,12 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := formInput(r)
 		if err != nil {
-			httpErr := handlererrors.ToHTTPError(err)
-			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{Action: "/projects", Title: "New project", Project: submittedFormValues(r), Error: httpErr.Message}))
+			renderProjectForm(w, r, submittedFormValues(r), "/projects", "New project", "", err)
 			return
 		}
 		p, err := domain.Create(r.Context(), q, in)
 		if err != nil {
-			httpErr := handlererrors.ToHTTPError(err)
-			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{
-				Action: "/projects",
-				Title:  "New project",
-				Project: views.ProjectFormValues{
-					Name:              in.Name,
-					PurchaseOrderName: in.PurchaseOrderName,
-					TotalHours:        r.FormValue("total_hours"),
-					StartDate:         in.StartDate,
-					EndDate:           in.EndDate,
-				},
-				Error: httpErr.Message,
-			}))
+			renderProjectForm(w, r, submittedFormValues(r), "/projects", "New project", "", err)
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
@@ -207,29 +120,17 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			app.WriteError(w, r, err)
 			return
 		}
 		in, err := formInput(r)
 		if err != nil {
-			httpErr := handlererrors.ToHTTPError(err)
-			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{Action: "/projects/" + strconv.FormatInt(id, 10), Title: "Edit project", Project: submittedFormValues(r), Error: httpErr.Message, DeleteAction: "/projects/" + strconv.FormatInt(id, 10) + "/delete"}))
+			renderProjectForm(w, r, submittedFormValues(r), "/projects/"+strconv.FormatInt(id, 10), "Edit project", "/projects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return
 		}
 		p, err := domain.Update(r.Context(), q, id, in)
 		if err != nil {
-			httpErr := handlererrors.ToHTTPError(err)
-			data := views.ProjectFormData{
-				Action: "/projects/" + strconv.FormatInt(id, 10),
-				Title:  "Edit project",
-				Project: views.ProjectFormValues{
-					Name: in.Name, PurchaseOrderName: in.PurchaseOrderName,
-					TotalHours: strconv.FormatFloat(in.TotalHours, 'f', -1, 64),
-					StartDate:  in.StartDate, EndDate: in.EndDate,
-				},
-				Error: httpErr.Message, DeleteAction: "/projects/" + strconv.FormatInt(id, 10) + "/delete",
-			}
-			handlererrors.Render(w, r, httpErr.Status, views.ProjectForm(data))
+			renderProjectForm(w, r, submittedFormValues(r), "/projects/"+strconv.FormatInt(id, 10), "Edit project", "/projects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
@@ -240,11 +141,11 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			handlererrors.WriteError(w, r, err)
+			app.WriteError(w, r, err)
 			return
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
-			handlererrors.WriteError(w, r, err)
+			app.WriteError(w, r, err)
 			return
 		}
 		app.Redirect(w, r, "/")

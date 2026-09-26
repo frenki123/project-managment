@@ -1,6 +1,17 @@
 package views
 
-import "strconv"
+import (
+	"strconv"
+	"time"
+
+	"cad-development/internal/weekly"
+)
+
+type MonthGroup struct {
+	Month string
+	Label string
+	Count int
+}
 
 func formatNum(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
@@ -27,7 +38,14 @@ func progressTitle(stored bool) string {
 	return "Progress carried forward from an earlier week"
 }
 
-func distinctMonths(weeks []WeekHeader) []MonthGroup {
+func monthLabel(ym string) string {
+	if parsed, err := time.Parse("2006-01", ym); err == nil {
+		return parsed.Format("January 2006")
+	}
+	return ym
+}
+
+func distinctMonths(weeks []weekly.WeekInfo) []MonthGroup {
 	var groups []MonthGroup
 	for _, week := range weeks {
 		if len(groups) > 0 && groups[len(groups)-1].Month == week.Month {

@@ -27,29 +27,11 @@ JOIN tasks t ON t.id = tt.task_id
 WHERE t.project_id = CAST(sqlc.arg(project_id) AS INTEGER)
 ;
 
--- name: ListTaskTotalsBySubproject :many
-SELECT
-    t.id AS task_id,
-    CAST(tt.planned_hours AS REAL) AS planned_hours,
-    CAST(tt.spent_hours AS REAL) AS spent_hours,
-    CAST(tt.progress AS REAL) AS progress
-FROM v_task_totals tt
-JOIN tasks t ON t.id = tt.task_id
-WHERE t.subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER)
-;
-
 -- name: ListTaskWeeksByProject :many
 SELECT tw.task_id, tw.week_start, tw.planned_hours, tw.spent_hours, tw.progress
 FROM task_weeks tw
 JOIN tasks t ON t.id = tw.task_id
 WHERE t.project_id = ?
-ORDER BY tw.task_id, tw.week_start;
-
--- name: ListTaskWeeksBySubproject :many
-SELECT tw.task_id, tw.week_start, tw.planned_hours, tw.spent_hours, tw.progress
-FROM task_weeks tw
-JOIN tasks t ON t.id = tw.task_id
-WHERE t.subproject_id = ?
 ORDER BY tw.task_id, tw.week_start;
 
 -- name: GetLastProgressBefore :one

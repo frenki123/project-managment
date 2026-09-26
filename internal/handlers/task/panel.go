@@ -6,7 +6,6 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	handlererrors "cad-development/internal/handlers/errors"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	taskdomain "cad-development/internal/task"
@@ -17,26 +16,25 @@ func panel(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			handlererrors.WriteHTMXError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		t, err := taskdomain.Get(r.Context(), q, id)
 		if err != nil {
-			handlererrors.WriteHTMXError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
-		row := views.TaskRow{
+		row := taskdomain.GridRow{
 			ID:         t.ID,
 			Name:       t.Name,
 			TotalHours: t.TotalHours,
 			SpentHours: t.SpentHours,
 			Progress:   t.Progress,
-			DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10),
 		}
 		if t.ProjectID != nil {
 			p, err := project.Get(r.Context(), q, *t.ProjectID)
 			if err != nil {
-				handlererrors.WriteHTMXError(w, r, err)
+				app.WriteFragmentError(w, r, err)
 				return
 			}
 			row.ProjectName = p.Name
@@ -44,7 +42,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 		if t.SubprojectID != nil {
 			s, err := subproject.Get(r.Context(), q, *t.SubprojectID)
 			if err != nil {
-				handlererrors.WriteHTMXError(w, r, err)
+				app.WriteFragmentError(w, r, err)
 				return
 			}
 			row.Subproject = s.Name
@@ -60,9 +58,9 @@ func panel(q *db.Queries) http.HandlerFunc {
 			DeletePath: "/tasks/" + strconv.FormatInt(t.ID, 10) + "/delete",
 		}
 		if app.IsHTMX(r) {
-			handlererrors.RenderHTMX(w, r, http.StatusOK, views.TaskPanel(data))
+			app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
 			return
 		}
-		handlererrors.Render(w, r, http.StatusOK, views.TaskPanelPage(data))
+		app.RenderPage(w, r, http.StatusOK, views.TaskPanelPage(data))
 	}
 }

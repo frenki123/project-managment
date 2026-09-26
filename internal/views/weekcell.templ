@@ -1,6 +1,8 @@
 package views
 
-templ WeekCellEditor(cell WeekCell) {
+import "cad-development/internal/task"
+
+templ WeekCellEditor(cell task.GridCell) {
 	<td class="week-cell">
 		if cell.Error != "" {
 			<div class="cell-error" role="alert">{ cell.Error }</div>
@@ -11,10 +13,10 @@ templ WeekCellEditor(cell WeekCell) {
 	</td>
 }
 
-templ WeekRowResponse(data WeekRowResponseData) {
-			@TaskGridRow(data.Row, false)
+templ WeekRowResponse(data task.Grid, rowIndex int) {
+			@TaskGridRow(data.Rows[rowIndex], false)
 	for i, total := range data.WeekTotals {
 		@WeekTotalCellOOB(i, total)
 	}
-	@GridTotalsOOB(data.Totals)
+	@GridTotalsOOB(data)
 }

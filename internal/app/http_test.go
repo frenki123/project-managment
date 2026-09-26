@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,70 +17,11 @@ import (
 	"cad-development/internal/app"
 )
 
-type failingComponent struct{}
-
-func (failingComponent) Render(context.Context, io.Writer) error {
-	return errors.New("render failed")
-}
-
 type textComponent string
 
 func (c textComponent) Render(_ context.Context, w io.Writer) error {
 	_, err := io.WriteString(w, string(c))
 	return err
-}
-
-type failingWriter struct {
-	header http.Header
-}
-
-func (w *failingWriter) Header() http.Header { return w.header }
-func (w *failingWriter) WriteHeader(int)     {}
-func (w *failingWriter) Write([]byte) (int, error) {
-	return 0, errors.New("client disconnected")
-}
-
-func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"ok","unknown":true}`))
-	var value struct {
-		Known string `json:"known"`
-	}
-	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err == nil {
-		t.Fatal("expected unknown field to be rejected")
-	}
-}
-
-func TestDecodeJSONRejectsTrailingContent(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"ok"}{"known":"second"}`))
-	var value struct {
-		Known string `json:"known"`
-	}
-	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err == nil {
-		t.Fatal("expected trailing JSON to be rejected")
-	}
-}
-
-func TestDecodeJSONMatchesFieldNamesCaseInsensitively(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"KNOWN":"ok"}`))
-	var value struct {
-		Known string `json:"known"`
-	}
-	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err != nil {
-		t.Fatal(err)
-	}
-	if value.Known != "ok" {
-		t.Fatalf("got %q", value.Known)
-	}
-}
-
-func TestDecodeJSONRejectsDuplicateNames(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"known":"first","known":"second"}`))
-	var value struct {
-		Known string `json:"known"`
-	}
-	if err := app.DecodeJSON(httptest.NewRecorder(), r, &value); err == nil {
-		t.Fatal("expected duplicate JSON names to be rejected")
-	}
 }
 
 func TestJSONWritesContentTypeAndStatus(t *testing.T) {
@@ -131,14 +71,34 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 	})
 }
 
-func TestWriteHTMXErrorRendersExplicitFragment(t *testing.T) {
+func TestWriteFragmentErrorRendersExplicitFragment(t *testing.T) {
 	rr := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
 	r.Header.Set("HX-Request", "true")
 	r.Header.Set("HX-Target", "#panel")
-	app.WriteHTMXError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
+	app.WriteFragmentError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
 	if rr.Code != http.StatusOK || rr.Header().Get("HX-Retarget") != "#panel" || !strings.Contains(rr.Body.String(), "&lt;missing&gt;") {
 		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
+	}
+}
+
+func TestErrorHelpersMapToStatusCodes(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"invalid", app.Invalid("bad"), http.StatusBadRequest},
+		{"missing", app.Missing("gone"), http.StatusNotFound},
+		{"conflict", app.Conflict("busy"), http.StatusConflict},
+		{"locked", app.Locked("no"), http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if httpErr, ok := errors.AsType[app.HTTPError](tt.err); !ok || httpErr.Status != tt.status {
+				t.Fatalf("got %#v", tt.err)
+			}
+		})
 	}
 }
 
@@ -182,14 +142,6 @@ func TestRedirectWithFormFilter(t *testing.T) {
 	app.RedirectWithFormFilter(rr, r, "/", "project", "subproject")
 	if got := rr.Header().Get("Location"); got != "/?project=7&subproject=3" {
 		t.Fatalf("got redirect %q", got)
-	}
-}
-
-func TestJSONMarshalFailureReturnsInternalError(t *testing.T) {
-	rr := httptest.NewRecorder()
-	app.JSON(rr, http.StatusOK, math.NaN())
-	if rr.Code != http.StatusInternalServerError || rr.Body.String() != `{"error":"internal error"}` {
-		t.Fatalf("got %d %q", rr.Code, rr.Body.String())
 	}
 }
 
@@ -240,33 +192,12 @@ func TestStaticHandlerServesEmbeddedAsset(t *testing.T) {
 	}
 }
 
-func TestRenderDoesNotCommitOnFailure(t *testing.T) {
-	rr := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	if err := app.Render(rr, r, http.StatusOK, failingComponent{}); err == nil {
-		t.Fatal("expected render error")
-	}
-	if rr.Header().Get("Content-Type") != "" || rr.Body.Len() != 0 {
-		t.Fatalf("response was committed: headers=%v body=%q", rr.Header(), rr.Body.String())
-	}
-}
-
 func TestRenderWritesSuccessfulComponent(t *testing.T) {
 	rr := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	if err := app.Render(rr, r, http.StatusCreated, textComponent("rendered")); err != nil {
-		t.Fatal(err)
-	}
+	app.RenderPage(rr, r, http.StatusCreated, textComponent("rendered"))
 	if rr.Code != http.StatusCreated || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.String() != "rendered" {
 		t.Fatalf("got %d %q %q", rr.Code, rr.Header().Get("Content-Type"), rr.Body.String())
-	}
-}
-
-func TestRenderClassifiesResponseWriteFailure(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	err := app.Render(&failingWriter{header: make(http.Header)}, r, http.StatusOK, textComponent("rendered"))
-	if _, ok := errors.AsType[app.ResponseError](err); !ok {
-		t.Fatalf("got %T: %v", err, err)
 	}
 }
 

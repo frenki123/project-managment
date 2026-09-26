@@ -28,13 +28,13 @@ func TestSaveProgressAndLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	unlocked := monthlock.NewSet()
+	unlocked := monthlock.Set{}
 	prog := 40.0
 	_, err = weekly.Save(ctx, q, tk.ID, "2026-04-27", weekly.Patch{Progress: &prog}, now, unlocked)
 	if err == nil {
 		t.Fatal("expected locked April week to fail")
 	}
-	unlocked = monthlock.NewSet("2026-04")
+	unlocked = monthlock.Set{"2026-04": true}
 	if _, err = weekly.Save(ctx, q, tk.ID, "2026-04-27", weekly.Patch{Progress: &prog}, now, unlocked); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestCascadeRejectsLockedConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	allOpen := monthlock.NewSet("2026-03", "2026-04")
+	allOpen := monthlock.Set{"2026-03": true, "2026-04": true}
 	p20 := 20.0
 	p40 := 40.0
 	if _, err = weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p20}, now, allOpen); err != nil {
@@ -116,7 +116,7 @@ func TestCascadeRejectsLockedConflict(t *testing.T) {
 	if result.Weeks[1].Progress == nil || *result.Weeks[1].Progress != 50 {
 		t.Fatalf("later progress should cascade to 50, got %#v", result.Weeks)
 	}
-	lockedApril := monthlock.NewSet("2026-03")
+	lockedApril := monthlock.Set{"2026-03": true}
 	p60 := 60.0
 	if _, err = weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p60}, now, lockedApril); err == nil {
 		t.Fatal("expected locked later week conflict")

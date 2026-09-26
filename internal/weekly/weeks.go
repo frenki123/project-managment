@@ -2,6 +2,8 @@ package weekly
 
 import (
 	"time"
+
+	"cad-development/internal/app"
 )
 
 type WeekStart string
@@ -17,7 +19,7 @@ type WeekInfo struct {
 func ParseDate(s string) (time.Time, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil {
-		return time.Time{}, Invalid("invalid date")
+		return time.Time{}, app.Invalid("invalid date")
 	}
 	return t, nil
 }
@@ -37,7 +39,7 @@ func ParseMonday(s string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	if t.Weekday() != time.Monday {
-		return time.Time{}, Invalid("week_start must be a Monday")
+		return time.Time{}, app.Invalid("week_start must be a Monday")
 	}
 	return t, nil
 }

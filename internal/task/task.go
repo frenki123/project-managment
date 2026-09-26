@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
 	"cad-development/internal/weekly"
@@ -65,7 +66,7 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
 	if in.Name == "" {
-		return in, Invalid("name is required")
+		return in, app.Invalid("name is required")
 	}
 	if in.ProjectID != nil && *in.ProjectID < 1 {
 		in.ProjectID = nil
@@ -76,19 +77,19 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	if in.SubprojectID != nil {
 		sp, err := q.GetSubproject(ctx, *in.SubprojectID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return in, Missing("subproject not found")
+			return in, app.Missing("subproject not found")
 		}
 		if err != nil {
 			return in, err
 		}
 		if in.ProjectID != nil && *in.ProjectID != sp.ProjectID {
-			return in, Invalid("subproject does not belong to project")
+			return in, app.Invalid("subproject does not belong to project")
 		}
 		in.ProjectID = new(sp.ProjectID)
 	}
 	if in.ProjectID != nil {
 		if _, err := q.GetProject(ctx, *in.ProjectID); errors.Is(err, sql.ErrNoRows) {
-			return in, Missing("project not found")
+			return in, app.Missing("project not found")
 		} else if err != nil {
 			return in, err
 		}
@@ -120,7 +121,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	row, err := q.GetTask(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Task{}, Missing("task not found")
+		return Task{}, app.Missing("task not found")
 	}
 	if err != nil {
 		return Task{}, err
@@ -184,11 +185,10 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error) {
-	var result Task
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetTask(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return Missing("task not found")
+			return app.Missing("task not found")
 		}
 		if err != nil {
 			return err
@@ -205,10 +205,10 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 				return err
 			}
 			if weekCount > 0 {
-				return ConflictError("cannot reassign task with weekly data")
+				return app.Conflict("cannot reassign task with weekly data")
 			}
 		}
-		row, err := txq.UpdateTask(ctx, db.UpdateTaskParams{
+		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{
 			Name:                in.Name,
 			Description:         in.Description,
 			ImplementationNotes: in.ImplementationNotes,
@@ -219,19 +219,18 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 			SubprojectID:        nullable.Int64(in.SubprojectID),
 			ID:                  id,
 		})
-		if err != nil {
-			return err
-		}
-		result = FromDB(row)
-		return nil
+		return err
 	})
-	return result, err
+	if err != nil {
+		return Task{}, err
+	}
+	return Get(ctx, q, id)
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	return q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return Missing("task not found")
+			return app.Missing("task not found")
 		} else if err != nil {
 			return err
 		}
@@ -240,7 +239,7 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 			return err
 		}
 		if weeks > 0 {
-			return ConflictError("cannot delete a task with weekly history")
+			return app.Conflict("cannot delete a task with weekly history")
 		}
 		_, err = txq.DeleteTask(ctx, id)
 		return err

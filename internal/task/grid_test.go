@@ -2,10 +2,12 @@ package task_test
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
@@ -109,8 +111,8 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 	}
 	secondID := second.ID
 	_, err = task.Update(ctx, q, item.ID, task.Input{Name: item.Name, ProjectID: &secondID})
-	domainErr, ok := errors.AsType[task.Error](err)
-	if !ok || domainErr.Kind != task.Conflict {
+	httpErr, ok := errors.AsType[app.HTTPError](err)
+	if !ok || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)
 	}
 	got, err := task.Get(ctx, q, item.ID)

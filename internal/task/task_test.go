@@ -2,9 +2,11 @@ package task_test
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
@@ -32,8 +34,7 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 		t.Fatal("expected blank task name to be rejected")
 	}
 	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
-	var domainErr task.Error
-	if !errors.As(err, &domainErr) || domainErr.Kind != task.InvalidInput {
+	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-// HTTPError is the transport-facing error used by HTTP adapters.
+// HTTPError is the single error type used across the app and its HTTP adapters.
 type HTTPError struct {
 	Status  int
 	Message string
@@ -17,8 +17,18 @@ func (e HTTPError) Error() string {
 	return e.Message
 }
 
+func Invalid(message string) error  { return HTTPError{Status: http.StatusBadRequest, Message: message} }
+func Missing(message string) error  { return HTTPError{Status: http.StatusNotFound, Message: message} }
+func Conflict(message string) error { return HTTPError{Status: http.StatusConflict, Message: message} }
+func Locked(message string) error   { return HTTPError{Status: http.StatusForbidden, Message: message} }
+
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	WriteHTTPError(w, r, HTTPErrorFrom(err))
+}
+
+// WriteFragmentError renders an error into an HTMX fragment target.
+func WriteFragmentError(w http.ResponseWriter, r *http.Request, err error) {
+	WriteHTMXError(w, r, HTTPErrorFrom(err))
 }
 
 func WriteHTTPError(w http.ResponseWriter, r *http.Request, httpErr HTTPError) {

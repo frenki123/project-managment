@@ -11,7 +11,6 @@ import (
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /{$}", taskhandler.GridPage(q))
 	projecthandler.Register(mux, q)
 	subprojecthandler.Register(mux, q)
 	taskhandler.Register(mux, q)

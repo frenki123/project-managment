@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
 )
 
@@ -20,14 +21,6 @@ type Set map[YearMonth]bool
 
 func (s Set) Contains(month YearMonth) bool {
 	return s[month]
-}
-
-func NewSet(months ...YearMonth) Set {
-	set := make(Set, len(months))
-	for _, month := range months {
-		set[month] = true
-	}
-	return set
 }
 
 type LocksResponse struct {
@@ -47,7 +40,7 @@ func Of(t time.Time) YearMonth {
 func ParseYearMonth(s YearMonth) (time.Time, error) {
 	t, err := time.Parse(yearMonthLayout, string(s))
 	if err != nil {
-		return time.Time{}, Invalid("invalid year_month")
+		return time.Time{}, app.Invalid("invalid year_month")
 	}
 	return t, nil
 }
@@ -112,7 +105,7 @@ func SetMonth(ctx context.Context, q *db.Queries, yearMonth YearMonth, unlocked 
 		return err
 	}
 	if !IsPastMonth(yearMonth, now) {
-		return Invalid("only past months can be unlocked")
+		return app.Invalid("only past months can be unlocked")
 	}
 	unlockedValue := int64(0)
 	if unlocked {
@@ -130,7 +123,7 @@ func Toggle(ctx context.Context, q *db.Queries, yearMonth YearMonth, now time.Ti
 		return false, err
 	}
 	if !IsPastMonth(yearMonth, now) {
-		return false, Invalid("only past months can be unlocked")
+		return false, app.Invalid("only past months can be unlocked")
 	}
 	row, err := q.ToggleMonthLock(ctx, string(yearMonth))
 	if err != nil {

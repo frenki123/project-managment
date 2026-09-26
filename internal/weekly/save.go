@@ -7,10 +7,10 @@ import (
 	"slices"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/monthlock"
 	"cad-development/internal/nullable"
-	"cad-development/internal/validation"
 )
 
 type Patch struct {
@@ -32,7 +32,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		return Cell{}, err
 	}
 	if patch.PlannedHours == nil && patch.SpentHours == nil && patch.Progress == nil {
-		return Cell{}, Invalid("at least one value is required")
+		return Cell{}, app.Invalid("at least one value is required")
 	}
 	if patch.PlannedHours != nil {
 		if err := validHours(*patch.PlannedHours); err != nil {
@@ -59,17 +59,17 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			}
 		}
 		if monthlock.WeekLocked(string(weekStart), now, unlocked) {
-			return Locked("month is locked")
+			return app.Locked("month is locked")
 		}
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return Missing("task not found")
+			return app.Missing("task not found")
 		}
 		if err != nil {
 			return err
 		}
 		if !task.ProjectID.Valid {
-			return Invalid("ideas cannot be planned")
+			return app.Invalid("ideas cannot be planned")
 		}
 		project, err := txq.GetProject(ctx, task.ProjectID.Int64)
 		if err != nil {
@@ -86,7 +86,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		validWeeks := WeekStarts(start, end)
 		inRange := slices.Contains(validWeeks, weekStart)
 		if !inRange {
-			return Invalid("week is outside the project date range")
+			return app.Invalid("week is outside the project date range")
 		}
 
 		existing, err := txq.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: taskID, WeekStart: string(weekStart)})
@@ -108,7 +108,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 			if *patch.Progress < previous {
-				return Invalid("progress cannot be less than the week before")
+				return app.Invalid("progress cannot be less than the week before")
 			}
 			progress = nullable.Float64(patch.Progress)
 		}
@@ -120,7 +120,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			}
 			for _, laterWeek := range later {
 				if laterWeek.Progress.Valid && laterWeek.Progress.Float64 < *patch.Progress && monthlock.WeekLocked(laterWeek.WeekStart, now, unlocked) {
-					return ConflictError("progress conflicts with a locked later week")
+					return app.Conflict("progress conflicts with a locked later week")
 				}
 			}
 		}
@@ -156,15 +156,15 @@ func lastProgressBefore(ctx context.Context, q *db.Queries, taskID int64, weekSt
 }
 
 func validHours(value float64) error {
-	if !validation.NonNegativeFinite(value) {
-		return Invalid("hours cannot be negative")
+	if !app.NonNegativeFinite(value) {
+		return app.Invalid("hours cannot be negative")
 	}
 	return nil
 }
 
 func validProgress(value float64) error {
-	if !validation.NonNegativeFinite(value) || value > 100 {
-		return Invalid("progress must be between 0 and 100")
+	if !app.NonNegativeFinite(value) || value > 100 {
+		return app.Invalid("progress must be between 0 and 100")
 	}
 	return nil
 }

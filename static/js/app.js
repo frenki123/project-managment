@@ -37,10 +37,6 @@
 		if (event.target.closest("[data-close-panel]")) {
 			document.getElementById("panel").replaceChildren();
 		}
-		const row = event.target.closest("tr[data-detail-path]");
-		if (row && !event.target.closest("input, button, a, select")) {
-			htmx.ajax("GET", row.dataset.detailPath, {target: "#panel", swap: "innerHTML"});
-		}
 	});
 
 	document.addEventListener("keydown", (event) => {

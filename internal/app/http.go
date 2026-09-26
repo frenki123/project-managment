@@ -144,3 +144,29 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 	}
 	return nil
 }
+
+func writeRenderError(w http.ResponseWriter, r *http.Request, err error, fragment bool) {
+	if _, ok := errors.AsType[ResponseError](err); ok {
+		log.Printf("write response: %v", err)
+		return
+	}
+	if fragment {
+		WriteFragmentError(w, r, err)
+		return
+	}
+	WriteError(w, r, err)
+}
+
+// RenderPage renders a full page, turning render failures into a response error.
+func RenderPage(w http.ResponseWriter, r *http.Request, status int, component Component) {
+	if err := Render(w, r, status, component); err != nil {
+		writeRenderError(w, r, err, false)
+	}
+}
+
+// RenderFragment renders an HTMX fragment, turning render failures into an error fragment.
+func RenderFragment(w http.ResponseWriter, r *http.Request, status int, component Component) {
+	if err := Render(w, r, status, component); err != nil {
+		writeRenderError(w, r, err, true)
+	}
+}

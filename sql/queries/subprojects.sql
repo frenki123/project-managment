@@ -13,10 +13,6 @@ SELECT
 FROM v_task_totals
 WHERE subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER);
 
--- name: ListSubprojects :many
-SELECT id, project_id, name, total_hours
-FROM subprojects ORDER BY name COLLATE NOCASE, id;
-
 -- name: ListSubprojectsWithTotals :many
 SELECT
     s.id, s.project_id, s.name, s.total_hours,

@@ -3,8 +3,10 @@ package subproject_test
 import (
 	"errors"
 	"math"
+	"net/http"
 	"testing"
 
+	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
@@ -82,8 +84,8 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = subproject.Update(ctx, q, sp.ID, subproject.Input{ProjectID: second.ID, Name: sp.Name, TotalHours: sp.TotalHours})
-	var domainErr subproject.Error
-	if !errors.As(err, &domainErr) || domainErr.Kind != subproject.Conflict {
+	var httpErr app.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
