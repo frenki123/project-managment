@@ -126,11 +126,17 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 		return Task{}, err
 	}
 	out := FromDB(row)
+	totals, err := q.GetTaskTotals(ctx, id)
+	if err != nil {
+		return Task{}, err
+	}
 	weeks, err := q.ListTaskWeeksByTask(ctx, id)
 	if err != nil {
 		return Task{}, err
 	}
-	out.TotalHours, out.SpentHours, out.Progress = weekly.Totals(weeks)
+	out.TotalHours = totals.PlannedHours
+	out.SpentHours = totals.SpentHours
+	out.Progress = totals.Progress
 	out.Weeks = make([]weekly.Cell, 0, len(weeks))
 	for _, w := range weeks {
 		c := weekly.Cell{
@@ -178,30 +184,48 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error) {
-	if _, err := q.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		return Task{}, Missing("task not found")
-	} else if err != nil {
-		return Task{}, err
-	}
-	in, err := validate(ctx, q, in)
-	if err != nil {
-		return Task{}, err
-	}
-	row, err := q.UpdateTask(ctx, db.UpdateTaskParams{
-		Name:                in.Name,
-		Description:         in.Description,
-		ImplementationNotes: in.ImplementationNotes,
-		Department:          in.Department,
-		Developers:          in.Developers,
-		Priority:            in.Priority,
-		ProjectID:           nullable.Int64(in.ProjectID),
-		SubprojectID:        nullable.Int64(in.SubprojectID),
-		ID:                  id,
+	var result Task
+	err := q.InTx(ctx, func(txq *db.Queries) error {
+		current, err := txq.GetTask(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Missing("task not found")
+		}
+		if err != nil {
+			return err
+		}
+		in, err = validate(ctx, txq, in)
+		if err != nil {
+			return err
+		}
+		projectChanged := current.ProjectID != nullable.Int64(in.ProjectID)
+		subprojectChanged := current.SubprojectID != nullable.Int64(in.SubprojectID)
+		if projectChanged || subprojectChanged {
+			weekCount, err := txq.CountTaskWeeksByTask(ctx, id)
+			if err != nil {
+				return err
+			}
+			if weekCount > 0 {
+				return ConflictError("cannot reassign task with weekly data")
+			}
+		}
+		row, err := txq.UpdateTask(ctx, db.UpdateTaskParams{
+			Name:                in.Name,
+			Description:         in.Description,
+			ImplementationNotes: in.ImplementationNotes,
+			Department:          in.Department,
+			Developers:          in.Developers,
+			Priority:            in.Priority,
+			ProjectID:           nullable.Int64(in.ProjectID),
+			SubprojectID:        nullable.Int64(in.SubprojectID),
+			ID:                  id,
+		})
+		if err != nil {
+			return err
+		}
+		result = FromDB(row)
+		return nil
 	})
-	if err != nil {
-		return Task{}, err
-	}
-	return FromDB(row), nil
+	return result, err
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {

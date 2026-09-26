@@ -20,9 +20,9 @@ DROP TABLE app_test;
 	}
 
 	database, err := app.OpenDatabase(app.DatabaseConfig{
-		DSN:           "file:test-app?mode=memory&cache=shared",
-		MigrationsDir: migrations,
-		MaxOpenConns:  1,
+		DSN:          "file:test-app?mode=memory&cache=shared",
+		Migrations:   os.DirFS(migrations),
+		MaxOpenConns: 1,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 
 	"cad-development/internal/db"
 
@@ -16,17 +18,17 @@ type Database struct {
 }
 
 type DatabaseConfig struct {
-	DSN           string
-	MigrationsDir string
-	MaxOpenConns  int
+	DSN          string
+	Migrations   fs.FS
+	MaxOpenConns int
 }
 
 func OpenDatabase(config DatabaseConfig) (*Database, error) {
 	if config.DSN == "" {
 		return nil, fmt.Errorf("database DSN is required")
 	}
-	if config.MigrationsDir == "" {
-		return nil, fmt.Errorf("database migrations directory is required")
+	if config.Migrations == nil {
+		return nil, fmt.Errorf("database migrations are required")
 	}
 	conn, err := sql.Open("sqlite", config.DSN)
 	if err != nil {
@@ -39,11 +41,12 @@ func OpenDatabase(config DatabaseConfig) (*Database, error) {
 		_ = conn.Close()
 		return nil, err
 	}
-	if err := goose.SetDialect("sqlite3"); err != nil {
+	provider, err := goose.NewProvider(goose.DialectSQLite3, conn, config.Migrations)
+	if err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
-	if err := goose.Up(conn, config.MigrationsDir); err != nil {
+	if _, err := provider.Up(context.Background()); err != nil {
 		_ = conn.Close()
 		return nil, err
 	}

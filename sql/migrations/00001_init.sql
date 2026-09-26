@@ -13,7 +13,8 @@ CREATE TABLE subprojects (
     id INTEGER PRIMARY KEY,
     project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    total_hours REAL NOT NULL CHECK (total_hours >= 0)
+    total_hours REAL NOT NULL CHECK (total_hours >= 0),
+    UNIQUE (project_id, id)
 );
 
 CREATE TABLE tasks (
@@ -25,7 +26,10 @@ CREATE TABLE tasks (
     developers TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT '',
     project_id INTEGER REFERENCES projects (id) ON DELETE SET NULL,
-    subproject_id INTEGER REFERENCES subprojects (id) ON DELETE SET NULL
+    subproject_id INTEGER REFERENCES subprojects (id) ON DELETE SET NULL,
+    CHECK (subproject_id IS NULL OR project_id IS NOT NULL),
+    FOREIGN KEY (project_id, subproject_id)
+        REFERENCES subprojects (project_id, id)
 );
 
 CREATE TABLE task_weeks (
@@ -44,7 +48,6 @@ CREATE TABLE month_locks (
 
 CREATE INDEX idx_tasks_project_id ON tasks (project_id);
 CREATE INDEX idx_tasks_subproject_id ON tasks (subproject_id);
-CREATE INDEX idx_subprojects_project_id ON subprojects (project_id);
 
 -- +goose Down
 DROP TABLE task_weeks;

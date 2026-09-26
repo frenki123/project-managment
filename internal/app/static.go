@@ -1,13 +1,13 @@
 package app
 
 import (
+	"io/fs"
 	"net/http"
-	"path/filepath"
 	"strings"
 )
 
-func StaticHandler(root string) http.Handler {
-	static := http.FileServer(http.Dir(filepath.Join(root, "static")))
+func StaticHandler(staticFS fs.FS) http.Handler {
+	static := http.FileServer(http.FS(staticFS))
 	assets := http.StripPrefix("/static/", static)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") {
@@ -18,6 +18,6 @@ func StaticHandler(root string) http.Handler {
 	})
 }
 
-func RegisterStatic(mux *http.ServeMux, root string) {
-	mux.Handle("GET /static/", StaticHandler(root))
+func RegisterStatic(mux *http.ServeMux, staticFS fs.FS) {
+	mux.Handle("GET /static/", StaticHandler(staticFS))
 }

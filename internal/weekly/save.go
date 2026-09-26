@@ -169,14 +169,3 @@ func toCell(week db.TaskWeek) Cell {
 	cell.Progress = nullable.Float64Pointer(week.Progress)
 	return cell
 }
-
-func Totals(weeks []db.TaskWeek) (planned, spent, progress float64) {
-	for _, week := range weeks {
-		planned += week.PlannedHours
-		spent += week.SpentHours
-		if week.Progress.Valid {
-			progress = week.Progress.Float64
-		}
-	}
-	return planned, spent, progress
-}

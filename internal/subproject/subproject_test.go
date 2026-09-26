@@ -1,12 +1,14 @@
 package subproject_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
+	"cad-development/internal/task"
 )
 
 func TestHoursCap(t *testing.T) {
@@ -58,5 +60,57 @@ func TestHoursRejectNonFiniteValues(t *testing.T) {
 		if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "bad", TotalHours: value}); err == nil {
 			t.Fatalf("expected non-finite value %v to be rejected", value)
 		}
+	}
+}
+
+func TestCannotMoveSubprojectWithTasks(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: first.ID, Name: "Tracked", TotalHours: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: new(first.ID), SubprojectID: new(sp.ID)}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = subproject.Update(ctx, q, sp.ID, subproject.Input{ProjectID: second.ID, Name: sp.Name, TotalHours: sp.TotalHours})
+	var domainErr subproject.Error
+	if !errors.As(err, &domainErr) || domainErr.Kind != subproject.Conflict {
+		t.Fatalf("got %v", err)
+	}
+	got, err := subproject.Get(ctx, q, sp.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ProjectID != first.ID {
+		t.Fatalf("subproject moved after rejected update: %d", got.ProjectID)
+	}
+}
+
+func TestDatabaseRejectsMismatchedTaskSubproject(t *testing.T) {
+	ctx := t.Context()
+	database := testkit.OpenDatabase(t)
+	first, err := project.Create(ctx, database.Q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, database.Q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, database.Q, subproject.Input{ProjectID: first.ID, Name: "First subproject", TotalHours: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id, subproject_id) VALUES (?, ?, ?)`, "invalid", second.ID, sp.ID); err == nil {
+		t.Fatal("expected mismatched task relationship to be rejected")
 	}
 }

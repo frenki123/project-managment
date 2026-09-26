@@ -14,7 +14,7 @@ tidy:
 
 # Format Go source files.
 fmt:
-    git ls-files '*.go' | xargs gofmt -w
+    git ls-files -co --exclude-standard -z -- '*.go' | xargs -0 -r gofmt -w
 
 # Show Go's reviewed modernization suggestions without changing files.
 modernize:

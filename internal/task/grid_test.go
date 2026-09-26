@@ -1,12 +1,14 @@
 package task_test
 
 import (
+	"errors"
 	"strconv"
 	"testing"
 	"time"
 
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/project"
+	"cad-development/internal/subproject"
 	"cad-development/internal/task"
 	"cad-development/internal/weekly"
 )
@@ -69,5 +71,74 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	}
 	if !foundCarryForward {
 		t.Fatal("expected a week without stored progress")
+	}
+}
+
+func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID := first.ID
+	item, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &firstID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hours := 2.0
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), nil); err != nil {
+		t.Fatal(err)
+	}
+	secondID := second.ID
+	_, err = task.Update(ctx, q, item.ID, task.Input{Name: item.Name, ProjectID: &secondID})
+	domainErr, ok := errors.AsType[task.Error](err)
+	if !ok || domainErr.Kind != task.Conflict {
+		t.Fatalf("got %v", err)
+	}
+	got, err := task.Get(ctx, q, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ProjectID == nil || *got.ProjectID != first.ID {
+		t.Fatalf("task moved after rejected update: %v", got.ProjectID)
+	}
+}
+
+func TestGridUsesSQLSubprojectTotals(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: 20, StartDate: "2026-09-01", EndDate: "2026-10-31"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := p.ID
+	subprojectID := sp.ID
+	item, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &projectID, SubprojectID: &subprojectID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned, spent, progress := 6.0, 4.0, 50.0
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid.PlannedHours != planned || grid.SpentHours != spent {
+		t.Fatalf("unexpected subproject totals: planned=%v spent=%v", grid.PlannedHours, grid.SpentHours)
+	}
+	if grid.ProgressPct != nil || len(grid.Rows) != 1 || grid.Rows[0].TotalHours != planned || grid.Rows[0].SpentHours != spent || grid.Rows[0].Progress != progress {
+		t.Fatalf("unexpected subproject grid: %#v", grid)
 	}
 }

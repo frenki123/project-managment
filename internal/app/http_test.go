@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	assets "cad-development"
 	"cad-development/internal/app"
 )
 
@@ -205,13 +207,14 @@ func TestDecodeJSONRejectsOversizedBody(t *testing.T) {
 
 func TestStaticHandlerRejectsDirectories(t *testing.T) {
 	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "static"), 0o755); err != nil {
+	staticRoot := filepath.Join(root, "static")
+	if err := os.Mkdir(staticRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "static", "app.js"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(staticRoot, "app.js"), []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler := app.StaticHandler(root)
+	handler := app.StaticHandler(os.DirFS(staticRoot))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/", nil))
 	if rr.Code != http.StatusNotFound {
@@ -221,6 +224,19 @@ func TestStaticHandlerRejectsDirectories(t *testing.T) {
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
 	if rr.Code != http.StatusOK || rr.Body.String() != "ok" {
 		t.Fatalf("asset response %d %q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestStaticHandlerServesEmbeddedAsset(t *testing.T) {
+	staticFS, err := fs.Sub(assets.FS, "static")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := app.StaticHandler(staticFS)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/js/app.js", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "htmx:responseError") {
+		t.Fatalf("embedded asset response %d %q", rr.Code, rr.Body.String())
 	}
 }
 

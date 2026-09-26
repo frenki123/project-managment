@@ -1,11 +1,12 @@
 package testkit
 
 import (
-	"os"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	assets "cad-development"
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 )
@@ -16,11 +17,10 @@ func Open(t *testing.T) *db.Queries {
 
 func OpenDatabase(t *testing.T) *app.Database {
 	t.Helper()
-	name := strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name())
 	database, err := app.OpenDatabase(app.DatabaseConfig{
-		DSN:           "file:" + name + "?mode=memory&cache=shared&_pragma=foreign_keys(1)",
-		MigrationsDir: filepath.Join(repoRoot(t), "sql", "migrations"),
-		MaxOpenConns:  1,
+		DSN:          "file:" + strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name()) + "?mode=memory&cache=shared&_pragma=foreign_keys(1)",
+		Migrations:   embeddedMigrations(t),
+		MaxOpenConns: 1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -33,9 +33,9 @@ func OpenFile(t *testing.T) *app.Database {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "app.db")
 	database, err := app.OpenDatabase(app.DatabaseConfig{
-		DSN:           "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
-		MigrationsDir: filepath.Join(repoRoot(t), "sql", "migrations"),
-		MaxOpenConns:  4,
+		DSN:          "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
+		Migrations:   embeddedMigrations(t),
+		MaxOpenConns: 4,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,22 +44,11 @@ func OpenFile(t *testing.T) *app.Database {
 	return database
 }
 
-func repoRoot(t *testing.T) string {
+func embeddedMigrations(t *testing.T) fs.FS {
 	t.Helper()
-	dir, err := os.Getwd()
+	migrations, err := fs.Sub(assets.FS, "sql/migrations")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range 12 {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	t.Fatal("go.mod not found")
-	return ""
+	return migrations
 }

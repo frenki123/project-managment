@@ -57,6 +57,12 @@ type GridCell struct {
 	Locked    bool
 }
 
+type taskTotal struct {
+	Planned  float64
+	Spent    float64
+	Progress float64
+}
+
 type projectFilter struct {
 	Value string
 	ID    int64
@@ -134,6 +140,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 
 	var tasks []Task
+	totalsByTask := map[int64]taskTotal{}
 	if subprojectID != nil {
 		sp, err := subproject.Get(ctx, q, *subprojectID)
 		if err != nil {
@@ -148,11 +155,38 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		if err != nil {
 			return Grid{}, err
 		}
+		summary, err := q.GetSubprojectTotals(ctx, *subprojectID)
+		if err != nil {
+			return Grid{}, err
+		}
+		data.PlannedHours = summary.PlannedHours
+		data.SpentHours = summary.SpentHours
+		totalRows, err := q.ListTaskTotalsBySubproject(ctx, *subprojectID)
+		if err != nil {
+			return Grid{}, err
+		}
+		for _, total := range totalRows {
+			totalsByTask[total.TaskID] = taskTotal{Planned: total.PlannedHours, Spent: total.SpentHours, Progress: total.Progress}
+		}
 	} else {
-		data.ProgressPct = new(0.0)
 		tasks, err = ListByProject(ctx, q, pid)
 		if err != nil {
 			return Grid{}, err
+		}
+		data.ProgressPct = new(0.0)
+		summary, err := q.GetProjectTotals(ctx, pid)
+		if err != nil {
+			return Grid{}, err
+		}
+		data.PlannedHours = summary.PlannedHours
+		data.SpentHours = summary.SpentHours
+		*data.ProgressPct = summary.Progress
+		totalRows, err := q.ListTaskTotalsByProject(ctx, pid)
+		if err != nil {
+			return Grid{}, err
+		}
+		for _, total := range totalRows {
+			totalsByTask[total.TaskID] = taskTotal{Planned: total.PlannedHours, Spent: total.SpentHours, Progress: total.Progress}
 		}
 	}
 
@@ -170,10 +204,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		byTask[w.TaskID] = append(byTask[w.TaskID], w)
 	}
 
-	var progressPct float64
 	for _, t := range tasks {
 		tweeks := byTask[t.ID]
-		planned, spent, prog := weekly.Totals(tweeks)
+		total := totalsByTask[t.ID]
 		cellByWeek := map[string]db.TaskWeek{}
 		for _, w := range tweeks {
 			cellByWeek[w.WeekStart] = w
@@ -182,9 +215,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			ID:          t.ID,
 			Name:        t.Name,
 			ProjectName: proj.Name,
-			TotalHours:  planned,
-			SpentHours:  spent,
-			Progress:    prog,
+			TotalHours:  total.Planned,
+			SpentHours:  total.Spent,
+			Progress:    total.Progress,
 		}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
@@ -206,14 +239,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			})
 		}
 		data.Rows = append(data.Rows, row)
-		data.PlannedHours += planned
-		data.SpentHours += spent
-		if data.ProgressPct != nil && proj.TotalHours > 0 {
-			progressPct += (planned / proj.TotalHours) * prog
-		}
-	}
-	if data.ProgressPct != nil {
-		data.ProgressPct = new(progressPct)
 	}
 	data.Overrun = data.PlannedHours > data.BudgetHours
 

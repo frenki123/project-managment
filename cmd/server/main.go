@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	assets "cad-development"
 	"cad-development/internal/app"
 	"cad-development/internal/handlers"
 )
@@ -32,10 +34,18 @@ func main() {
 	}
 
 	dbPath := filepath.Join(dataDir, "app.db")
+	migrations, err := fs.Sub(assets.FS, "sql/migrations")
+	if err != nil {
+		log.Fatal(err)
+	}
+	staticFS, err := fs.Sub(assets.FS, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
 	database, err := app.OpenDatabase(app.DatabaseConfig{
-		DSN:           dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
-		MigrationsDir: filepath.Join(root, "sql", "migrations"),
-		MaxOpenConns:  4,
+		DSN:          dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
+		Migrations:   migrations,
+		MaxOpenConns: 4,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -53,7 +63,7 @@ func main() {
 	addr := "127.0.0.1:" + port
 
 	mux := http.NewServeMux()
-	app.RegisterStatic(mux, root)
+	app.RegisterStatic(mux, staticFS)
 	handlers.Register(mux, database.Q)
 
 	log.Printf("listening on http://%s", addr)

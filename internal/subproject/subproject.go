@@ -126,14 +126,27 @@ func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Subpr
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject, error) {
-	if _, err := Get(ctx, q, id); err != nil {
-		return Subproject{}, err
-	}
 	var result Subproject
 	err := q.InTx(ctx, func(txq *db.Queries) error {
+		current, err := txq.GetSubproject(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Missing("subproject not found")
+		}
+		if err != nil {
+			return err
+		}
 		validated, err := validate(ctx, txq, in, id)
 		if err != nil {
 			return err
+		}
+		if current.ProjectID != validated.ProjectID {
+			taskCount, err := txq.CountTasksBySubproject(ctx, sql.NullInt64{Int64: id, Valid: true})
+			if err != nil {
+				return err
+			}
+			if taskCount > 0 {
+				return ConflictError("cannot move subproject with tasks")
+			}
 		}
 		row, err := txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
 			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: validated.TotalHours, ID: id,

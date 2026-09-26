@@ -51,8 +51,11 @@ func RenderHTMX(w http.ResponseWriter, r *http.Request, status int, component ap
 func mapDomainError(err error) (app.HTTPError, bool) {
 	if taskErr, ok := errors.AsType[task.Error](err); ok {
 		status := http.StatusBadRequest
-		if taskErr.Kind == task.NotFound {
+		switch taskErr.Kind {
+		case task.NotFound:
 			status = http.StatusNotFound
+		case task.Conflict:
+			status = http.StatusConflict
 		}
 		return app.HTTPError{Status: status, Message: taskErr.Message}, true
 	}
