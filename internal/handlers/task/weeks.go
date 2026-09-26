@@ -96,7 +96,7 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 				continue
 			}
 			grid.Rows[i].Cells[j].Error = errMsg
-			app.RenderPage(w, r, http.StatusOK, views.WeekRowResponse(grid, i))
+			app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, i))
 			return
 		}
 	}

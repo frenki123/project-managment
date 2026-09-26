@@ -56,7 +56,7 @@ func formInput(r *http.Request) (domain.Input, error) {
 	} else if pid != nil {
 		in.ProjectID = *pid
 	}
-	in.TotalHours = hours
+	in.TotalHours = &hours
 	return in, nil
 }
 
@@ -184,7 +184,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))
+		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10)+"&subproject="+strconv.FormatInt(s.ID, 10))
 	}
 }
 
@@ -195,10 +195,15 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
+		s, err := domain.Get(r.Context(), q, id)
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
 			app.WriteError(w, r, err)
 			return
 		}
-		app.Redirect(w, r, "/")
+		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))
 	}
 }

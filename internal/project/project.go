@@ -26,11 +26,11 @@ type Project struct {
 }
 
 type Input struct {
-	Name              string  `json:"name"`
-	PurchaseOrderName string  `json:"purchase_order_name"`
-	TotalHours        float64 `json:"total_hours"`
-	StartDate         string  `json:"start_date"`
-	EndDate           string  `json:"end_date"`
+	Name              string   `json:"name"`
+	PurchaseOrderName string   `json:"purchase_order_name"`
+	TotalHours        *float64 `json:"total_hours"`
+	StartDate         string   `json:"start_date"`
+	EndDate           string   `json:"end_date"`
 }
 
 type ProjectsResponse struct {
@@ -54,7 +54,10 @@ func validate(in Input) (Input, error) {
 	if in.Name == "" {
 		return in, app.Invalid("name is required")
 	}
-	if !app.NonNegativeFinite(in.TotalHours) {
+	if in.TotalHours == nil {
+		return in, app.Invalid("total_hours is required")
+	}
+	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
 	}
 	start, err := weekly.ParseDate(in.StartDate)
@@ -81,7 +84,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 	row, err := q.CreateProject(ctx, db.CreateProjectParams{
 		Name:              in.Name,
 		PurchaseOrderName: in.PurchaseOrderName,
-		TotalHours:        in.TotalHours,
+		TotalHours:        *in.TotalHours,
 		StartDate:         in.StartDate,
 		EndDate:           in.EndDate,
 	})
@@ -162,7 +165,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 		if err != nil {
 			return err
 		}
-		if in.TotalHours < sum {
+		if *in.TotalHours < sum {
 			return app.Conflict("project hours cannot be less than subproject hours")
 		}
 		start, err := weekly.ParseDate(in.StartDate)
@@ -185,7 +188,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 			return app.Conflict("project dates cannot exclude existing weekly data")
 		}
 		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{
-			Name: in.Name, PurchaseOrderName: in.PurchaseOrderName, TotalHours: in.TotalHours,
+			Name: in.Name, PurchaseOrderName: in.PurchaseOrderName, TotalHours: *in.TotalHours,
 			StartDate: in.StartDate, EndDate: in.EndDate, ID: id,
 		})
 		return err

@@ -33,14 +33,19 @@
 		if (event.target.matches(".week-cell input")) lastActive = event.target;
 	});
 
+	const closePanel = () => document.getElementById("panel")?.replaceChildren();
+
 	document.addEventListener("click", (event) => {
-		if (event.target.closest("[data-close-panel]")) {
-			document.getElementById("panel").replaceChildren();
-		}
+		if (event.target.closest("[data-close-panel]")) closePanel();
 	});
 
 	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape") document.getElementById("panel")?.replaceChildren();
+		if (event.key === "Escape") closePanel();
+	});
+
+	document.addEventListener("submit", (event) => {
+		const message = event.target.dataset.confirm;
+		if (message && !confirm(message)) event.preventDefault();
 	});
 
 	document.body.addEventListener("htmx:afterSwap", (event) => {

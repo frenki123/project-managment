@@ -69,10 +69,10 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 		return in, app.Invalid("name is required")
 	}
 	if in.ProjectID != nil && *in.ProjectID < 1 {
-		in.ProjectID = nil
+		return in, app.Invalid("invalid project_id")
 	}
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
-		in.SubprojectID = nil
+		return in, app.Invalid("invalid subproject_id")
 	}
 	if in.SubprojectID != nil {
 		sp, err := q.GetSubproject(ctx, *in.SubprojectID)
@@ -139,6 +139,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
 	out.Weeks = make([]weekly.Cell, 0, len(weeks))
+	prev := 0.0
 	for _, w := range weeks {
 		c := weekly.Cell{
 			TaskID:       w.TaskID,
@@ -146,7 +147,10 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 			PlannedHours: w.PlannedHours,
 			SpentHours:   w.SpentHours,
 		}
-		c.Progress = nullable.Float64Pointer(w.Progress)
+		if w.Progress.Valid {
+			prev = w.Progress.Float64
+		}
+		c.Progress = new(prev)
 		out.Weeks = append(out.Weeks, c)
 	}
 	return out, nil
@@ -184,6 +188,9 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 	return mapTasks(rows), nil
 }
 
+// Update replaces the full task state; omitted fields become zero values.
+// For a task with weekly data, omitting project_id/subproject_id is treated as
+// a reassignment and fails with Conflict. Send the complete entity.
 func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error) {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetTask(ctx, id)

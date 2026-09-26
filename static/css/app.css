@@ -168,17 +168,6 @@ body {
 	color: #b00020;
 }
 
-.grid-alert {
-	position: sticky;
-	top: 0;
-	z-index: 5;
-	margin-bottom: 0.75rem;
-	padding: 0.65rem 0.8rem;
-	border: 1px solid #b00020;
-	background: var(--pico-background-color, #fff);
-	color: #b00020;
-}
-
 .carried-progress {
 	border-left: 3px dotted var(--pico-muted-color, #888);
 }

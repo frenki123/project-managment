@@ -17,7 +17,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: 100, StartDate: "2026-01-05", EndDate: "2026-06-01",
+		Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 func TestSaveReadsUnlockedPastMonthInsideTransaction(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-04-06", EndDate: "2026-05-04"})
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-04-06", EndDate: "2026-05-04"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCascadeRejectsLockedConflict(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: 100, StartDate: "2026-03-02", EndDate: "2026-06-01",
+		Name: "P", TotalHours: new(100.0), StartDate: "2026-03-02", EndDate: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: 100, StartDate: "2026-01-05", EndDate: "2026-06-01",
+		Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: 10, StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,5 +202,13 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 	}
 	if cell.PlannedHours != planned || cell.SpentHours != updatedSpent || cell.Progress == nil || *cell.Progress != progress {
 		t.Fatalf("partial patch changed untouched values: %#v", cell)
+	}
+	nextHours := 2.0
+	cell, err = weekly.Save(ctx, q, tk.ID, "2026-09-14", weekly.Patch{PlannedHours: &nextHours}, now, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Progress == nil || *cell.Progress != progress {
+		t.Fatalf("carried progress should be effective in save response: %#v", cell)
 	}
 }

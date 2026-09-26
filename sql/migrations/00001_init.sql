@@ -11,7 +11,7 @@ CREATE TABLE projects (
 
 CREATE TABLE subprojects (
     id INTEGER PRIMARY KEY,
-    project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+    project_id INTEGER NOT NULL REFERENCES projects (id),
     name TEXT NOT NULL,
     total_hours REAL NOT NULL CHECK (total_hours >= 0),
     UNIQUE (project_id, id)
@@ -25,15 +25,15 @@ CREATE TABLE tasks (
     department TEXT NOT NULL DEFAULT '',
     developers TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT '',
-    project_id INTEGER REFERENCES projects (id) ON DELETE SET NULL,
-    subproject_id INTEGER REFERENCES subprojects (id) ON DELETE SET NULL,
+    project_id INTEGER REFERENCES projects (id),
+    subproject_id INTEGER REFERENCES subprojects (id),
     CHECK (subproject_id IS NULL OR project_id IS NOT NULL),
     FOREIGN KEY (project_id, subproject_id)
         REFERENCES subprojects (project_id, id)
 );
 
 CREATE TABLE task_weeks (
-    task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+    task_id INTEGER NOT NULL REFERENCES tasks (id),
     week_start TEXT NOT NULL,
     planned_hours REAL NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
     spent_hours REAL NOT NULL DEFAULT 0 CHECK (spent_hours >= 0),

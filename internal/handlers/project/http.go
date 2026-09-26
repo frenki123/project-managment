@@ -43,7 +43,7 @@ func formInput(r *http.Request) (domain.Input, error) {
 		StartDate:         r.FormValue("start_date"),
 		EndDate:           r.FormValue("end_date"),
 	}
-	in.TotalHours = hours
+	in.TotalHours = &hours
 	return in, nil
 }
 

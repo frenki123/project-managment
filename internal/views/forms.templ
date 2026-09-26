@@ -1,107 +1,91 @@
 package views
 
-templ TaskForm(data TaskFormData) {
-	@Layout(data.Title) {
+templ FormShell(title string, errMsg string, deleteAction string, confirmMessage string, children ...templ.Component) {
+	@Layout(title) {
 		<main class="container form-page">
-			<h1>{ data.Title }</h1>
-			if data.Error != "" {
-				<p class="error">{ data.Error }</p>
+			<h1>{ title }</h1>
+			if errMsg != "" {
+				<p class="error">{ errMsg }</p>
 			}
-			<form method="post" action={ templ.URL(data.Action) }>
-				<label>Name<input type="text" name="name" value={ data.Task.Name } required/></label>
-				<label>Description<textarea name="description">{ data.Task.Description }</textarea></label>
-				<label>Implementation notes<textarea name="implementation_notes">{ data.Task.ImplementationNotes }</textarea></label>
-				<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
-				<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
-				<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
-				<label>
-					Project
-					<select name="project_id" id="task-project-filter" disabled?={ !data.CanReassign }>
-						<option value="">Ideas</option>
-						for _, o := range data.Projects {
-							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-						}
-					</select>
-					if !data.CanReassign {
-						<input type="hidden" name="project_id" value={ data.Task.ProjectID }/>
-					}
-				</label>
-				<label>
-					Subproject
-					<select name="subproject_id" id="task-subproject-filter" disabled?={ !data.CanReassign }>
-						<option value="">None</option>
-						for _, o := range data.Subprojects {
-							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-						}
-					</select>
-					if !data.CanReassign {
-						<input type="hidden" name="subproject_id" value={ data.Task.SubprojectID }/>
-					}
-				</label>
-				if !data.CanReassign {
-					<small>{ data.ReassignNote }</small>
-				}
-				<button type="submit">Save</button>
-			</form>
-			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this task?')">
+			{ children... }
+			if deleteAction != "" {
+				<form method="post" action={ templ.URL(deleteAction) } data-confirm={ confirmMessage }>
 					<button type="submit" class="secondary">Delete</button>
 				</form>
 			}
 		</main>
+	}
+}
+
+templ TaskForm(data TaskFormData) {
+	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this task?") {
+		<form method="post" action={ templ.URL(data.Action) }>
+			<label>Name<input type="text" name="name" value={ data.Task.Name } required/></label>
+			<label>Description<textarea name="description">{ data.Task.Description }</textarea></label>
+			<label>Implementation notes<textarea name="implementation_notes">{ data.Task.ImplementationNotes }</textarea></label>
+			<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
+			<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
+			<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
+			<label>
+				Project
+				<select name="project_id" id="task-project-filter" disabled?={ !data.CanReassign }>
+					<option value="">Ideas</option>
+					for _, o := range data.Projects {
+						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+					}
+				</select>
+				if !data.CanReassign {
+					<input type="hidden" name="project_id" value={ data.Task.ProjectID }/>
+				}
+			</label>
+			<label>
+				Subproject
+				<select name="subproject_id" id="task-subproject-filter" disabled?={ !data.CanReassign }>
+					<option value="">None</option>
+					for _, o := range data.Subprojects {
+						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+					}
+				</select>
+				if !data.CanReassign {
+					<input type="hidden" name="subproject_id" value={ data.Task.SubprojectID }/>
+				}
+			</label>
+			if !data.CanReassign {
+				<small>{ data.ReassignNote }</small>
+			}
+			<button type="submit">Save</button>
+		</form>
 	}
 }
 
 templ ProjectForm(data ProjectFormData) {
-	@Layout(data.Title) {
-		<main class="container form-page">
-			<h1>{ data.Title }</h1>
-			if data.Error != "" {
-				<p class="error">{ data.Error }</p>
-			}
-			<form method="post" action={ templ.URL(data.Action) }>
-				<label>Name<input type="text" name="name" value={ data.Project.Name } required/></label>
-				<label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label>
-				<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
-				<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
-				<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
-				<button type="submit">Save</button>
-			</form>
-			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this project?')">
-					<button type="submit" class="secondary">Delete</button>
-				</form>
-			}
-		</main>
+	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this project?") {
+		<form method="post" action={ templ.URL(data.Action) }>
+			<label>Name<input type="text" name="name" value={ data.Project.Name } required/></label>
+			<label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label>
+			<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
+			<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
+			<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
+			<button type="submit">Save</button>
+		</form>
 	}
 }
 
 templ SubprojectForm(data SubprojectFormData) {
-	@Layout(data.Title) {
-		<main class="container form-page">
-			<h1>{ data.Title }</h1>
-			if data.Error != "" {
-				<p class="error">{ data.Error }</p>
-			}
-			<form method="post" action={ templ.URL(data.Action) }>
-				<label>Name<input type="text" name="name" value={ data.Subproject.Name } required/></label>
-				<label>
-					Project
-					<select name="project_id" required>
-						for _, o := range data.Projects {
-							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-						}
-					</select>
-				</label>
-				<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
-				<button type="submit">Save</button>
-			</form>
-			if data.DeleteAction != "" {
-				<form method="post" action={ templ.URL(data.DeleteAction) } onsubmit="return confirm('Delete this subproject?')">
-					<button type="submit" class="secondary">Delete</button>
-				</form>
-			}
-		</main>
+	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this subproject?") {
+		<form method="post" action={ templ.URL(data.Action) }>
+			<label>Name<input type="text" name="name" value={ data.Subproject.Name } required/></label>
+			<label>
+				Project
+				<select name="project_id" required>
+					for _, o := range data.Projects {
+						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+					}
+				</select>
+			</label>
+			<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
+			<button type="submit">Save</button>
+		</form>
 	}
 }
 
@@ -127,6 +111,6 @@ templ TaskPanel(data TaskPanelData) {
 		<p><strong>Progress:</strong> { formatNum(data.Task.Progress) }%</p>
 		<p>{ data.Desc }</p>
 		<p>{ data.Notes }</p>
-		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } onsubmit="return confirm('Delete this task?')"><button type="submit" class="secondary">DELETE</button></form></p>
+		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } data-confirm="Delete this task?"><button type="submit" class="secondary">DELETE</button></form></p>
 	</div>
 }

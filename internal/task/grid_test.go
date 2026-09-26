@@ -19,7 +19,7 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: 300, StartDate: "2026-09-01", EndDate: "2026-10-31",
+		Name: "P", TotalHours: new(300.0), StartDate: "2026-09-01", EndDate: "2026-10-31",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -92,11 +92,11 @@ weekTotalFound:
 func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,11 +127,11 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: 20, StartDate: "2026-09-01", EndDate: "2026-10-31"})
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(20.0), StartDate: "2026-09-01", EndDate: "2026-10-31"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: 10})
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: new(10.0)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,15 +176,15 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: second.ID, Name: "Second subproject", TotalHours: 1})
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: second.ID, Name: "Second subproject", TotalHours: new(1.0)})
 	if err != nil {
 		t.Fatal(err)
 	}

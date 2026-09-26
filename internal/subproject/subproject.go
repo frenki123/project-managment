@@ -20,9 +20,9 @@ type Subproject struct {
 }
 
 type Input struct {
-	ProjectID  int64   `json:"project_id"`
-	Name       string  `json:"name"`
-	TotalHours float64 `json:"total_hours"`
+	ProjectID  int64    `json:"project_id"`
+	Name       string   `json:"name"`
+	TotalHours *float64 `json:"total_hours"`
 }
 
 type SubprojectsResponse struct {
@@ -46,7 +46,10 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Inp
 	if in.ProjectID < 1 {
 		return in, app.Invalid("project is required")
 	}
-	if !app.NonNegativeFinite(in.TotalHours) {
+	if in.TotalHours == nil {
+		return in, app.Invalid("total_hours is required")
+	}
+	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
 	}
 	proj, err := q.GetProject(ctx, in.ProjectID)
@@ -68,7 +71,7 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Inp
 	if err != nil {
 		return in, err
 	}
-	if used+in.TotalHours > proj.TotalHours {
+	if used+*in.TotalHours > proj.TotalHours {
 		return in, app.Conflict("subproject hours exceed project hours")
 	}
 	return in, nil
@@ -82,7 +85,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 			return err
 		}
 		row, err := txq.CreateSubproject(ctx, db.CreateSubprojectParams{
-			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: validated.TotalHours,
+			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: *validated.TotalHours,
 		})
 		if err == nil {
 			result = FromDB(row)
@@ -176,7 +179,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 			}
 		}
 		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
-			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: validated.TotalHours, ID: id,
+			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: *validated.TotalHours, ID: id,
 		})
 		return err
 	})

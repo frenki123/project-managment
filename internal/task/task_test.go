@@ -17,15 +17,15 @@ import (
 func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: first.ID, Name: "First subproject", TotalHours: 1})
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: first.ID, Name: "First subproject", TotalHours: new(1.0)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,11 +42,11 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 func TestCreateSubprojectAdoptsItsProject(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: 1})
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: new(1.0)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestCreateSubprojectAdoptsItsProject(t *testing.T) {
 func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: 10, StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
 	if err != nil {
 		t.Fatal(err)
 	}

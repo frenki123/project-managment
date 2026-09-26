@@ -86,10 +86,8 @@ func taskSelects(r *http.Request, q *db.Queries, selectedProject, selectedSub *i
 			return nil, nil, err
 		}
 	}
-	projNames := map[int64]string{}
 	var po []taskdomain.Option
 	for _, p := range projects {
-		projNames[p.ID] = p.Name
 		v := strconv.FormatInt(p.ID, 10)
 		sel := selectedProject != nil && *selectedProject == p.ID
 		po = append(po, taskdomain.Option{Value: v, Label: p.Name, Selected: sel})
@@ -98,7 +96,7 @@ func taskSelects(r *http.Request, q *db.Queries, selectedProject, selectedSub *i
 	for _, s := range subs {
 		v := strconv.FormatInt(s.ID, 10)
 		sel := selectedSub != nil && *selectedSub == s.ID
-		so = append(so, taskdomain.Option{Value: v, Label: projNames[s.ProjectID] + " / " + s.Name, Selected: sel})
+		so = append(so, taskdomain.Option{Value: v, Label: s.Name, Selected: sel})
 	}
 	return po, so, nil
 }
@@ -242,11 +240,16 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
+		t, err := taskdomain.Get(r.Context(), q, id)
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
 		if err := taskdomain.Delete(r.Context(), q, id); err != nil {
 			app.WriteError(w, r, err)
 			return
 		}
-		app.Redirect(w, r, "/")
+		app.Redirect(w, r, afterTask(t))
 	}
 }
 

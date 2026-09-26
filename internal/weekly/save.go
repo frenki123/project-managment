@@ -141,7 +141,15 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 		}
-		result = toCell(row)
+		effective := nullable.Float64Pointer(row.Progress)
+		if effective == nil {
+			prev, err := lastProgressBefore(ctx, txq, taskID, weekStart)
+			if err != nil {
+				return err
+			}
+			effective = new(prev)
+		}
+		result = toCell(row, effective)
 		return nil
 	})
 	return result, err
@@ -169,8 +177,12 @@ func validProgress(value float64) error {
 	return nil
 }
 
-func toCell(week db.TaskWeek) Cell {
-	cell := Cell{TaskID: week.TaskID, WeekStart: WeekStart(week.WeekStart), PlannedHours: week.PlannedHours, SpentHours: week.SpentHours}
-	cell.Progress = nullable.Float64Pointer(week.Progress)
-	return cell
+func toCell(week db.TaskWeek, progress *float64) Cell {
+	return Cell{
+		TaskID:       week.TaskID,
+		WeekStart:    WeekStart(week.WeekStart),
+		PlannedHours: week.PlannedHours,
+		SpentHours:   week.SpentHours,
+		Progress:     progress,
+	}
 }

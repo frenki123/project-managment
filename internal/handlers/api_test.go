@@ -19,18 +19,13 @@ func nextMonday(now time.Time) time.Time {
 	return day.AddDate(0, 0, int(offset))
 }
 
-func TestJSONTaskAndWeek(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-
-	start := nextMonday(time.Now())
-	end := start.AddDate(0, 0, 28)
-	projBody := []byte(`{"name":"Alpha","purchase_order_name":"PO-1","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + end.Format("2006-01-02") + `"}`)
+func createProject(t *testing.T, mux *http.ServeMux, name string, start time.Time) int64 {
+	t.Helper()
+	body := []byte(`{"name":"` + name + `","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(projBody)))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(body)))
 	if rr.Code != http.StatusCreated {
-		t.Fatalf("create project %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("create project %s: %d %s", name, rr.Code, rr.Body.String())
 	}
 	var proj struct {
 		ID int64 `json:"id"`
@@ -38,13 +33,39 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &proj); err != nil {
 		t.Fatal(err)
 	}
+	return proj.ID
+}
+
+func createTask(t *testing.T, mux *http.ServeMux, body []byte) int64 {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader(body)))
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create task: %d %s", rr.Code, rr.Body.String())
+	}
+	var tk struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
+		t.Fatal(err)
+	}
+	return tk.ID
+}
+
+func TestJSONTaskAndWeek(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := nextMonday(time.Now())
+	projID := createProject(t, mux, "Alpha", start)
 
 	// Keep this map to pin the request wire shape independently of domain types.
-	taskBody, err := json.Marshal(map[string]any{"name": "Do work", "project_id": proj.ID, "developers": "Ada", "priority": "high"})
+	taskBody, err := json.Marshal(map[string]any{"name": "Do work", "project_id": projID, "developers": "Ada", "priority": "high"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader(taskBody)))
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("create task %d %s", rr.Code, rr.Body.String())
@@ -85,7 +106,7 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatalf("got %#v", got)
 	}
 
-	updatedBody := []byte(`{"name":"Updated work","project_id":` + strconv.FormatInt(proj.ID, 10) + `}`)
+	updatedBody := []byte(`{"name":"Updated work","project_id":` + strconv.FormatInt(projID, 10) + `}`)
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), bytes.NewReader(updatedBody)))
 	if rr.Code != http.StatusOK {
@@ -126,37 +147,16 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	handlers.Register(mux, q)
 
 	start := nextMonday(time.Now())
-	projBody := []byte(`{"name":"Alpha","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(projBody)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create project %d %s", rr.Code, rr.Body.String())
-	}
-	var proj struct {
+	projID := createProject(t, mux, "Alpha", start)
+	tk := struct {
 		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &proj); err != nil {
-		t.Fatal(err)
-	}
+	}{ID: createTask(t, mux, []byte(`{"name":"Grid task","project_id":` + strconv.FormatInt(projID, 10) + `}`))}
 
-	taskBody := []byte(`{"name":"Grid task","project_id":` + strconv.FormatInt(proj.ID, 10) + `}`)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader(taskBody)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create task %d %s", rr.Code, rr.Body.String())
-	}
-	var tk struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
-		t.Fatal(err)
-	}
-
-	body := "planned_hours=8&spent_hours=3&progress=25&project=" + strconv.FormatInt(proj.ID, 10)
+	body := "planned_hours=8&spent_hours=3&progress=25&project=" + strconv.FormatInt(projID, 10)
 	r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("week edit %d %s", rr.Code, rr.Body.String())
@@ -355,39 +355,15 @@ func TestEditTaskReassignConflictKeepsStoredProject(t *testing.T) {
 	handlers.Register(mux, q)
 
 	start := nextMonday(time.Now())
-	createProject := func(name string) int64 {
-		body := []byte(`{"name":"` + name + `","total_hours":10,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(body)))
-		if rr.Code != http.StatusCreated {
-			t.Fatalf("create project %s: %d %s", name, rr.Code, rr.Body.String())
-		}
-		var proj struct {
-			ID int64 `json:"id"`
-		}
-		if err := json.Unmarshal(rr.Body.Bytes(), &proj); err != nil {
-			t.Fatal(err)
-		}
-		return proj.ID
-	}
-	a := createProject("A")
-	b := createProject("B")
+	a := createProject(t, mux, "A", start)
+	b := createProject(t, mux, "B", start)
 
-	taskBody := []byte(`{"name":"Tracked","project_id":` + strconv.FormatInt(a, 10) + `}`)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader(taskBody)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create task %d %s", rr.Code, rr.Body.String())
-	}
-	var tk struct {
+	tk := struct {
 		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
-		t.Fatal(err)
-	}
+	}{ID: createTask(t, mux, []byte(`{"name":"Tracked","project_id":` + strconv.FormatInt(a, 10) + `}`))}
 
 	weekBody := []byte(`{"planned_hours":1}`)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewReader(weekBody)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("save week %d %s", rr.Code, rr.Body.String())
@@ -408,5 +384,122 @@ func TestEditTaskReassignConflictKeepsStoredProject(t *testing.T) {
 	rejectedHidden := `name="project_id" value="` + strconv.FormatInt(b, 10) + `"`
 	if bytes.Contains(rr.Body.Bytes(), []byte(rejectedHidden)) {
 		t.Fatalf("form carries rejected project (%s): %s", rejectedHidden, rr.Body.String())
+	}
+}
+
+func TestMutationsRedirectToContext(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	pid := createProject(t, mux, "P", start)
+
+	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid, 10) + `,"name":"SP","total_hours":10}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(spBody)))
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create subproject %d %s", rr.Code, rr.Body.String())
+	}
+	var sp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &sp); err != nil {
+		t.Fatal(err)
+	}
+
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(sp.ID, 10)+`}`))
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10)+"/delete", nil))
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(sp.ID, 10) {
+		t.Fatalf("task delete redirect: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	form := "name=SP2&project_id=" + strconv.FormatInt(pid, 10) + "&total_hours=10"
+	r := httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(sp.ID, 10), bytes.NewBufferString(form))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(sp.ID, 10) {
+		t.Fatalf("subproject update redirect: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(sp.ID, 10)+"/delete", nil))
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10) {
+		t.Fatalf("subproject delete redirect: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+}
+
+func TestJSONContractConsistency(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+
+	noHours := []byte(`{"name":"No hours","start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(noHours)))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("project without total_hours: got %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"zero","project_id":0}`))))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("project_id 0: got %d %s", rr.Code, rr.Body.String())
+	}
+
+	pid := createProject(t, mux, "P", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewReader([]byte(`{"progress":25}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("save progress %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.AddDate(0, 0, 7).Format("2006-01-02"), bytes.NewReader([]byte(`{"planned_hours":1}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("save planned %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
+	}
+	var got struct {
+		Weeks []struct {
+			Progress float64 `json:"progress"`
+		} `json:"weeks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Weeks) != 2 || got.Weeks[0].Progress != 25 || got.Weeks[1].Progress != 25 {
+		t.Fatalf("expected carried progress in weeks: %#v", got.Weeks)
+	}
+
+	putBody := []byte(`{"name":"Renamed","project_id":` + strconv.FormatInt(pid, 10) + `}`)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), bytes.NewReader(putBody)))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("full-replace update %d %s", rr.Code, rr.Body.String())
+	}
+	var updated struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Renamed" {
+		t.Fatalf("renamed task: %q", updated.Name)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), bytes.NewReader([]byte(`{"name":"Tracked"}`))))
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("omitted project_id on tracked task: got %d %s", rr.Code, rr.Body.String())
 	}
 }
