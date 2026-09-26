@@ -60,8 +60,8 @@ func validate(in Input) (Input, error) {
 	if end.Before(start) {
 		return in, Invalid("end_date must be on or after start_date")
 	}
-	in.StartDate = start.Format("2006-01-02")
-	in.EndDate = end.Format("2006-01-02")
+	in.StartDate = start.Format(time.DateOnly)
+	in.EndDate = end.Format(time.DateOnly)
 	return in, nil
 }
 

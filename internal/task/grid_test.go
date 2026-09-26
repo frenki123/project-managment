@@ -1,7 +1,6 @@
 package task_test
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
 		Name: "P", TotalHours: 300, StartDate: "2026-09-01", EndDate: "2026-10-31",

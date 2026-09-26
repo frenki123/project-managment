@@ -171,8 +171,7 @@ func validProgress(value float64) error {
 func toCell(week db.TaskWeek) Cell {
 	cell := Cell{TaskID: week.TaskID, WeekStart: week.WeekStart, PlannedHours: week.PlannedHours, SpentHours: week.SpentHours}
 	if week.Progress.Valid {
-		progress := week.Progress.Float64
-		cell.Progress = &progress
+		cell.Progress = new(week.Progress.Float64)
 	}
 	return cell
 }

@@ -92,8 +92,7 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 		if in.ProjectID != nil && *in.ProjectID != sp.ProjectID {
 			return in, Invalid("subproject does not belong to project")
 		}
-		pid := sp.ProjectID
-		in.ProjectID = &pid
+		in.ProjectID = new(sp.ProjectID)
 	}
 	if in.ProjectID != nil {
 		if _, err := q.GetProject(ctx, *in.ProjectID); errors.Is(err, sql.ErrNoRows) {
@@ -149,8 +148,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 			SpentHours:   w.SpentHours,
 		}
 		if w.Progress.Valid {
-			v := w.Progress.Float64
-			c.Progress = &v
+			c.Progress = new(w.Progress.Float64)
 		}
 		out.Weeks = append(out.Weeks, c)
 	}

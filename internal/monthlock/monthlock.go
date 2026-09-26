@@ -7,17 +7,19 @@ import (
 	"cad-development/internal/db"
 )
 
+const yearMonthLayout = "2006-01"
+
 type MonthLock struct {
 	YearMonth string `json:"year_month"`
 	Unlocked  bool   `json:"unlocked"`
 }
 
 func YearMonth(t time.Time) string {
-	return t.Format("2006-01")
+	return t.Format(yearMonthLayout)
 }
 
 func ParseYearMonth(s string) (time.Time, error) {
-	t, err := time.Parse("2006-01", s)
+	t, err := time.Parse(yearMonthLayout, s)
 	if err != nil {
 		return time.Time{}, Invalid("invalid year_month")
 	}
@@ -27,14 +29,14 @@ func ParseYearMonth(s string) (time.Time, error) {
 func PreviousMonth(now time.Time) string {
 	y, m, _ := now.Date()
 	if m == time.January {
-		return time.Date(y-1, time.December, 1, 0, 0, 0, 0, now.Location()).Format("2006-01")
+		return time.Date(y-1, time.December, 1, 0, 0, 0, 0, now.Location()).Format(yearMonthLayout)
 	}
-	return time.Date(y, m-1, 1, 0, 0, 0, 0, now.Location()).Format("2006-01")
+	return time.Date(y, m-1, 1, 0, 0, 0, 0, now.Location()).Format(yearMonthLayout)
 }
 
 func IsPastMonth(yearMonth string, now time.Time) bool {
 	parsed, err := ParseYearMonth(yearMonth)
-	return err == nil && parsed.Format("2006-01") < YearMonth(now)
+	return err == nil && parsed.Format(yearMonthLayout) < YearMonth(now)
 }
 
 func Locked(yearMonth string, now time.Time, unlocked map[string]bool) bool {
@@ -49,7 +51,7 @@ func WeekLocked(weekStart string, now time.Time, unlocked map[string]bool) bool 
 	if err != nil || week.Weekday() != time.Monday {
 		return true
 	}
-	return Locked(week.Format("2006-01"), now, unlocked)
+	return Locked(week.Format(yearMonthLayout), now, unlocked)
 }
 
 func UnlockedSet(ctx context.Context, q *db.Queries) (map[string]bool, error) {
@@ -112,7 +114,7 @@ func MonthRange(from, to time.Time) []string {
 }
 
 func PastMonths(from time.Time, now time.Time) []string {
-	prev, _ := time.Parse("2006-01", PreviousMonth(now))
+	prev, _ := time.Parse(yearMonthLayout, PreviousMonth(now))
 	start := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
 	if start.After(prev) {
 		return nil

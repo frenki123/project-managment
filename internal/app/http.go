@@ -72,7 +72,7 @@ func FormInt64Checked(r *http.Request, name string) (*int64, error) {
 	if err != nil || n < 1 {
 		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + name}
 	}
-	return &n, nil
+	return new(n), nil
 }
 
 func FormFloat(r *http.Request, name string) (*float64, error) {
@@ -90,7 +90,7 @@ func FormFloat(r *http.Request, name string) (*float64, error) {
 	if err != nil {
 		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid number"}
 	}
-	return &f, nil
+	return new(f), nil
 }
 
 func FormFloatRequired(r *http.Request, name string) (float64, error) {

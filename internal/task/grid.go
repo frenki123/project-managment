@@ -148,8 +148,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 	} else {
-		zero := 0.0
-		data.ProgressPct = &zero
+		data.ProgressPct = new(0.0)
 		tasks, err = ListByProject(ctx, q, pid)
 		if err != nil {
 			return Grid{}, err
@@ -213,7 +212,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 	}
 	if data.ProgressPct != nil {
-		data.ProgressPct = &progressPct
+		data.ProgressPct = new(progressPct)
 	}
 	data.Overrun = data.PlannedHours > data.BudgetHours
 

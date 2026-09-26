@@ -12,6 +12,10 @@ generate:
 tidy:
     go mod tidy
 
+# Format Go source files.
+fmt:
+    git ls-files '*.go' | xargs gofmt -w
+
 # Generate code and build the local server binary.
 build: generate
     mkdir -p tmp

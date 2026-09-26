@@ -1,7 +1,6 @@
 package weekly_test
 
 import (
-	"context"
 	"math"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestSaveProgressAndLock(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
 		Name: "P", TotalHours: 100, StartDate: "2026-01-05", EndDate: "2026-06-01",
@@ -60,7 +59,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 }
 
 func TestCascadeRejectsLockedConflict(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
 		Name: "P", TotalHours: 100, StartDate: "2026-03-02", EndDate: "2026-06-01",
@@ -112,7 +111,7 @@ func TestCascadeRejectsLockedConflict(t *testing.T) {
 }
 
 func TestSaveRejectsInvalidPatches(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
 		Name: "P", TotalHours: 100, StartDate: "2026-01-05", EndDate: "2026-06-01",
