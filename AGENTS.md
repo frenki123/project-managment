@@ -1,5 +1,5 @@
 # Project
-Build a local-first web app replacing Excel CAD_Development.xlsx.
+Build a local-first web app for project hour planning, time tracking, and progress tracking.
 
 # Development rules
 - One Go executable; embed templates, static assets, and Goose migrations.
@@ -9,7 +9,7 @@ Build a local-first web app replacing Excel CAD_Development.xlsx.
 - Vendored assets are pinned and committed: `static/js/htmx.min.js` (HTMX 4.0.0), `static/js/chart.umd.min.js` (Chart.js 4.5.1 UMD, exposes the global `Chart`), `static/css/pico.min.css` (Pico 2.1.1). Source maps are not vendored.
 - Design for desktop and laptop screens; mobile support and responsive mobile layouts are not required.
 - Calculated values stay calculated; prefer SQL calculations over Go calculations.
-- No Excel import; provide Excel/XLSX export.
+- No spreadsheet import; provide XLSX export.
 - Do not edit applied migrations after deployment; add a migration when needed.
 - Use Go `1.27.1` through `devenv`; run project commands via `just` — run `just --list` to see available recipes.
 - Keep tests simple and avoid brittle tests that require frequent updates during development. Use Go stdlib.
@@ -23,23 +23,18 @@ Build a local-first web app replacing Excel CAD_Development.xlsx.
 - Use `encoding/json/v2` at HTTP boundaries; test its stricter behavior and preserve API contracts.
 - Do not add generic abstractions unless they clearly simplify the code; generic methods cannot implement interface methods.
 
-# Original Excel
-This Excel separates planning, execution, and progress into three linked sheets (`Plan`, `Actual`, `Progress`) so that estimated hours, real hours spent, and task completion can
-be tracked independently instead of assuming "hours used = progress made." Each task's `Complexity` (h), set in `Plan`, is turned into a weight factor in `Progress` 
-(task complexity / total complexity of all tasks) and combined with weekly progress % to produce a cumulative earned-value figure in hours — putting progress on the same scale as
-planned and actual hours. These three hour-based curves (Planned, Actual, Earned) are plotted together on the `S curve` sheet, which is the key output of the whole file: 
-a real picture of whether the project is on track, even when time spent doesn't match work actually done.
+# Domain model
+Planning, execution, and progress are three separate dimensions. Estimated hours, real hours spent, and task completion are tracked independently instead of assuming
+"hours used = progress made". A task can have 100 h estimated, 100 h spent, and still be 50% done, which simply means the project is not going as planned.
 
-The key point of this Excel is that we can have estimated hours of 100, developer hours of 100, and progress can still be 50%. This just means project progress isn't going as 
-planned, and that's exactly what the S-curve is meant to visualize — unlike other project management tools that would automatically mark a task as finished once all the hours are 
-used. Planned hours, used hours, and progress must stay conceptually separate, and `Complexity` is what lets progress (%) be converted into the same hours metric as planned/actual,
-so all three can be plotted together.
+Each task's complexity (h) is turned into a weight factor and combined with weekly progress % to produce a cumulative earned-value figure in hours, putting progress on the same
+scale as planned and spent hours. The three hour-based curves (Planned, Spent, Earned) are plotted together on the S-curve, which is the key output of the app: a real picture of
+whether the project is on track, even when time spent doesn't match work actually done. Planned hours, spent hours, and progress must stay conceptually separate, and complexity is
+what lets progress (%) be converted into the same hours metric as planned/spent, so all three can be plotted together.
 
-## Excel Data Model
-This is a list of the data used in the Excel. It's not divided by sheet, as sheet usage was just an Excel limitation in the design, not something we want to copy.
-In general we don't care which sheet something is on, only what the data represents. The basic data are a list of tasks with static data and weekly hours and progress tracking.
-
-### User Inputs:
+## Task
+The basic data is a list of tasks with static data plus weekly hours and progress tracking.
+### Input data
 - task ID
 - task name
 - task description
@@ -50,31 +45,15 @@ In general we don't care which sheet something is on, only what the data represe
 - weekly estimation of the planned hours for the task
 - weekly actual hours worked per task
 - weekly progress estimation per task. Progress can't go down, so if progress is 50% in W31 and we didn't make any progress in W32, progress in W32 is 50%. So progress is cumulative
-
-### Calculated results
-- Complexity (Total Hours per Task)
-- Total planned hours per week
-- Total planned hours cumulative - so we can track how much total hours is planned for the project
-- Total hours spent/actual per Task
-- Total hours spent/actual per week
-- Total hours spent/actual per week cumulative
+### Calculated data
+- Complexity (total planned hours per task) - a sum of weekly planned hours. We don't enter total hours for a task separately.
+- Total planned hours per week and cumulative
+- Total hours spent/actual per task, per week, and cumulative
 - Task progress per week - max value entered for progress
-- Task weight factor - ratio between task and total complexity `TotalTaskHours / SumOfTotalTaskHours`. `TotalTaskHours` is a sum of weekly planned hours. We don't enter specificly total hours for task.
-- Total weekly progress - sumproduct between task weight factor and task progress
-- Total weekly progress (h) = Total weekly progress (%) × Complexity total
-- S-curve graph
 
-## Excel Missing data
-- Project concept - in Excel we simplified the problem with project per year, but this is wrong. In the app we need to be able to define tasks and projects. Important is that we can have
-tasks that don't have a project. These tasks represent ideas, but currently are not assigned to any project.
-- Subproject concept - every project can also have a subproject. Subproject is basically just a simple extra label for part of the tasks in the project, so we can have one extra filter
-on the tasks per project. 
-Every project contains all the tasks in the subproject!
-
-*In general, subproject and project are really similar*
-
-### Project data model
-#### Input data
+## Project
+Projects are first-class, not implied by a period. A task does not need a project; such tasks are ideas that are not assigned to any project yet.
+### Input data
 - project name
 - purchase order name
 - project total hours
@@ -82,25 +61,29 @@ Every project contains all the tasks in the subproject!
 - subprojects in the project
 - start date
 - end date
-#### Calculated data
+### Calculated data
+- planned hours
 - actual used hours
 - progress
-- planned used hours
 
-### Subproject data model
+## Subproject
+A subproject is a simple extra label for part of the tasks in a project, giving one extra filter on the tasks per project. Every project contains all the tasks in the
+subproject. In general, subproject and project are really similar.
+### Input data
 - subproject name
 - total hours
 - tasks in the subproject
-#### Calculated data
+### Calculated data
+- planned hours
 - actual used hours
-- planned used hours
+- subprojects do not have progress
 
 # Web App
 In general the web app will have two entry points that should always be almost the same - user UI and machine JSON data. UI will be defined with `htmx` and `templ`, JSON data will be
 used with the CLI and SDKs in the future so LLM harness can also use this application.
 
 ## UI/UX
-We will try to make "Excel-like" inputs as much as possible. Fallback to form creation and edit only for data that we don't need often.
+We will try to make "spreadsheet-like" inputs as much as possible. Fallback to form creation and edit only for data that we don't need often.
 ### Form data
 #### New Task/Edit Task:
 - task name

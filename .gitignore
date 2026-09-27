@@ -16,11 +16,6 @@ data/
 *.db-wal
 *.db-shm
 
-# Excel
-*.xlsx
-*.ods
-.~lock.*
-
 # sqlc generated (run `just generate`)
 internal/db/db.go
 internal/db/models.go
