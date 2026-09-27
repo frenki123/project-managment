@@ -10,7 +10,7 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Design for desktop and laptop screens; mobile support and responsive mobile layouts are not required.
 - Calculated values stay calculated; prefer SQL calculations over Go calculations.
 - No spreadsheet import; provide XLSX export.
-- Do not edit applied migrations after deployment; add a migration when needed.
+- While in alpha, `sql/migrations/00001_init.sql` is edited in place; do not add migration files. Apply the change with `just db-reset`. Once a non-prerelease version ships, never edit an applied migration again — add a new one from then on.
 - Use Go `1.27.1` through `devenv`; run project commands via `just` — run `just --list` to see available recipes.
 - Keep tests simple and avoid brittle tests that require frequent updates during development. Use Go stdlib.
 - Do not use curl or sqlite3 CLI checks as a substitute for Go tests.
@@ -24,8 +24,7 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Do not add generic abstractions unless they clearly simplify the code; generic methods cannot implement interface methods.
 
 # Releases and compatibility
-- The project is pre-release (`v0.0.1-alpha`). Breaking changes are expected and allowed: schema, `/api/v1` contracts, and UI may change without deprecation or back-compat shims.
-- Still never edit an applied migration — add a new one, even if it drops data. `just db-reset` is an acceptable way to recover.
+- The project is pre-release (`v0.0.1-alpha`). Breaking changes are expected and allowed: schema, `/api/v1` contracts, and UI can change without deprecation or back-compat shims. `just db-reset` is the expected way to recover a local database.
 - Tag a release with `v<semver>`, prefixed `alpha` while unstable (`v0.0.1-alpha`). Pushing the tag builds, tests, and publishes a GitHub Release. A tag with a `-` suffix is published as a pre-release.
 
 # Domain model
