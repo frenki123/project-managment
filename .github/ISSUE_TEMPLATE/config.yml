@@ -1,0 +1,20 @@
+name: config
+description: Template chooser for new issues
+title: ''
+labels: ''
+assignees: ''
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Not sure whether this is a bug? Use **Report a problem** if something
+        behaves differently than expected, or open a blank issue for anything else.
+  - type: input
+    id: contact
+    attributes:
+      label: Contact
+      description: Optional. Leave blank if you would rather not be contacted.
+      placeholder: your email or handle
+    validations:
+      required: false
