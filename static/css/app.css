@@ -7,7 +7,7 @@ body.modal-open { overflow: hidden; }
 	--project-col: 7rem;
 	--subproject-col: 7rem;
 	--status-col: 8rem;
-	--summary-col: 9rem;
+	--summary-col: 8rem;
 }
 
 .app-header,
