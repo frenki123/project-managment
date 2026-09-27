@@ -64,6 +64,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	app.RegisterStatic(mux, staticFS)
+	if os.Getenv("DEV_RELOAD") == "1" {
+		app.RegisterDevReload(mux)
+	}
 	handlers.Register(mux, database.Q)
 
 	log.Printf("listening on http://%s", addr)

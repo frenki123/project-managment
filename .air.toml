@@ -3,10 +3,10 @@ tmp_dir = "tmp"
 
 [build]
 cmd = "just build"
-bin = "./tmp/server"
-include_ext = ["go", "templ", "sql"]
-exclude_dir = ["tmp", "data", "static", "internal/db", ".devenv", ".direnv"]
-exclude_regex = ["_templ\\.go"]
+entrypoint = "./tmp/server"
+include_ext = ["go", "templ", "sql", "css", "js"]
+exclude_dir = ["tmp", "data", "internal/db", ".devenv", ".direnv"]
+exclude_regex = ["_templ\\.go$"]
 exclude_unchanged = true
 delay = 500
 kill_delay = "1s"

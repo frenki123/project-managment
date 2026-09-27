@@ -41,9 +41,12 @@ db-reset:
     goose reset
     goose up
 
+# Start Air without changing the development database.
+dev:
+    DEV_RELOAD=1 air -c .air.toml
+
 # Reset the database, then start Air.
-dev: db-reset
-    air -c .air.toml
+dev-reset: db-reset dev
 
 # Build and run the local server.
 run: build
