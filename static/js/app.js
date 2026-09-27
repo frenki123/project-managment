@@ -79,34 +79,34 @@
 		if (message && !confirm(message)) event.preventDefault();
 	});
 
-	document.body.addEventListener("htmx:afterSwap", (event) => {
+	document.body.addEventListener("htmx:after:swap", (event) => {
 		if (!lastActive) return;
-		if (!event.detail.target?.matches("tr.task-row")) return;
+		if (!event.detail.ctx.target?.matches("tr.task-row")) return;
 		const selector = `[name="${lastActive.name}"][data-save-path="${lastActive.dataset.savePath || ""}"]`;
 		const replacement = document.querySelector(selector);
 		if (replacement) replacement.focus();
 		lastActive = null;
 	});
 
-	document.body.addEventListener("htmx:beforeSwap", (event) => {
-		if (event.detail.target?.id === "modal-root") abortSubprojectRequest();
+	document.body.addEventListener("htmx:before:swap", (event) => {
+		if (event.detail.ctx.target?.id === "modal-root") abortSubprojectRequest();
 	});
 
-	document.body.addEventListener("htmx:beforeRequest", (event) => {
-		const trigger = event.detail.elt;
+	document.body.addEventListener("htmx:before:request", (event) => {
+		const trigger = event.detail.ctx.sourceElement;
 		if (trigger?.getAttribute("hx-target") === "#modal-root" && !document.getElementById("modal-root")?.contains(trigger)) {
 			modalOpener = trigger;
 		}
 	});
 
-	document.body.addEventListener("htmx:responseError", (event) => {
-		if (event.detail.elt?.matches(".week-cell input")) lastActive = null;
+	document.body.addEventListener("htmx:response:error", (event) => {
+		const ctx = event.detail.ctx;
+		if (ctx.sourceElement?.matches(".week-cell input")) lastActive = null;
 		const toast = document.getElementById("toast");
 		if (!toast) {
 			return;
 		}
-		const response = event.detail.xhr;
-		toast.textContent = response.responseText || `Request failed (${response.status})`;
+		toast.textContent = ctx.text || `Request failed (${ctx.response?.status})`;
 		toast.hidden = false;
 		clearTimeout(timer);
 		timer = setTimeout(() => {

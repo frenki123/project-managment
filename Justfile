@@ -47,7 +47,7 @@ seed: db-reset generate
 
 # Start Air without changing the development database.
 dev:
-    DEV_RELOAD=1 air -c .air.toml
+    air -c .air.toml
 
 # Reset the database, seed example data, then start Air.
 dev-reset: seed dev

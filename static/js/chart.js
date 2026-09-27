@@ -46,5 +46,5 @@
 	applyTheme();
 	dark.addEventListener("change", applyTheme);
 	render();
-	document.body.addEventListener("htmx:afterSwap", render);
+	document.body.addEventListener("htmx:after:swap", render);
 })();
