@@ -14,10 +14,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  TEMPL_VERSION: v0.3.1020
-  SQLC_VERSION: v1.31.1
-
 jobs:
   check:
     name: Test and build
@@ -25,38 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install templ and sqlc
-        run: |
-          set -euo pipefail
-          export GOBIN="$PWD/.bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          go install "github.com/a-h/templ/cmd/templ@$TEMPL_VERSION"
-          go install "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION"
-
-      - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+      - uses: ./.github/actions/setup
 
       - name: Generate, test, vet, build
         run: just check
 
-      - name: Build release binaries
+      - name: Cross-compile release binaries
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/server-linux-amd64     ./cmd/server
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/server-windows-amd64.exe ./cmd/server
-
-      - name: Upload binaries
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v7
-        with:
-          name: server-binaries
-          path: dist/
-          if-no-files-found: error

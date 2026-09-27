@@ -23,6 +23,11 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Use `encoding/json/v2` at HTTP boundaries; test its stricter behavior and preserve API contracts.
 - Do not add generic abstractions unless they clearly simplify the code; generic methods cannot implement interface methods.
 
+# Releases and compatibility
+- The project is pre-release (`v0.0.1-alpha`). Breaking changes are expected and allowed: schema, `/api/v1` contracts, and UI may change without deprecation or back-compat shims.
+- Still never edit an applied migration — add a new one, even if it drops data. `just db-reset` is an acceptable way to recover.
+- Tag a release with `v<semver>`, prefixed `alpha` while unstable (`v0.0.1-alpha`). Pushing the tag builds, tests, and publishes a GitHub Release. A tag with a `-` suffix is published as a pre-release.
+
 # Domain model
 Planning, execution, and progress are three separate dimensions. Estimated hours, real hours spent, and task completion are tracked independently instead of assuming
 "hours used = progress made". A task can have 100 h estimated, 100 h spent, and still be 50% done, which simply means the project is not going as planned.

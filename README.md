@@ -8,6 +8,10 @@ estimated, 100 h spent, and still be only 50% done. Task complexity turns progre
 same hours metric, which makes it possible to plot **Planned**, **Spent**, and **Earned** on
 one S-curve per project.
 
+> **Pre-release: expect breaking changes.** The project is at `v0.0.1-alpha`. The data model,
+> `/api/v1` responses, and UI can change or break at any time, with no migration path for existing
+> data. Back up `data/app.db` and expect to run `just db-reset` after upgrading.
+
 ## Features
 
 - **Workboard** (`/`): the main grid. Rows are tasks, columns are weeks derived from the project
@@ -53,6 +57,22 @@ Then open http://127.0.0.1:8080. The server also runs standalone with `just run`
 migrations on boot. `PORT` overrides the default `8080`; the database is `data/app.db`.
 
 Run `just --list` to see every recipe. `just check` runs tests, vet, and a build.
+
+## Releases
+
+Binaries for each tag are attached to
+[GitHub Releases](https://github.com/frenki123/project-managment/releases): `server-linux-amd64`
+and `server-windows-amd64.exe`. Any binary reports what it is with `./server --version`.
+
+```sh
+gh release download v0.0.1-alpha -R frenki123/project-managment -p server-linux-amd64
+```
+
+The tag is part of a direct download URL, because GitHub's `releases/latest` skips pre-releases:
+
+```
+https://github.com/frenki123/project-managment/releases/download/v0.0.1-alpha/server-linux-amd64
+```
 
 ## Layout
 

@@ -23,7 +23,7 @@ modernize:
 # Generate code and build the local server binary.
 build: generate
     mkdir -p tmp
-    go build -o ./tmp/server ./cmd/server
+    go build -ldflags "-X main.version=$(git describe --tags --always)" -o ./tmp/server ./cmd/server
 
 # Generate code and run all Go tests.
 test: generate
