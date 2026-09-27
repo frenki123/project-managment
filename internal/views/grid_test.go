@@ -45,15 +45,15 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
 		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}},
 	})
-	for _, label := range []string{"Planned [h]", "Spent [h]", "Progress [%]", "W1"} {
+	for _, label := range []string{"Status", "Summary", "W1"} {
 		if !strings.Contains(project, label) {
 			t.Fatalf("project grid is missing %q: %s", label, project)
 		}
 	}
-	if strings.Count(project, `<col class="`) != 8 || !strings.Contains(project, `colspan="7" class="sticky c0"`) {
+	if strings.Count(project, `<col class="`) != 6 || !strings.Contains(project, `colspan="5" class="sticky c0"`) {
 		t.Fatalf("project grid has unexpected fixed/footer structure: %s", project)
 	}
-	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") {
+	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, "Planned 0 h") || !strings.Contains(project, "Spent 0 h") || !strings.Contains(project, "Progress 0%") {
 		t.Fatalf("project grid is missing task status: %s", project)
 	}
 	for _, label := range []string{"Plan", "Spent"} {
