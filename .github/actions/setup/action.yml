@@ -1,0 +1,25 @@
+name: Setup
+description: Install Go, templ, sqlc, and just for building and testing.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Install templ and sqlc
+      shell: bash
+      env:
+        TEMPL_VERSION: v0.3.1020
+        SQLC_VERSION: v1.31.1
+      run: |
+        set -euo pipefail
+        export GOBIN="$PWD/.bin"
+        echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+        echo "$GOBIN" >> "$GITHUB_PATH"
+        go install "github.com/a-h/templ/cmd/templ@$TEMPL_VERSION"
+        go install "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION"
+
+    - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4

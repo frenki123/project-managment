@@ -8,6 +8,11 @@ estimated, 100 h spent, and still be only 50% done. Task complexity turns progre
 same hours metric, which makes it possible to plot **Planned**, **Spent**, and **Earned** on
 one S-curve per project.
 
+> **Pre-release: expect breaking changes.** The project is at `v0.0.1-alpha`. The data model,
+> `/api/v1` responses, and UI can change or break at any time, with no migration path for existing
+> data. Back up `data/app.db`; to start over after an upgrade, stop the server, delete it, and
+> start again — the schema is rebuilt on boot.
+
 ## Features
 
 - **Workboard** (`/`): the main grid. Rows are tasks, columns are weeks derived from the project
@@ -41,6 +46,9 @@ UMD. Desktop and laptop screens are the target; mobile layouts are out of scope.
 
 ## Getting started
 
+To run a downloaded binary, see [Releases](#releases) — it needs no toolchain. To build from
+source, the rest of this section applies.
+
 Requires [devenv](https://devenv.sh/) and direnv; it provides Go 1.27, `just`, `templ`,
 `sqlc`, `goose`, and `air`.
 
@@ -53,6 +61,32 @@ Then open http://127.0.0.1:8080. The server also runs standalone with `just run`
 migrations on boot. `PORT` overrides the default `8080`; the database is `data/app.db`.
 
 Run `just --list` to see every recipe. `just check` runs tests, vet, and a build.
+
+## Releases
+
+Binaries for each tag are attached to
+[GitHub Releases](https://github.com/frenki123/project-managment/releases): `server-linux-amd64`
+and `server-windows-amd64.exe`. Any binary reports what it is with `./server --version`.
+
+```sh
+gh release download v0.0.1-alpha -R frenki123/project-managment -p server-linux-amd64
+```
+
+The tag is part of a direct download URL, because GitHub's `releases/latest` skips pre-releases:
+
+```
+https://github.com/frenki123/project-managment/releases/download/v0.0.1-alpha/server-linux-amd64
+```
+
+The binary is self-contained: no runtime, no toolchain, no dependencies. It creates `data/app.db`
+in the current directory on first start and applies the schema itself. `DEVENV_ROOT` overrides
+the directory holding `data/`, which keeps the database outside the folder you unpacked into.
+
+```sh
+./server-linux-amd64                # http://127.0.0.1:8080
+PORT=9000 ./server-linux-amd64      # or pick another port
+./server-linux-amd64 --version      # prints the version
+```
 
 ## Layout
 
