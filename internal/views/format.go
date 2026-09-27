@@ -1,7 +1,9 @@
 package views
 
 import (
+	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"cad-development/internal/weekly"
@@ -13,8 +15,14 @@ type MonthGroup struct {
 	Count int
 }
 
-func formatNum(v float64) string {
-	return strconv.FormatFloat(v, 'f', -1, 64)
+// hours renders hours with at most one decimal, dropping a trailing ".0".
+func hours(v float64) string {
+	return strings.TrimSuffix(strconv.FormatFloat(v, 'f', 1, 64), ".0")
+}
+
+// percent renders a percentage as a whole number, rounding down.
+func percent(v float64) string {
+	return strconv.FormatFloat(math.Floor(v), 'f', 0, 64)
 }
 
 func overrunClass(overrun bool) string {

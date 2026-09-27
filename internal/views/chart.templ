@@ -22,10 +22,10 @@ templ ChartPage(data ChartPageData) {
 				if data.HasProject {
 					<p class="project-description"><span>PO { data.SelectedProject.PurchaseOrderName }</span><span>{ data.SelectedProject.StartDate } - { data.SelectedProject.EndDate }</span></p>
 					<div class="chart-summary">
-						<span>Budget <strong>{ formatNum(data.SelectedProject.TotalHours) } h</strong></span>
-						<span>Planned <strong>{ formatNum(data.SelectedProject.PlannedHours) } h</strong></span>
-						<span>Spent <strong>{ formatNum(data.SelectedProject.SpentHours) } h</strong></span>
-						<span>Progress <strong>{ formatNum(data.SelectedProject.ProgressPct) }%</strong></span>
+						<span>Budget <strong>{ hours(data.SelectedProject.TotalHours) } h</strong></span>
+						<span>Planned <strong>{ hours(data.SelectedProject.PlannedHours) } h</strong></span>
+						<span>Spent <strong>{ hours(data.SelectedProject.SpentHours) } h</strong></span>
+						<span>Progress <strong>{ percent(data.SelectedProject.ProgressPct) }%</strong></span>
 					</div>
 					<div class="chart-container" data-chart="s-curve" data-series={ templ.JSONString(data.Series) }>
 						<canvas id="s-curve"></canvas>

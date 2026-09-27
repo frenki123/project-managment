@@ -3,6 +3,9 @@
 	const Chart = window.Chart;
 	const dark = window.matchMedia("(prefers-color-scheme: dark)");
 
+	// Approximates views.hours; the two round exact .x5 boundaries differently.
+	const formatHours = (v) => String(Number((Math.round(v * 10) / 10).toFixed(1)));
+
 	const applyTheme = () => {
 		Chart.defaults.color = dark.matches ? "#d6d6d6" : "#333";
 		Chart.defaults.borderColor = dark.matches ? "#3a3a3a" : "#ddd";
@@ -34,6 +37,7 @@
 					responsive: true,
 					maintainAspectRatio: false,
 					scales: { y: { beginAtZero: true, title: { display: true, text: "Hours" } } },
+					plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatHours(c.parsed.y)}` } } },
 				},
 			});
 		}

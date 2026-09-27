@@ -207,10 +207,10 @@ templ TaskPanelHeader(data TaskPanelData, kicker string) {
 templ TaskPanelSummary(data TaskPanelData) {
 	<section class="panel-section panel-highlight">
 		<h3>Progress</h3>
-		<strong>{ formatNum(data.Task.Progress) }%</strong>
+		<strong>{ percent(data.Task.Progress) }%</strong>
 	</section>
 	<section class="panel-section">
 		<h3>Task totals</h3>
-		<div class="panel-stats"><div><small>Total</small><strong>{ formatNum(data.Task.TotalHours) } h</strong></div><div><small>Spent</small><strong>{ formatNum(data.Task.SpentHours) } h</strong></div></div>
+		<div class="panel-stats"><div><small>Total</small><strong>{ hours(data.Task.TotalHours) } h</strong></div><div><small>Spent</small><strong>{ hours(data.Task.SpentHours) } h</strong></div></div>
 	</section>
 }

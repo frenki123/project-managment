@@ -156,11 +156,11 @@ templ GridTotalsOOB(data task.Grid) {
 }
 
 	templ GridTotalsContent(data task.Grid) {
-		<div class="metric"><small>Budget</small><strong>{ formatNum(data.BudgetHours) } h</strong></div>
-		<div class={ "metric " + overrunClass(data.Overrun) }><small>Planned</small><strong>{ formatNum(data.PlannedHours) } h</strong></div>
-		<div class="metric"><small>Spent</small><strong>{ formatNum(data.SpentHours) } h</strong></div>
+		<div class="metric"><small>Budget</small><strong>{ hours(data.BudgetHours) } h</strong></div>
+		<div class={ "metric " + overrunClass(data.Overrun) }><small>Planned</small><strong>{ hours(data.PlannedHours) } h</strong></div>
+		<div class="metric"><small>Spent</small><strong>{ hours(data.SpentHours) } h</strong></div>
 		if data.ProgressPct != nil {
-			<div class="metric"><small>Earned progress</small><strong>{ formatNum(*data.ProgressPct) }%</strong></div>
+			<div class="metric"><small>Earned progress</small><strong>{ percent(*data.ProgressPct) }%</strong></div>
 		}
 }
 
@@ -173,11 +173,11 @@ templ WeekTotalCellOOB(index int, total task.GridWeekTotal, showEarned bool) {
 }
 
 templ WeekTotalContent(total task.GridWeekTotal, showEarned bool) {
-	<small>Plan { formatNum(total.Planned) }</small><small>Spent { formatNum(total.Spent) }</small>
+	<small>Plan { hours(total.Planned) }</small><small>Spent { hours(total.Spent) }</small>
 	if showEarned {
-		<small>Earned { formatNum(total.CumulativeEarned) }</small>
+		<small>Earned { hours(total.CumulativeEarned) }</small>
 	}
-	<small>Cum plan { formatNum(total.CumulativePlanned) }</small><small>Cum spent { formatNum(total.CumulativeSpent) }</small>
+	<small>Cum plan { hours(total.CumulativePlanned) }</small><small>Cum spent { hours(total.CumulativeSpent) }</small>
 }
 
 templ TaskGridRow(row task.GridRow, ideas bool) {
@@ -187,9 +187,9 @@ templ TaskGridRow(row task.GridRow, ideas bool) {
 		</td>
 		<td class="sticky c1">{ row.ProjectName }</td>
 		<td class="sticky c2">{ row.Subproject }</td>
-		<td class="sticky c3">{ formatNum(row.TotalHours) }</td>
-		<td class="sticky c4">{ formatNum(row.SpentHours) }</td>
-		<td class="sticky c5">{ formatNum(row.Progress) }</td>
+		<td class="sticky c3">{ hours(row.TotalHours) }</td>
+		<td class="sticky c4">{ hours(row.SpentHours) }</td>
+		<td class="sticky c5">{ percent(row.Progress) }</td>
 		if !ideas {
 			for _, cell := range row.Cells {
 				@WeekCellEditor(cell)

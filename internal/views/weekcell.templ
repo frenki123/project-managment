@@ -7,14 +7,14 @@ templ WeekCellEditor(cell task.GridCell) {
 		if cell.Error != "" {
 			<div class="cell-error" role="alert">{ cell.Error }</div>
 		}
-		@WeekInput(cell, "Planned hours", "planned_hours", cell.Planned, "", "planned", "")
-		@WeekInput(cell, "Spent hours", "spent_hours", cell.Spent, "", "spent", "")
-		@WeekInput(cell, "Progress percent", "progress", cell.Progress, "100", progressTitle(cell.Stored), progressClass(cell.Stored))
+		@WeekInput(cell, "Planned hours", "planned_hours", hours(cell.Planned), "", "planned", "")
+		@WeekInput(cell, "Spent hours", "spent_hours", hours(cell.Spent), "", "spent", "")
+		@WeekInput(cell, "Progress percent", "progress", percent(cell.Progress), "100", progressTitle(cell.Stored), progressClass(cell.Stored))
 	</td>
 }
 
-templ WeekInput(cell task.GridCell, label string, name string, value float64, max string, title string, cssClass string) {
-	<input class={ cssClass } aria-label={ label } data-save-path={ cell.SavePath } type="number" step="any" min="0" max={ max } name={ name } value={ formatNum(value) } disabled?={ cell.Locked } title={ title } hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+templ WeekInput(cell task.GridCell, label string, name string, value string, max string, title string, cssClass string) {
+	<input class={ cssClass } aria-label={ label } data-save-path={ cell.SavePath } type="number" step="any" min="0" max={ max } name={ name } value={ value } disabled?={ cell.Locked } title={ title } hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
 }
 
 templ WeekRowResponse(data task.Grid, rowIndex int) {
