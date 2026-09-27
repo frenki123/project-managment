@@ -14,10 +14,13 @@
     pkgs.sqlc
     pkgs.goose
     pkgs.templ
+    pkgs.uv
   ];
 
   languages.go.enable = true;
   languages.go.package = pkgs.go_1_27;
+  languages.python.enable = true;
+  languages.python.package = pkgs.python312;
 
   processes.dev.exec = "just dev";
 
@@ -32,5 +35,7 @@
     sqlc version
     goose --version
     templ version
+    python --version
+    uv --version
   '';
 }

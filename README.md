@@ -49,8 +49,8 @@ UMD. Desktop and laptop screens are the target; mobile layouts are out of scope.
 To run a downloaded binary, see [Releases](#releases) — it needs no toolchain. To build from
 source, the rest of this section applies.
 
-Requires [devenv](https://devenv.sh/) and direnv; it provides Go 1.27, `just`, `templ`,
-`sqlc`, `goose`, and `air`.
+Requires [devenv](https://devenv.sh/) and direnv; it provides Go 1.27, Python 3.12, `uv`,
+`just`, `templ`, `sqlc`, `goose`, and `air`.
 
 ```sh
 direnv allow          # or: devenv shell
