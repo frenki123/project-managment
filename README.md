@@ -81,8 +81,8 @@ gh release download dev -R frenki123/project-managment -p server-windows-amd64.e
 building and publishing it. A tag with a `-` suffix, such as `v0.0.2-alpha`, is published as a
 pre-release. None has shipped yet, so `dev` is the only downloadable build today.
 
-Download URLs must name the tag: GitHub's `releases/latest` skips pre-releases, and every build
-here is a pre-release, so that endpoint does not exist yet.
+Download URLs must name the tag. GitHub's `releases/latest` skips pre-releases, and every build
+here is a pre-release, so `releases/latest/download/<file>` returns 404.
 
 ```
 https://github.com/frenki123/project-managment/releases/download/dev/server-linux-amd64
