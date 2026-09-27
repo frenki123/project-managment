@@ -99,8 +99,6 @@ templ GridPage(data task.Grid) {
 					<col class="c3"/>
 					if !data.Ideas {
 						<col class="c4"/>
-						<col class="c5"/>
-						<col class="c6"/>
 						for range data.Weeks {
 							<col class="week-col"/>
 						}
@@ -109,14 +107,14 @@ templ GridPage(data task.Grid) {
 				<thead>
 					if !data.Ideas {
 						<tr class="group-row">
-							<th colspan="3" class="sticky c0">Task information</th>
-							<th colspan="4" class="sticky c3">Task totals</th>
+							<th colspan="4" class="sticky c0">Task information</th>
+							<th class="sticky c4">Summary</th>
 							<th colspan={ len(data.Weeks) } class="timeline-group">Weekly timeline</th>
 						</tr>
 					}
 					if !data.Ideas {
 						<tr class="month-row">
-							<th colspan="7" class="sticky c0">Month</th>
+							<th colspan="5" class="sticky c0">Month</th>
 							for _, month := range distinctMonths(data.Weeks) {
 								<th colspan={ month.Count } class="month-group">{ month.Label }</th>
 							}
@@ -131,10 +129,8 @@ templ GridPage(data task.Grid) {
 						} else {
 							<th class="sticky c1">Project</th>
 							<th class="sticky c2">Subproject</th>
-							<th class="sticky c3">Planned [h]</th>
-							<th class="sticky c4">Spent [h]</th>
-							<th class="sticky c5">Progress [%]</th>
-							<th class="sticky c6">Status</th>
+							<th class="sticky c3">Status</th>
+							<th class="sticky c4">Summary</th>
 						}
 						if !data.Ideas {
 							for _, w := range data.Weeks {
@@ -151,7 +147,7 @@ templ GridPage(data task.Grid) {
 				if !data.Ideas {
 					<tfoot>
 						<tr>
-							<th colspan="7" class="sticky c0">
+							<th colspan="5" class="sticky c0">
 								<div class="week-total-labels">
 									<small>Plan</small>
 									<small>Spent</small>
@@ -223,13 +219,21 @@ templ TaskGridRow(row task.GridRow, ideas bool) {
 		if ideas {
 			<td class="sticky c3 idea-status">Unassigned</td>
 		} else {
-			<td class="sticky c3">{ hours(row.TotalHours) }</td>
-			<td class="sticky c4">{ hours(row.SpentHours) }</td>
-			<td class="sticky c5">{ percent(row.Progress) }</td>
-			<td class="sticky c6">{ row.Status }</td>
+			<td class="sticky c3">{ row.Status }</td>
+			<td class="sticky c4">
+				@TaskSummary(row)
+			</td>
 			for _, cell := range row.Cells {
 				@WeekCellEditor(cell)
 			}
 		}
 	</tr>
+}
+
+templ TaskSummary(row task.GridRow) {
+	<dl class="task-summary">
+		<div><dt>Planned</dt><dd>{ hours(row.TotalHours) } h</dd></div>
+		<div><dt>Spent</dt><dd>{ hours(row.SpentHours) } h</dd></div>
+		<div><dt>Progress</dt><dd>{ percent(row.Progress) }%</dd></div>
+	</dl>
 }
