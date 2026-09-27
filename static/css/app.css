@@ -171,6 +171,9 @@ body { margin: 0; }
 .week-table thead .group-row th { position: sticky; top: 0; z-index: 3; color: var(--pico-muted-color, #64748b); background: #eef2f7 !important; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; }
 .week-table thead .month-row th { position: sticky; top: 1.75rem; z-index: 2; }
 .week-table thead .column-row th { position: sticky; top: 3.5rem; z-index: 2; }
+.week-table thead .group-row th.sticky,
+.week-table thead .month-row th.sticky,
+.week-table thead .column-row th.sticky { z-index: 4; }
 .month-group { text-align: center; background: #eef2f7 !important; color: var(--pico-muted-color, #64748b); }
 .timeline-group { text-align: center; }
 .c0 { left: 0; min-width: var(--task-col); }
