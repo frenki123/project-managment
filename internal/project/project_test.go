@@ -24,7 +24,7 @@ func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, testNow(), nil); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, testNow()); err != nil {
 		t.Fatal(err)
 	}
 	if err := project.Delete(ctx, q, p.ID); err == nil {
@@ -54,7 +54,7 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-10-05", weekly.Patch{PlannedHours: &hours}, testNow(), nil); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-10-05", weekly.Patch{PlannedHours: &hours}, testNow()); err != nil {
 		t.Fatal(err)
 	}
 	p.EndDate = "2026-09-30"

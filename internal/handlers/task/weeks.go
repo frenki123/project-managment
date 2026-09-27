@@ -131,5 +131,5 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 }
 
 func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time) (weekly.Cell, error) {
-	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now, nil)
+	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now)
 }

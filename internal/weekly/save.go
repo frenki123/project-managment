@@ -28,7 +28,7 @@ type Cell struct {
 	Progress     *float64  `json:"progress"`
 }
 
-func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time, unlocked monthlock.Set) (Cell, error) {
+func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
 	if _, err := ParseWeekStart(weekStart); err != nil {
 		return Cell{}, err
 	}
@@ -55,15 +55,12 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if unlocked == nil {
-			var err error
-			unlocked, err = monthlock.UnlockedSet(ctx, txq)
-			if err != nil {
-				return err
-			}
+		unlocked, err := monthlock.Unlocked(ctx, txq)
+		if err != nil {
+			return err
 		}
 		if monthlock.WeekLocked(string(weekStart), now, unlocked) {
-			return app.Locked("month is locked")
+			return app.Locked("history is locked")
 		}
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {

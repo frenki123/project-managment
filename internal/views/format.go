@@ -38,13 +38,6 @@ func progressTitle(stored bool) string {
 	return "Progress carried forward from an earlier week"
 }
 
-func monthLabel(ym string) string {
-	if parsed, err := time.Parse("2006-01", ym); err == nil {
-		return parsed.Format("January 2006")
-	}
-	return ym
-}
-
 func dateLabel(value string) string {
 	if parsed, err := time.Parse(time.DateOnly, value); err == nil {
 		return parsed.Format("02 Jan 2006")

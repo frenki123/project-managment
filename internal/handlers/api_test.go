@@ -14,6 +14,8 @@ import (
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/handlers"
+	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 )
 
 func nextMonday(now time.Time) time.Time {
@@ -296,39 +298,101 @@ func TestSubprojectListReturnsDatabaseError(t *testing.T) {
 }
 
 func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
+	database := testkit.OpenDatabase(t)
+	q := database.Q
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	check := func(method, path string, want bool) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(method, path, nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s %s: %d %s", method, path, rr.Code, rr.Body.String())
+		}
+		var got map[string]bool
+		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		unlocked, ok := got["unlocked"]
+		if len(got) != 1 || !ok || unlocked != want {
+			t.Fatalf("%s %s: expected unlocked=%t, got %s", method, path, want, rr.Body.String())
+		}
+	}
+	check(http.MethodGet, "/api/v1/month-locks", false)
+	for range 2 {
+		check(http.MethodPost, "/api/v1/month-locks/unlock", true)
+	}
+	check(http.MethodGet, "/api/v1/month-locks", true)
+	stored, err := db.New(database.Conn).GetGlobalUnlock(t.Context())
+	if err != nil || stored != 1 {
+		t.Fatalf("unlock not visible through new queries instance: %d %v", stored, err)
+	}
+	for range 2 {
+		check(http.MethodPost, "/api/v1/month-locks/lock", false)
+	}
+	check(http.MethodGet, "/api/v1/month-locks", false)
+	stored, err = db.New(database.Conn).GetGlobalUnlock(t.Context())
+	if err != nil || stored != 0 {
+		t.Fatalf("lock not visible through new queries instance: %d %v", stored, err)
+	}
+}
+
+func TestGlobalUnlockOpensEveryPastWeekForAllWeeklyInputs(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	yearMonth := "2026-08"
+	first := weekly.MondayOnOrBefore(time.Now().AddDate(0, -5, 0))
+	second := weekly.MondayOnOrBefore(time.Now().AddDate(0, -3, 0))
+	projectBody := `{"name":"History","total_hours":100,"start_date":"` + first.Format(time.DateOnly) + `","end_date":"` + time.Now().Format(time.DateOnly) + `"}`
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/month-locks/"+yearMonth+"/unlock", nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("unlock status %d: %s", rr.Code, rr.Body.String())
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", strings.NewReader(projectBody)))
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create project: %d %s", rr.Code, rr.Body.String())
 	}
-	var got struct {
-		Unlocked bool `json:"unlocked"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+	var p struct{ ID int64 `json:"id"` }
+	if err := json.Unmarshal(rr.Body.Bytes(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if !got.Unlocked {
-		t.Fatalf("expected unlocked=true, got %s", rr.Body.String())
+	id := createTask(t, mux, []byte(`{"name":"History task","project_id":`+strconv.FormatInt(p.ID, 10)+`}`))
+	path := func(week time.Time) string {
+		return "/api/v1/tasks/" + strconv.FormatInt(id, 10) + "/weeks/" + week.Format(time.DateOnly)
 	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/month-locks", nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("list status %d: %s", rr.Code, rr.Body.String())
+	put := func(week time.Time, body string, want int) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path(week), strings.NewReader(body)))
+		if rr.Code != want {
+			t.Fatalf("week %s: expected %d, got %d %s", week.Format(time.DateOnly), want, rr.Code, rr.Body.String())
+		}
 	}
-	var list struct {
-		Locks []struct {
-			Unlocked bool `json:"unlocked"`
-		} `json:"month_locks"`
+	put(first, `{"planned_hours":6,"progress":40}`, http.StatusForbidden)
+	put(second, `{"spent_hours":3}`, http.StatusForbidden)
+	for _, route := range []string{"unlock", "lock"} {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/month-locks/"+route, nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", route, rr.Code, rr.Body.String())
+		}
+		if route == "unlock" {
+			put(first, `{"planned_hours":6,"progress":40}`, http.StatusOK)
+			put(second, `{"spent_hours":3,"progress":60}`, http.StatusOK)
+			grid, err := task.LoadGrid(t.Context(), q, strconv.FormatInt(p.ID, 10), nil, time.Now())
+			if err != nil || !grid.HistoryUnlocked || grid.Rows[0].Cells[0].Locked {
+				t.Fatalf("unlocked grid: %#v %v", grid, err)
+			}
+		} else {
+			put(first, `{"planned_hours":7}`, http.StatusForbidden)
+			put(second, `{"spent_hours":4}`, http.StatusForbidden)
+		}
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
-		t.Fatal(err)
-	}
-	if len(list.Locks) != 1 || !list.Locks[0].Unlocked {
-		t.Fatalf("unexpected list response %s", rr.Body.String())
+	for _, want := range []struct {
+		week time.Time
+		plan, spent, progress float64
+	}{{first, 6, 0, 40}, {second, 0, 3, 60}} {
+		row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: id, WeekStart: want.week.Format(time.DateOnly)})
+		if err != nil || row.PlannedHours != want.plan || row.SpentHours != want.spent || !row.Progress.Valid || row.Progress.Float64 != want.progress {
+			t.Fatalf("history changed after relock: %#v %v", row, err)
+		}
 	}
 }
 
@@ -336,13 +400,30 @@ func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/set", bytes.NewBufferString("project=ideas&unlocked=true"))
+	projectID := createProject(t, mux, "Lock filter", nextMonday(time.Now()))
+	project := strconv.FormatInt(projectID, 10)
+	r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("project="+project+"&unlocked=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
 	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`<section id="grid"`)) || bytes.Contains(rr.Body.Bytes(), []byte("<!DOCTYPE html>")) {
 		t.Fatalf("got status %d body %q", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `value="`+project+`" selected`) {
+		t.Fatalf("project filter not preserved: %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
+		t.Fatalf("grid did not reflect global unlock: %s", rr.Body.String())
+	}
+	stored, err := q.GetGlobalUnlock(t.Context())
+	if err != nil || stored != 1 {
+		t.Fatalf("HTML unlock not stored: %d %v", stored, err)
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/?project=ideas", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Lock history") {
+		t.Fatalf("global control missing from ideas view: %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -376,29 +457,20 @@ func TestHTMXGridReturnsFragment(t *testing.T) {
 	}
 }
 
-func TestUnlockMonthRequiresYearMonth(t *testing.T) {
+func TestHTMLMonthLockRequiresBooleanState(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("unlocked=true"))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, r)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d %s", rr.Code, rr.Body.String())
-	}
-
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/month-locks", nil))
-	var list struct {
-		Locks []struct{} `json:"month_locks"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
-		t.Fatal(err)
-	}
-	if len(list.Locks) != 0 {
-		t.Fatalf("empty year_month modified lock data: %s", rr.Body.String())
+	for _, body := range []string{"project=ideas", "project=ideas&unlocked=maybe"} {
+		rr := postForm(t, mux, "/month-locks/set", body)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
+		}
+		stored, err := q.GetGlobalUnlock(t.Context())
+		if err != nil || stored != 0 {
+			t.Fatalf("%q: invalid state modified unlock: %d %v", body, stored, err)
+		}
 	}
 }
 
@@ -690,30 +762,46 @@ func TestHTMLMonthLockSetIsIdempotentAndValidatesView(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	month := time.Now().AddDate(0, -1, 0).Format("2006-01")
-	post := func(body string) int {
+	post := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("HX-Request", "true")
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, r)
-		return rr.Code
+		return rr
 	}
-	if status := post("year_month=" + month + "&unlocked=true&project=bad"); status != http.StatusBadRequest {
-		t.Fatalf("invalid view: %d", status)
-	}
-	locks, err := q.ListMonthLocks(t.Context())
-	if err != nil || len(locks) != 0 {
-		t.Fatalf("invalid view changed locks: %v %v", locks, err)
-	}
-	for range 2 {
-		if status := post("year_month=" + month + "&unlocked=true&project=ideas"); status != http.StatusOK {
-			t.Fatalf("unlock: %d", status)
+	for _, body := range []string{"unlocked=true&project=bad", "unlocked=true&project=999999"} {
+		rr := post(body)
+		if rr.Code != http.StatusBadRequest && rr.Code != http.StatusNotFound {
+			t.Fatalf("invalid view %q: %d %s", body, rr.Code, rr.Body.String())
+		}
+		stored, err := q.GetGlobalUnlock(t.Context())
+		if err != nil || stored != 0 {
+			t.Fatalf("invalid view %q changed unlock: %d %v", body, stored, err)
 		}
 	}
-	locks, err = q.ListMonthLocks(t.Context())
-	if err != nil || len(locks) != 1 || locks[0].Unlocked != 1 {
-		t.Fatalf("repeat unlock reversed state: %v %v", locks, err)
+	for _, want := range []struct {
+		value  string
+		stored int64
+	}{{"true", 1}, {"true", 1}, {"false", 0}, {"false", 0}} {
+		rr := post("unlocked=" + want.value + "&project=ideas")
+		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `<section id="grid"`) || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") {
+			t.Fatalf("set %s: %d %s", want.value, rr.Code, rr.Body.String())
+		}
+		stored, err := q.GetGlobalUnlock(t.Context())
+		if err != nil || stored != want.stored {
+			t.Fatalf("set %s: stored %d %v", want.value, stored, err)
+		}
+		if want.stored == 1 {
+			rr = post("unlocked=false&project=bad")
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("invalid view while unlocked: %d %s", rr.Code, rr.Body.String())
+			}
+			stored, err = q.GetGlobalUnlock(t.Context())
+			if err != nil || stored != 1 {
+				t.Fatalf("invalid view locked global state: %d %v", stored, err)
+			}
+		}
 	}
 }
 

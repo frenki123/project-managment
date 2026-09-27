@@ -12,77 +12,57 @@ import (
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /api/v1/month-locks", listJSON(q))
-	mux.HandleFunc("POST /api/v1/month-locks/{yearMonth}/unlock", setJSON(q, true))
-	mux.HandleFunc("POST /api/v1/month-locks/{yearMonth}/lock", setJSON(q, false))
-	mux.HandleFunc("POST /month-locks/last/set", setLastMonth(q))
-	mux.HandleFunc("POST /month-locks/set", setMonth(q))
+	mux.HandleFunc("GET /api/v1/month-locks", getJSON(q))
+	mux.HandleFunc("POST /api/v1/month-locks/unlock", setJSON(q, true))
+	mux.HandleFunc("POST /api/v1/month-locks/lock", setJSON(q, false))
+	mux.HandleFunc("POST /month-locks/set", setHTML(q))
 }
 
-func listJSON(q *db.Queries) http.HandlerFunc {
+func getJSON(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		currentTime := time.Now()
-		rows, err := domain.List(r.Context(), q)
+		unlocked, err := domain.Unlocked(r.Context(), q)
 		if err != nil {
 			app.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, domain.LocksResponse{MonthLocks: rows, LastMonth: domain.PreviousMonth(currentTime)})
+		app.JSON(w, http.StatusOK, domain.State{Unlocked: unlocked})
 	}
 }
 
 func setJSON(q *db.Queries, unlocked bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		currentTime := time.Now()
-		ym := r.PathValue("yearMonth")
-		if err := domain.SetMonth(r.Context(), q, domain.YearMonth(ym), unlocked, currentTime); err != nil {
+		if err := domain.Set(r.Context(), q, unlocked); err != nil {
 			app.WriteError(w, r, err)
 			return
 		}
-		app.JSON(w, http.StatusOK, domain.SetResponse{YearMonth: domain.YearMonth(ym), Unlocked: unlocked})
+		app.JSON(w, http.StatusOK, domain.State{Unlocked: unlocked})
 	}
 }
 
-func setLastMonth(q *db.Queries) http.HandlerFunc {
+func setHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		currentTime := time.Now()
-		setAndRender(w, r, q, domain.PreviousMonth(currentTime), currentTime)
-	}
-}
-
-func setMonth(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		currentTime := time.Now()
-		ym := domain.YearMonth(r.FormValue("year_month"))
-		if ym == "" {
-			app.WriteError(w, r, app.Invalid("year_month is required"))
+		state := r.FormValue("unlocked")
+		if state != "true" && state != "false" {
+			app.WriteError(w, r, app.Invalid("unlocked must be true or false"))
 			return
 		}
-		setAndRender(w, r, q, ym, currentTime)
+		now := time.Now()
+		pk, sid, err := taskhandler.ParseFilter(r)
+		if err == nil {
+			_, err = taskdomain.LoadGrid(r.Context(), q, pk, sid, now)
+		}
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
+		if err := domain.Set(r.Context(), q, state == "true"); err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
+		if app.IsHTMX(r) {
+			taskhandler.RenderGrid(w, r, q, now)
+			return
+		}
+		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
 	}
-}
-
-func setAndRender(w http.ResponseWriter, r *http.Request, q *db.Queries, ym domain.YearMonth, now time.Time) {
-	state := r.FormValue("unlocked")
-	if state != "true" && state != "false" {
-		app.WriteError(w, r, app.Invalid("unlocked must be true or false"))
-		return
-	}
-	pk, sid, err := taskhandler.ParseFilter(r)
-	if err == nil {
-		_, err = taskdomain.LoadGrid(r.Context(), q, pk, sid, now)
-	}
-	if err != nil {
-		app.WriteError(w, r, err)
-		return
-	}
-	if err := domain.SetMonth(r.Context(), q, ym, state == "true", now); err != nil {
-		app.WriteError(w, r, err)
-		return
-	}
-	if app.IsHTMX(r) {
-		taskhandler.RenderGrid(w, r, q, now)
-		return
-	}
-	app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
 }

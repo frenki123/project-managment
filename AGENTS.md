@@ -149,8 +149,8 @@ Filtered by project and/or subproject. Rows are tasks, columns are weeks calcula
 - progress can't be less than the week before
 - if progress is not entered for the week it stays like the last week
 - if progress in week before is edited and progress in the week after are less update all progress for next week.
-CHECK FOR LOCKED MONTHS! If months are locked don't allow the edit. Edit of locked months needs to be specificly enabled with the combobox!
-- last month data is "locked" and needs to be unlocked with specific button. Locked data is for planned, spent and progress per tasks. Last month is not "before 30 days", it is acutall month before. So at 2nd of May we can't edit data in the April
+CHECK FOR LOCKED MONTHS! By default, all weeks whose Monday falls in a past calendar month are locked for planned hours, spent hours, and progress. On May 2, April and earlier weeks are locked (not merely weeks older than 30 days).
+- One persisted global Unlock history control opens every historical week for editing. Lock history restores the default automatic rule for all past months. There are no per-month unlocks.
 - normal validation like no negative hours, no negative progress etc.
 #### Row Click Action
 - opens the task detail with all entered and calculated total data. Has `EDIT` button so we can edit tasks. Open it as a modal detail or side view (still open to decision).

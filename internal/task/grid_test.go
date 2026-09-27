@@ -40,10 +40,10 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	secondPlanned := 50.0
 	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now, nil); err != nil {
+	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now, nil); err != nil {
+	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,7 +106,7 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), nil); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	secondID := second.ID
@@ -143,7 +143,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	planned, spent, progress := 6.0, 4.0, 50.0
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, nil); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now)
@@ -197,26 +197,49 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	}
 }
 
-func TestGridPastMonthsIncludesDisplayedMondayBeforeProjectStart(t *testing.T) {
+func TestGridUsesPersistedGlobalHistoryUnlock(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	_, err := project.Create(ctx, q, project.Input{
-		Name: "Earlier", TotalHours: new(10.0), StartDate: "2026-01-01", EndDate: "2026-01-31",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	p, err := project.Create(ctx, q, project.Input{
-		Name: "Selected", TotalHours: new(10.0), StartDate: "2026-02-02", EndDate: "2026-02-28",
+		Name: "Selected", TotalHours: new(10.0), StartDate: "2026-04-27", EndDate: "2026-05-11",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC))
+	other, err := project.Create(ctx, q, project.Input{
+		Name: "Earlier", TotalHours: new(10.0), StartDate: "2026-03-30", EndDate: "2026-04-06",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(grid.PastMonths) != 2 || grid.PastMonths[0] != "2025-12" || grid.PastMonths[1] != "2026-01" {
-		t.Fatalf("expected months from first displayed Monday, got %v", grid.PastMonths)
+	for _, id := range []int64{p.ID, other.ID} {
+		if _, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	for _, unlocked := range []bool{false, true, false} {
+		value := int64(0)
+		if unlocked {
+			value = 1
+		}
+		if err := q.SetGlobalUnlock(ctx, value); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []int64{p.ID, other.ID} {
+			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if grid.HistoryUnlocked != unlocked {
+				t.Fatalf("project %d: history unlock = %v, want %v", id, grid.HistoryUnlocked, unlocked)
+			}
+			for _, cell := range grid.Rows[0].Cells {
+				wantLocked := !unlocked && string(cell.WeekStart) < "2026-05-01"
+				if cell.Locked != wantLocked {
+					t.Fatalf("project %d: unexpected lock for %s: %#v", id, cell.WeekStart, cell)
+				}
+			}
+		}
 	}
 }

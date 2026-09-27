@@ -41,10 +41,11 @@ CREATE TABLE task_weeks (
     PRIMARY KEY (task_id, week_start)
 );
 
-CREATE TABLE month_locks (
-    year_month TEXT PRIMARY KEY NOT NULL,
+CREATE TABLE edit_lock (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     unlocked INTEGER NOT NULL DEFAULT 0 CHECK (unlocked IN (0, 1))
 );
+INSERT INTO edit_lock (id, unlocked) VALUES (1, 0);
 
 CREATE INDEX idx_subprojects_project_name
     ON subprojects (project_id, name COLLATE NOCASE, id);
@@ -69,7 +70,8 @@ GROUP BY t.id;
 -- +goose Down
 DROP VIEW v_task_totals;
 DROP TABLE task_weeks;
-DROP TABLE month_locks;
+DROP TABLE IF EXISTS edit_lock;
+DROP TABLE IF EXISTS month_locks;
 DROP TABLE tasks;
 DROP TABLE subprojects;
 DROP TABLE projects;

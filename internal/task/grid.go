@@ -33,9 +33,7 @@ type Grid struct {
 	SpentHours       float64
 	ProgressPct      *float64
 	Overrun          bool
-	LastMonth        string
-	LastMonthUnlock  bool
-	PastMonths       []string
+	HistoryUnlocked  bool
 }
 
 type Option struct {
@@ -97,14 +95,12 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		Ideas:            filter.Ideas,
 		ProjectName:      "Ideas",
 		Projects:         projectOptions(projects, filter.Value),
-		LastMonth:        string(monthlock.PreviousMonth(now)),
 	}
-	unlocked, err := monthlock.UnlockedSet(ctx, q)
+	unlocked, err := monthlock.Unlocked(ctx, q)
 	if err != nil {
 		return Grid{}, err
 	}
-	data.LastMonthUnlock = unlocked.Contains(monthlock.YearMonth(data.LastMonth))
-
+	data.HistoryUnlocked = unlocked
 	if filter.Ideas {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
@@ -121,7 +117,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 		return data, nil
 	}
-
 	pid := filter.ID
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {
@@ -272,20 +267,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.Overrun = data.PlannedHours > data.BudgetHours
 
-	from := weekly.MondayOnOrBefore(start)
-	for _, p := range projects {
-		ps, err := weekly.ParseDate(p.StartDate)
-		if err != nil {
-			continue
-		}
-		ps = weekly.MondayOnOrBefore(ps)
-		if ps.Before(from) {
-			from = ps
-		}
-	}
-	for _, ym := range monthlock.PastMonths(from, now) {
-		data.PastMonths = append(data.PastMonths, string(ym))
-	}
 	return data, nil
 }
 
