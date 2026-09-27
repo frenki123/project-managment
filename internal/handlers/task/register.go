@@ -38,6 +38,13 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	if subprojectErr != nil {
 		return taskdomain.TasksResponse{}, subprojectErr
 	}
+	if projectID != nil {
+		if _, err := q.GetProject(ctx, *projectID); errors.Is(err, sql.ErrNoRows) {
+			return taskdomain.TasksResponse{}, app.Missing("project not found")
+		} else if err != nil {
+			return taskdomain.TasksResponse{}, err
+		}
+	}
 	if subprojectID != nil {
 		sp, err := q.GetSubproject(ctx, *subprojectID)
 		if errors.Is(err, sql.ErrNoRows) {

@@ -1,10 +1,14 @@
 package weekly_test
 
 import (
+	"errors"
 	"math"
+	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/monthlock"
@@ -133,6 +137,58 @@ func TestCascadeRejectsLockedConflict(t *testing.T) {
 	}
 }
 
+func TestCascadeProtectsLockedCarriedProgress(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{
+		Name: "P", TotalHours: new(100.0), StartDate: "2026-03-30", EndDate: "2026-05-04",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	marchOpen := monthlock.Set{"2026-03": true}
+	allOpen := monthlock.Set{"2026-03": true, "2026-04": true}
+	p20, p50, p70 := 20.0, 50.0, 70.0
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p20}, now, allOpen); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-05-04", weekly.Patch{Progress: &p70}, now, marchOpen); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p20}, now, marchOpen); err != nil {
+		t.Fatalf("unchanged carried progress should be allowed: %v", err)
+	}
+	_, err = weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p50}, now, marchOpen)
+	httpErr, ok := errors.AsType[app.HTTPError](err)
+	if !ok || httpErr.Status != http.StatusConflict {
+		t.Fatalf("expected locked carried progress conflict, got %v", err)
+	}
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundApril := false
+	for _, cell := range grid.Rows[0].Cells {
+		if cell.WeekStart == "2026-04-06" {
+			foundApril = true
+			if cell.Progress != 20 || cell.Stored {
+				t.Fatalf("locked April carry changed: %#v", cell)
+			}
+		}
+	}
+	if !foundApril {
+		t.Fatal("missing displayed April week")
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p50}, now, allOpen); err != nil {
+		t.Fatalf("unlocked April should allow change: %v", err)
+	}
+}
+
 func TestSaveRejectsInvalidPatches(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
@@ -210,5 +266,43 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 	}
 	if cell.Progress == nil || *cell.Progress != progress {
 		t.Fatalf("carried progress should be effective in save response: %#v", cell)
+	}
+}
+
+func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-03-02", EndDate: "2026-04-27"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	open := monthlock.Set{"2026-03": true, "2026-04": true}
+	p20, p50, hours := 20.0, 50.0, 3.0
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-02", weekly.Patch{Progress: &p20}, now, open); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p50, PlannedHours: &hours}, now, open); err != nil {
+		t.Fatal(err)
+	}
+	delete(open, "2026-04")
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{ClearProgress: true}, now, open); err == nil {
+		t.Fatal("clear should not change locked April's effective progress")
+	}
+	open["2026-04"] = true
+	cell, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{ClearProgress: true}, now, open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.PlannedHours != hours || cell.Progress == nil || *cell.Progress != p20 {
+		t.Fatalf("clear did not carry forward while preserving hours: %#v", cell)
+	}
+	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-03-30"})
+	if err != nil || row.Progress.Valid {
+		t.Fatalf("explicit progress was not cleared: %#v %v", row, err)
 	}
 }

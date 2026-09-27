@@ -2,6 +2,7 @@ package taskhandler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"cad-development/internal/app"
@@ -43,17 +44,17 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 		}
 		plannedValue, plannedPresent, err := app.FormFloatValue(r, "planned_hours")
 		if err != nil {
-			app.WriteError(w, r, err)
+			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
 		spentValue, spentPresent, err := app.FormFloatValue(r, "spent_hours")
 		if err != nil {
-			app.WriteError(w, r, err)
+			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
 		progressValue, progressPresent, err := app.FormFloatValue(r, "progress")
 		if err != nil {
-			app.WriteError(w, r, err)
+			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
 		var patch weekly.Patch
@@ -64,43 +65,69 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			patch.SpentHours = &spentValue
 		}
 		if progressPresent {
-			patch.Progress = &progressValue
+			if strings.TrimSpace(r.FormValue("progress")) == "" {
+				patch.ClearProgress = true
+			} else {
+				patch.Progress = &progressValue
+			}
+		}
+		grid, rowIndex, err := weekGrid(r, q, id, currentTime)
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
+		if rowIndex < 0 {
+			app.WriteError(w, r, app.Invalid("task or week is outside the selected view"))
+			return
 		}
 		_, err = saveWeek(r, q, id, patch, currentTime)
 		if err != nil {
-			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
+			grid.Rows[rowIndex].Cells[weekIndex(grid, rowIndex, r.PathValue("weekStart"))].Error = app.HTTPErrorFrom(err).Message
+			app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, rowIndex))
 			return
 		}
 		renderWeekRow(w, r, q, id, "", currentTime)
 	}
 }
 
-func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID int64, errMsg string, now time.Time) {
+func weekIndex(grid taskdomain.Grid, rowIndex int, weekStart string) int {
+	for i, cell := range grid.Rows[rowIndex].Cells {
+		if string(cell.WeekStart) == weekStart {
+			return i
+		}
+	}
+	return -1
+}
+
+func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time) (taskdomain.Grid, int, error) {
 	projectKey, subprojectID, err := ParseFilter(r)
 	if err != nil {
-		app.WriteError(w, r, err)
-		return
+		return taskdomain.Grid{}, -1, err
 	}
 	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now)
 	if err != nil {
+		return taskdomain.Grid{}, -1, err
+	}
+	for i, row := range grid.Rows {
+		if row.ID == taskID && weekIndex(grid, i, r.PathValue("weekStart")) >= 0 {
+			return grid, i, nil
+		}
+	}
+	return grid, -1, nil
+}
+
+func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID int64, errMsg string, now time.Time) {
+	grid, rowIndex, err := weekGrid(r, q, taskID, now)
+	if err != nil {
 		app.WriteError(w, r, err)
 		return
 	}
-	weekStart := r.PathValue("weekStart")
-	for i := range grid.Rows {
-		if grid.Rows[i].ID != taskID {
-			continue
-		}
-		for j := range grid.Rows[i].Cells {
-			if string(grid.Rows[i].Cells[j].WeekStart) != weekStart {
-				continue
-			}
-			grid.Rows[i].Cells[j].Error = errMsg
-			app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, i))
-			return
-		}
+	if rowIndex >= 0 {
+		grid.Rows[rowIndex].Cells[weekIndex(grid, rowIndex, r.PathValue("weekStart"))].Error = errMsg
+		app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, rowIndex))
+		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	app.WriteError(w, r, app.Invalid("task or week is outside the selected view"))
 }
 
 func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time) (weekly.Cell, error) {

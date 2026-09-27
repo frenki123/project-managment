@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/db"
 	"cad-development/internal/handlers"
 )
 
@@ -335,7 +336,7 @@ func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/toggle", bytes.NewBufferString("project=ideas"))
+	r := httptest.NewRequest(http.MethodPost, "/month-locks/last/set", bytes.NewBufferString("project=ideas&unlocked=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
 	rr := httptest.NewRecorder()
@@ -380,7 +381,7 @@ func TestUnlockMonthRequiresYearMonth(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/unlock", bytes.NewBufferString(""))
+	r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("unlocked=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
@@ -643,8 +644,76 @@ func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
 	}
 
 	rr = postWeek("planned_hours=abc&project=" + strconv.FormatInt(pid, 10))
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("parse error should be 400: %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
+		t.Fatalf("parse error should be inline: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = postWeek("progress=50&project=" + strconv.FormatInt(pid, 10))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("set progress: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = postWeek("progress=&project=" + strconv.FormatInt(pid, 10))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("clear progress: %d %s", rr.Code, rr.Body.String())
+	}
+	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+	if err != nil || row.Progress.Valid {
+		t.Fatalf("clearing input did not clear stored progress: %#v %v", row, err)
+	}
+}
+
+func TestHTMLWeekEditRejectsInvalidDisplayContextBeforeSaving(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	pid := createProject(t, mux, "P", start)
+	other := createProject(t, mux, "Other", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	for _, body := range []string{"planned_hours=5&project=bad", "planned_hours=5&project=" + strconv.FormatInt(other, 10)} {
+		r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, r)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
+		}
+		weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
+		if err != nil || len(weeks) != 0 {
+			t.Fatalf("%q: write despite invalid view: %v %v", body, weeks, err)
+		}
+	}
+}
+
+func TestHTMLMonthLockSetIsIdempotentAndValidatesView(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	month := time.Now().AddDate(0, -1, 0).Format("2006-01")
+	post := func(body string) int {
+		r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString(body))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, r)
+		return rr.Code
+	}
+	if status := post("year_month=" + month + "&unlocked=true&project=bad"); status != http.StatusBadRequest {
+		t.Fatalf("invalid view: %d", status)
+	}
+	locks, err := q.ListMonthLocks(t.Context())
+	if err != nil || len(locks) != 0 {
+		t.Fatalf("invalid view changed locks: %v %v", locks, err)
+	}
+	for range 2 {
+		if status := post("year_month=" + month + "&unlocked=true&project=ideas"); status != http.StatusOK {
+			t.Fatalf("unlock: %d", status)
+		}
+	}
+	locks, err = q.ListMonthLocks(t.Context())
+	if err != nil || len(locks) != 1 || locks[0].Unlocked != 1 {
+		t.Fatalf("repeat unlock reversed state: %v %v", locks, err)
 	}
 }
 

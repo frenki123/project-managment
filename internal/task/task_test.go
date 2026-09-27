@@ -3,11 +3,13 @@ package task_test
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
 	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/db"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -79,5 +81,64 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	}
 	if _, err := task.Get(ctx, q, tk.ID); err != nil {
 		t.Fatal("task was deleted after rejected delete")
+	}
+}
+
+func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Second", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{Name: "Part", ProjectID: first.ID, TotalHours: new(5.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idea, err := task.Create(ctx, q, task.Input{Name: "Idea"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inPart, err := task.Create(ctx, q, task.Input{Name: "Part task", ProjectID: &first.ID, SubprojectID: &sp.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inSecond, err := task.Create(ctx, q, task.Input{Name: "Other task", ProjectID: &second.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hours := 4.0
+	if _, err := weekly.Save(ctx, q, inPart.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		scope string
+		owner int64
+		ids   []int64
+	}{
+		{"ideas", 0, []int64{idea.ID}},
+		{"project", first.ID, []int64{inPart.ID}},
+		{"subproject", sp.ID, []int64{inPart.ID}},
+		{"all", 0, []int64{idea.ID, inPart.ID, inSecond.ID}},
+	} {
+		rows, err := q.ListTaskTotals(ctx, db.ListTaskTotalsParams{Scope: tc.scope, OwnerID: tc.owner})
+		if err != nil || len(rows) != len(tc.ids) {
+			t.Fatalf("%s totals: %v %v", tc.scope, rows, err)
+		}
+		ids := make([]int64, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.TaskID)
+			if row.TaskID == inPart.ID && row.PlannedHours != hours {
+				t.Fatalf("%s lost calculated hours: %v", tc.scope, rows)
+			}
+		}
+		slices.Sort(ids)
+		if !slices.Equal(ids, tc.ids) {
+			t.Fatalf("%s included unrelated tasks: %v", tc.scope, ids)
+		}
 	}
 }

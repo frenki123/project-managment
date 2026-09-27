@@ -118,20 +118,6 @@ func SetMonth(ctx context.Context, q *db.Queries, yearMonth YearMonth, unlocked 
 	return err
 }
 
-func Toggle(ctx context.Context, q *db.Queries, yearMonth YearMonth, now time.Time) (bool, error) {
-	if _, err := ParseYearMonth(yearMonth); err != nil {
-		return false, err
-	}
-	if !IsPastMonth(yearMonth, now) {
-		return false, app.Invalid("only past months can be unlocked")
-	}
-	row, err := q.ToggleMonthLock(ctx, string(yearMonth))
-	if err != nil {
-		return false, err
-	}
-	return row.Unlocked != 0, nil
-}
-
 func MonthRange(from, to time.Time) []YearMonth {
 	if to.Before(from) {
 		from, to = to, from

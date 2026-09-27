@@ -75,12 +75,6 @@ type GridWeekTotal struct {
 	CumulativeSpent   float64
 }
 
-type taskTotal struct {
-	Planned  float64
-	Spent    float64
-	Progress float64
-}
-
 type projectFilter struct {
 	Value string
 	ID    int64
@@ -190,15 +184,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		byTask[w.TaskID] = append(byTask[w.TaskID], w)
 	}
 
-	totalRows, err := q.ListTaskTotalsByProject(ctx, pid)
-	if err != nil {
-		return Grid{}, err
-	}
-	totalsByTask := map[int64]taskTotal{}
-	for _, total := range totalRows {
-		totalsByTask[total.TaskID] = taskTotal{Planned: total.PlannedHours, Spent: total.SpentHours, Progress: total.Progress}
-	}
-
 	subNames := map[int64]string{}
 	for _, s := range subs {
 		subNames[s.ID] = s.Name
@@ -248,7 +233,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 
 	for _, t := range tasks {
 		tweeks := byTask[t.ID]
-		total := totalsByTask[t.ID]
 		cellByWeek := map[string]db.TaskWeek{}
 		for _, w := range tweeks {
 			cellByWeek[w.WeekStart] = w
@@ -257,9 +241,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			ID:          t.ID,
 			Name:        t.Name,
 			ProjectName: proj.Name,
-			TotalHours:  total.Planned,
-			SpentHours:  total.Spent,
-			Progress:    total.Progress,
+			TotalHours:  t.TotalHours,
+			SpentHours:  t.SpentHours,
+			Progress:    t.Progress,
 			DetailPath:  "/tasks/" + strconv.FormatInt(t.ID, 10),
 		}
 		if t.SubprojectID != nil {
@@ -288,12 +272,13 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.Overrun = data.PlannedHours > data.BudgetHours
 
-	from := start
+	from := weekly.MondayOnOrBefore(start)
 	for _, p := range projects {
 		ps, err := weekly.ParseDate(p.StartDate)
 		if err != nil {
 			continue
 		}
+		ps = weekly.MondayOnOrBefore(ps)
 		if ps.Before(from) {
 			from = ps
 		}

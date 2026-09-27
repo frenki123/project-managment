@@ -16,16 +16,18 @@ WHERE task_id = ?;
 -- name: CountTaskWeeksByTask :one
 SELECT COUNT(*) FROM task_weeks WHERE task_id = ?;
 
--- name: ListTaskTotalsByProject :many
-SELECT
-    t.id AS task_id,
-    CAST(tt.planned_hours AS REAL) AS planned_hours,
-    CAST(tt.spent_hours AS REAL) AS spent_hours,
-    CAST(tt.progress AS REAL) AS progress
-FROM v_task_totals tt
-JOIN tasks t ON t.id = tt.task_id
-WHERE t.project_id = CAST(sqlc.arg(project_id) AS INTEGER)
-;
+-- name: ListTaskTotals :many
+SELECT t.id AS task_id,
+       CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
+       CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
+       CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
+FROM tasks t
+LEFT JOIN task_weeks tw ON tw.task_id = t.id
+WHERE CAST(sqlc.arg(scope) AS TEXT) = 'all'
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'ideas' AND t.project_id IS NULL)
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'project' AND t.project_id = CAST(sqlc.arg(owner_id) AS INTEGER))
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'subproject' AND t.subproject_id = CAST(sqlc.arg(owner_id) AS INTEGER))
+GROUP BY t.id;
 
 -- name: ListTaskWeeksByProject :many
 SELECT tw.task_id, tw.week_start, tw.planned_hours, tw.spent_hours, tw.progress

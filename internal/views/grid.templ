@@ -78,22 +78,25 @@ templ GridPage(data task.Grid) {
 						<strong>{ monthLabel(data.LastMonth) }</strong>
 					</span>
 					<div class="locks">
-						<form hx-post="/month-locks/last/toggle" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+						<form hx-post="/month-locks/last/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
 							if data.LastMonthUnlock {
+								<input type="hidden" name="unlocked" value="false"/>
 								<button type="submit" class="secondary outline">Lock month</button>
 							} else {
+								<input type="hidden" name="unlocked" value="true"/>
 								<button type="submit" class="secondary outline">Unlock month</button>
 							}
 						</form>
 						if len(data.PastMonths) > 0 {
-							<form hx-post="/month-locks/unlock" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+							<form hx-post="/month-locks/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
 								<span class="history-label">History</span>
 								<label><span class="sr-only">Historical month</span><select name="year_month">
 									for _, ym := range data.PastMonths {
 										<option value={ ym }>{ monthLabel(ym) }</option>
 									}
 								</select></label>
-								<button type="submit" class="secondary outline">Toggle history</button>
+								<button type="submit" name="unlocked" value="true" class="secondary outline">Unlock</button>
+								<button type="submit" name="unlocked" value="false" class="secondary outline">Lock</button>
 							</form>
 						}
 					</div>

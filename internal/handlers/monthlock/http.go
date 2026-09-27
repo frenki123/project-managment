@@ -8,14 +8,15 @@ import (
 	"cad-development/internal/db"
 	taskhandler "cad-development/internal/handlers/task"
 	domain "cad-development/internal/monthlock"
+	taskdomain "cad-development/internal/task"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("GET /api/v1/month-locks", listJSON(q))
 	mux.HandleFunc("POST /api/v1/month-locks/{yearMonth}/unlock", setJSON(q, true))
 	mux.HandleFunc("POST /api/v1/month-locks/{yearMonth}/lock", setJSON(q, false))
-	mux.HandleFunc("POST /month-locks/last/toggle", toggleLastMonth(q))
-	mux.HandleFunc("POST /month-locks/unlock", unlockMonth(q))
+	mux.HandleFunc("POST /month-locks/last/set", setLastMonth(q))
+	mux.HandleFunc("POST /month-locks/set", setMonth(q))
 }
 
 func listJSON(q *db.Queries) http.HandlerFunc {
@@ -42,14 +43,14 @@ func setJSON(q *db.Queries, unlocked bool) http.HandlerFunc {
 	}
 }
 
-func toggleLastMonth(q *db.Queries) http.HandlerFunc {
+func setLastMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
-		toggleAndRender(w, r, q, domain.PreviousMonth(currentTime), currentTime)
+		setAndRender(w, r, q, domain.PreviousMonth(currentTime), currentTime)
 	}
 }
 
-func unlockMonth(q *db.Queries) http.HandlerFunc {
+func setMonth(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()
 		ym := domain.YearMonth(r.FormValue("year_month"))
@@ -57,12 +58,25 @@ func unlockMonth(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, app.Invalid("year_month is required"))
 			return
 		}
-		toggleAndRender(w, r, q, ym, currentTime)
+		setAndRender(w, r, q, ym, currentTime)
 	}
 }
 
-func toggleAndRender(w http.ResponseWriter, r *http.Request, q *db.Queries, ym domain.YearMonth, now time.Time) {
-	if _, err := domain.Toggle(r.Context(), q, ym, now); err != nil {
+func setAndRender(w http.ResponseWriter, r *http.Request, q *db.Queries, ym domain.YearMonth, now time.Time) {
+	state := r.FormValue("unlocked")
+	if state != "true" && state != "false" {
+		app.WriteError(w, r, app.Invalid("unlocked must be true or false"))
+		return
+	}
+	pk, sid, err := taskhandler.ParseFilter(r)
+	if err == nil {
+		_, err = taskdomain.LoadGrid(r.Context(), q, pk, sid, now)
+	}
+	if err != nil {
+		app.WriteError(w, r, err)
+		return
+	}
+	if err := domain.SetMonth(r.Context(), q, ym, state == "true", now); err != nil {
 		app.WriteError(w, r, err)
 		return
 	}

@@ -161,7 +161,7 @@ func List(ctx context.Context, q *db.Queries) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mapTasks(rows), nil
+	return mapTasks(ctx, q, rows, "all", 0)
 }
 
 func ListIdeas(ctx context.Context, q *db.Queries) ([]Task, error) {
@@ -169,7 +169,7 @@ func ListIdeas(ctx context.Context, q *db.Queries) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mapTasks(rows), nil
+	return mapTasks(ctx, q, rows, "ideas", 0)
 }
 
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task, error) {
@@ -177,7 +177,7 @@ func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task,
 	if err != nil {
 		return nil, err
 	}
-	return mapTasks(rows), nil
+	return mapTasks(ctx, q, rows, "project", projectID)
 }
 
 func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([]Task, error) {
@@ -185,7 +185,7 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 	if err != nil {
 		return nil, err
 	}
-	return mapTasks(rows), nil
+	return mapTasks(ctx, q, rows, "subproject", subprojectID)
 }
 
 // Update replaces the full task state; omitted fields become zero values.
@@ -253,10 +253,26 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	})
 }
 
-func mapTasks(rows []db.Task) []Task {
+func mapTasks(ctx context.Context, q *db.Queries, rows []db.Task, scope string, ownerID int64) ([]Task, error) {
+	if len(rows) == 0 {
+		return []Task{}, nil
+	}
+	totals, err := q.ListTaskTotals(ctx, db.ListTaskTotalsParams{Scope: scope, OwnerID: ownerID})
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]db.ListTaskTotalsRow, len(totals))
+	for _, total := range totals {
+		byID[total.TaskID] = total
+	}
 	out := make([]Task, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, FromDB(row))
+		t := FromDB(row)
+		total := byID[t.ID]
+		t.TotalHours = total.PlannedHours
+		t.SpentHours = total.SpentHours
+		t.Progress = total.Progress
+		out = append(out, t)
 	}
-	return out
+	return out, nil
 }

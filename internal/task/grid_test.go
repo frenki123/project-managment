@@ -196,3 +196,27 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 		t.Fatalf("expected subproject filter reset: %#v", grid)
 	}
 }
+
+func TestGridPastMonthsIncludesDisplayedMondayBeforeProjectStart(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	_, err := project.Create(ctx, q, project.Input{
+		Name: "Earlier", TotalHours: new(10.0), StartDate: "2026-01-01", EndDate: "2026-01-31",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Create(ctx, q, project.Input{
+		Name: "Selected", TotalHours: new(10.0), StartDate: "2026-02-02", EndDate: "2026-02-28",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grid.PastMonths) != 2 || grid.PastMonths[0] != "2025-12" || grid.PastMonths[1] != "2026-01" {
+		t.Fatalf("expected months from first displayed Monday, got %v", grid.PastMonths)
+	}
+}
