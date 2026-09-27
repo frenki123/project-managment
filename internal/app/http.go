@@ -77,6 +77,14 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 	http.Redirect(w, r, url, http.StatusSeeOther)
 }
 
+func SetToast(w http.ResponseWriter, message string) {
+	payload := map[string]map[string]string{"app:toast": {"message": message}}
+	body, err := json.Marshal(payload)
+	if err == nil {
+		w.Header().Set("HX-Trigger", string(body))
+	}
+}
+
 func RedirectWithFormFilter(w http.ResponseWriter, r *http.Request, path string, names ...string) {
 	query := r.URL.Query()
 	for _, name := range names {

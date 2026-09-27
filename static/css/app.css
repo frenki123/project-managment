@@ -100,6 +100,12 @@ body { margin: 0; }
 .locks button { margin: 0; padding: 0.35rem 0.55rem; font-size: 0.75rem; }
 .lock-status { color: var(--pico-muted-color); font-size: 0.75rem; }
 .lock-status strong { color: var(--pico-color); }
+.history-unlocked .project-header,
+.history-unlocked .workboard-toolbar { border-color: var(--pico-del-color); }
+.history-unlocked .project-header { border-top: 3px solid var(--pico-del-color); }
+.history-unlocked .workboard-toolbar { background: color-mix(in srgb, var(--pico-del-color) 8%, transparent); }
+.history-unlocked .lock-status { color: var(--pico-del-color); font-weight: 700; }
+.history-unlocked .week-table thead th { border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-muted-border-color)); }
 
 .totals {
 	display: grid;
@@ -154,6 +160,7 @@ body { margin: 0; }
 .resource-form input,
 .resource-form select { min-height: 1.9rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }
 .resource-form textarea { min-height: 3.5rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }
+.form-hint { display: block; margin-top: -0.35rem; color: var(--pico-muted-color); font-size: 0.75rem; }
 .resource-actions { justify-content: space-between; gap: 0.75rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
 .resource-actions button { margin: 0; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
 .delete-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
@@ -187,6 +194,7 @@ body { margin: 0; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }
 .week-cell input { display: block; box-sizing: border-box; width: 100%; min-height: 1.55rem; margin: 0 0 0.1rem; padding: 0.1rem 0.25rem; font-size: 0.75rem; }
+.week-cell input:disabled { cursor: not-allowed; background: color-mix(in srgb, var(--pico-muted-border-color) 35%, transparent); }
 .cell-error { margin-bottom: 0.2rem; color: var(--pico-del-color); white-space: normal; }
 .linkish { padding: 0; border: 0; background: none; color: var(--pico-primary); font: inherit; text-decoration: underline; cursor: pointer; }
 .overrun { color: var(--pico-del-color); font-weight: 700; }

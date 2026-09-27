@@ -74,9 +74,19 @@
 		}
 	});
 
-	document.addEventListener("submit", (event) => {
-		const message = event.target.dataset.confirm;
-		if (message && !confirm(message)) event.preventDefault();
+	const showToast = (message) => {
+		const toast = document.getElementById("toast");
+		if (!toast) return;
+		toast.textContent = message;
+		toast.hidden = false;
+		clearTimeout(timer);
+		timer = setTimeout(() => {
+			toast.hidden = true;
+		}, 5000);
+	};
+
+	document.body.addEventListener("app:toast", (event) => {
+		showToast(event.detail?.message || "Request could not be completed");
 	});
 
 	document.body.addEventListener("htmx:after:swap", (event) => {
@@ -102,15 +112,6 @@
 	document.body.addEventListener("htmx:response:error", (event) => {
 		const ctx = event.detail.ctx;
 		if (ctx.sourceElement?.matches(".week-cell input")) lastActive = null;
-		const toast = document.getElementById("toast");
-		if (!toast) {
-			return;
-		}
-		toast.textContent = ctx.text || `Request failed (${ctx.response?.status})`;
-		toast.hidden = false;
-		clearTimeout(timer);
-		timer = setTimeout(() => {
-			toast.hidden = true;
-		}, 5000);
+		showToast(ctx.text || `Request failed (${ctx.response?.status})`);
 	});
 })();

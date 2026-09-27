@@ -49,3 +49,21 @@ func ValidateFilter(ctx context.Context, q *db.Queries, projectKey string, subpr
 	}
 	return nil
 }
+
+func NormalizeSubprojectFilter(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64) (*int64, error) {
+	if subprojectID == nil {
+		return nil, nil
+	}
+	filter, err := parseProjectFilter(projectKey)
+	if err != nil || filter.Ideas {
+		return nil, err
+	}
+	sp, err := q.GetSubproject(ctx, *subprojectID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && sp.ProjectID != filter.ID) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return subprojectID, nil
+}

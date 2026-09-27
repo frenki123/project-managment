@@ -1,6 +1,7 @@
 package charthandler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,7 @@ import (
 	"cad-development/internal/db"
 	projectdomain "cad-development/internal/project"
 	"cad-development/internal/views"
+	"cad-development/internal/weekly"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
@@ -24,11 +26,32 @@ func page(q *db.Queries) http.HandlerFunc {
 		}
 		data := views.ChartPageData{Projects: projects}
 		if len(projects) > 0 {
-			id, err := selectedProjectID(r, projects[0].ID)
+			ids := make([]int64, 0, len(projects))
+			for _, p := range projects {
+				ids = append(ids, p.ID)
+			}
+			fallback := app.PreferredProjectID(r, ids)
+			if r.URL.Query().Get("project") == "" {
+				app.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
+				return
+			}
+			id, err := selectedProjectID(r, fallback)
 			if err != nil {
 				app.WriteError(w, r, err)
 				return
 			}
+			found := false
+			for _, candidate := range ids {
+				if candidate == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				app.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
+				return
+			}
+			app.RememberProject(w, id)
 			curve, err := projectdomain.LoadSCurve(r.Context(), q, id)
 			if err != nil {
 				app.WriteError(w, r, err)
@@ -60,7 +83,13 @@ func series(curve projectdomain.SCurve) views.ChartSeries {
 	spent := make([]float64, 0, len(curve.Weeks))
 	earned := make([]float64, 0, len(curve.Weeks))
 	for _, week := range curve.Weeks {
-		labels = append(labels, week.WeekStart)
+		parsed, err := weekly.ParseWeekStart(weekly.WeekStart(week.WeekStart))
+		if err != nil {
+			labels = append(labels, week.WeekStart)
+		} else {
+			year, number := parsed.ISOWeek()
+			labels = append(labels, fmt.Sprintf("W%d '%02d", number, year%100))
+		}
 		planned = append(planned, week.PlannedHours)
 		spent = append(spent, week.SpentHours)
 		earned = append(earned, week.EarnedHours)

@@ -70,6 +70,7 @@ type TaskPanelData struct {
 	Priority   string
 	Notes      string
 	Desc       string
+	Error      string
 	EditPath   string
 	DeletePath string
 }

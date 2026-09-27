@@ -33,7 +33,7 @@ templ ResourceHeader(resource string, title string, context string, deleteAction
 }
 
 templ DeleteForm(action string, message string, label string) {
-	<form hx-post={ templ.URL(action) } hx-target="#modal-root" hx-swap="innerHTML" data-confirm={ message }>
+	<form hx-post={ templ.URL(action) } hx-target="#modal-root" hx-swap="innerHTML" hx-confirm={ message }>
 		<button type="submit" class="secondary outline">{ label }</button>
 	</form>
 }
@@ -153,6 +153,7 @@ templ ProjectFields(data ProjectFormData) {
 		<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
 		<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
 	</div></section>
+	<small class="form-hint">Weekly task planning is tracked separately; planned hours may exceed this project budget.</small>
 }
 
 templ SubprojectForm(data SubprojectFormData) {
@@ -174,6 +175,7 @@ templ SubprojectFields(data SubprojectFormData) {
 		</select></label>
 		<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
 	</div></section>
+	<small class="form-hint">The total of this project's subprojects cannot exceed the project budget.</small>
 }
 
 templ TaskPanel(data TaskPanelData) {
@@ -184,6 +186,9 @@ templ TaskPanel(data TaskPanelData) {
 			<h3>Ownership</h3>
 			<dl class="panel-details"><dt>Department</dt><dd>{ data.Department }</dd><dt>Developers</dt><dd>{ data.Developers }</dd><dt>Priority</dt><dd>{ data.Priority }</dd></dl>
 		</section>
+		if data.Error != "" {
+			<p class="error" role="alert">{ data.Error }</p>
+		}
 		if data.Desc != "" {
 			<section class="panel-section"><h3>Description</h3><p>{ data.Desc }</p></section>
 		}

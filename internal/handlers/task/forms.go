@@ -119,7 +119,7 @@ func taskFormData(r *http.Request, q *db.Queries, vals views.TaskFormValues, can
 
 func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.TaskFormValues, canReassign bool, action, title, deleteAction string, err error, summary *views.TaskPanelData) {
 	httpErr := app.HTTPErrorFrom(err)
-	data, formErr := taskFormData(r, q, vals, canReassign, httpErr.Message)
+	data, formErr := taskFormData(r, q, vals, canReassign, app.FriendlyFormMessage(httpErr.Message))
 	if formErr != nil {
 		app.WriteFragmentError(w, r, formErr)
 		return
@@ -261,13 +261,15 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		if err := taskdomain.Delete(r.Context(), q, id); err != nil {
-			idStr := strconv.FormatInt(id, 10)
 			summary, summaryErr := taskPanelData(r, q, t)
 			if summaryErr != nil {
 				app.WriteFragmentError(w, r, summaryErr)
 				return
 			}
-			renderTaskForm(w, r, q, taskFormValues(t), len(t.Weeks) == 0, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err, &summary)
+			httpErr := app.HTTPErrorFrom(err)
+			message := app.FriendlyFormMessage(httpErr.Message)
+			app.SetToast(w, message)
+			app.RenderFragment(w, r, httpErr.Status, views.TaskPanel(taskPanelError(summary, message)))
 			return
 		}
 		app.Redirect(w, r, afterTask(t))

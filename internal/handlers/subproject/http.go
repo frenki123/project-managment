@@ -81,7 +81,7 @@ func renderSubprojectForm(w http.ResponseWriter, r *http.Request, q *db.Queries,
 		return
 	}
 	data := views.SubprojectFormData{
-		Action: action, Title: title, Context: "Project assignment and budget", Subproject: vals, Projects: opts, Error: httpErr.Message, DeleteAction: deleteAction,
+		Action: action, Title: title, Context: "Project assignment and budget", Subproject: vals, Projects: opts, Error: app.FriendlyFormMessage(httpErr.Message), DeleteAction: deleteAction,
 	}
 	app.RenderFragment(w, r, httpErr.Status, views.SubprojectForm(data))
 }
@@ -207,11 +207,13 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
 			idStr := strconv.FormatInt(id, 10)
+			httpErr := app.HTTPErrorFrom(err)
+			app.SetToast(w, app.FriendlyFormMessage(httpErr.Message))
 			renderSubprojectForm(w, r, q, views.SubprojectFormValues{
 				Name:       s.Name,
 				ProjectID:  strconv.FormatInt(s.ProjectID, 10),
 				TotalHours: strconv.FormatFloat(s.TotalHours, 'f', -1, 64),
-			}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", err)
+			}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", httpErr)
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))

@@ -29,7 +29,7 @@ func panel(q *db.Queries) http.HandlerFunc {
 			app.WriteFragmentError(w, r, err)
 			return
 		}
-	app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
+		app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
 	}
 }
 
@@ -66,4 +66,9 @@ func taskPanelData(r *http.Request, q *db.Queries, t taskdomain.Task) (views.Tas
 		EditPath:   "/tasks/" + id + "/edit",
 		DeletePath: "/tasks/" + id + "/delete",
 	}, nil
+}
+
+func taskPanelError(data views.TaskPanelData, message string) views.TaskPanelData {
+	data.Error = message
+	return data
 }

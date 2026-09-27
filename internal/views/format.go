@@ -46,6 +46,13 @@ func progressTitle(stored bool) string {
 	return "Progress carried forward from an earlier week"
 }
 
+func inputTitle(locked bool, title string) string {
+	if locked {
+		return "Locked because history is locked for past months"
+	}
+	return title
+}
+
 func dateLabel(value string) string {
 	if parsed, err := time.Parse(time.DateOnly, value); err == nil {
 		return parsed.Format("02 Jan 2006")

@@ -5,6 +5,7 @@ import (
 	"html"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // HTTPError is the single error type used across the app and its HTTP adapters.
@@ -74,4 +75,13 @@ func HTTPErrorFrom(err error) HTTPError {
 	}
 	log.Println(err)
 	return HTTPError{Status: http.StatusInternalServerError, Message: "internal error"}
+}
+
+func FriendlyFormMessage(message string) string {
+	message = strings.ReplaceAll(message, "end_date", "End date")
+	message = strings.ReplaceAll(message, "start_date", "start date")
+	message = strings.ReplaceAll(message, "total_hours", "total hours")
+	message = strings.ReplaceAll(message, "subproject_id", "subproject")
+	message = strings.ReplaceAll(message, "project_id", "project")
+	return message
 }

@@ -349,7 +349,9 @@ func TestGlobalUnlockOpensEveryPastWeekForAllWeeklyInputs(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("create project: %d %s", rr.Code, rr.Body.String())
 	}
-	var p struct{ ID int64 `json:"id"` }
+	var p struct {
+		ID int64 `json:"id"`
+	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &p); err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +388,7 @@ func TestGlobalUnlockOpensEveryPastWeekForAllWeeklyInputs(t *testing.T) {
 		}
 	}
 	for _, want := range []struct {
-		week time.Time
+		week                  time.Time
 		plan, spent, progress float64
 	}{{first, 6, 0, 40}, {second, 0, 3, 60}} {
 		row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: id, WeekStart: want.week.Format(time.DateOnly)})

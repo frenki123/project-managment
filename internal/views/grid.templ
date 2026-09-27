@@ -15,7 +15,7 @@ templ GridPage(data task.Grid) {
 }
 
 	templ Grid(data task.Grid) {
-		<section id="grid" class="grid-main">
+		<section id="grid" class={ gridClass(data) }>
 		<header class="project-header">
 			<div class="project-heading">
 				<p class="eyebrow">WORKBOARD
@@ -162,6 +162,14 @@ templ GridTotalsOOB(data task.Grid) {
 		if data.ProgressPct != nil {
 			<div class="metric"><small>Earned progress</small><strong>{ percent(*data.ProgressPct) }%</strong></div>
 		}
+		<small class={ "budget-hint " + overrunClass(data.Overrun) }>Planned { hours(data.PlannedHours) } h of { hours(data.BudgetHours) } h budget</small>
+}
+
+func gridClass(data task.Grid) string {
+	if data.HistoryUnlocked {
+		return "grid-main history-unlocked"
+	}
+	return "grid-main"
 }
 
 templ WeekTotalCell(index int, total task.GridWeekTotal, showEarned bool) {

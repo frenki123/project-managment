@@ -14,7 +14,14 @@ templ WeekCellEditor(cell task.GridCell) {
 }
 
 templ WeekInput(cell task.GridCell, label string, name string, value string, max string, title string, cssClass string) {
-	<input class={ cssClass } aria-label={ label } data-save-path={ cell.SavePath } type="number" step="any" min="0" max={ max } name={ name } value={ value } disabled?={ cell.Locked } title={ title } hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+	<input class={ cssClass } aria-label={ label } data-save-path={ cell.SavePath } type="number" step="any" min="0" { maxAttr(max)... } name={ name } value={ value } disabled?={ cell.Locked } title={ inputTitle(cell.Locked, title) } hx-post={ templ.URL(cell.SavePath) } hx-trigger="change" hx-target="closest tr" hx-swap="outerHTML" hx-include="this, #filters"/>
+}
+
+func maxAttr(max string) templ.Attributes {
+	if max == "" {
+		return nil
+	}
+	return templ.Attributes{"max": max}
 }
 
 templ WeekRowResponse(data task.Grid, rowIndex int) {
