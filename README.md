@@ -10,7 +10,8 @@ one S-curve per project.
 
 > **Pre-release: expect breaking changes.** The project is at `v0.0.1-alpha`. The data model,
 > `/api/v1` responses, and UI can change or break at any time, with no migration path for existing
-> data. Back up `data/app.db` and expect to run `just db-reset` after upgrading.
+> data. Back up `data/app.db`; to start over after an upgrade, stop the server, delete it, and
+> start again — the schema is rebuilt on boot.
 
 ## Features
 
@@ -45,6 +46,9 @@ UMD. Desktop and laptop screens are the target; mobile layouts are out of scope.
 
 ## Getting started
 
+To run a downloaded binary, see [Releases](#releases) — it needs no toolchain. To build from
+source, the rest of this section applies.
+
 Requires [devenv](https://devenv.sh/) and direnv; it provides Go 1.27, `just`, `templ`,
 `sqlc`, `goose`, and `air`.
 
@@ -72,6 +76,16 @@ The tag is part of a direct download URL, because GitHub's `releases/latest` ski
 
 ```
 https://github.com/frenki123/project-managment/releases/download/v0.0.1-alpha/server-linux-amd64
+```
+
+The binary is self-contained: no runtime, no toolchain, no dependencies. It creates `data/app.db`
+in the current directory on first start and applies the schema itself. `DEVENV_ROOT` overrides
+the directory holding `data/`, which keeps the database outside the folder you unpacked into.
+
+```sh
+./server-linux-amd64                # http://127.0.0.1:8080
+PORT=9000 ./server-linux-amd64      # or pick another port
+./server-linux-amd64 --version      # prints the version
 ```
 
 ## Layout
