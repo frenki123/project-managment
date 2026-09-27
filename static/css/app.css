@@ -193,12 +193,20 @@ body.modal-open { overflow: hidden; }
 .week-table col.c4 { width: var(--summary-col); }
 .week-table col.week-col { width: 4.5rem; }
 .ideas .week-table col.c3 { width: 8rem; }
-.week-table .c4 { box-shadow: 0.45rem 0 0.6rem -0.55rem rgb(0 0 0 / 70%); }
+.week-table .c4 { vertical-align: top; box-shadow: 0.45rem 0 0.6rem -0.55rem rgb(0 0 0 / 70%); }
 .week-col span,
 .week-col small,
 .week-total small,
 .week-total-labels small { display: block; }
-.week-table .c4 small { display: block; }
+.task-summary small {
+	display: flex;
+	box-sizing: border-box;
+	align-items: center;
+	min-height: 1.7rem;
+	margin: 0 0 0.1rem;
+	padding: 0.1rem 0.25rem;
+	font-size: 0.75rem;
+}
 .week-total-labels { text-align: right; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }

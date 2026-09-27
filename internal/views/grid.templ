@@ -231,7 +231,9 @@ templ TaskGridRow(row task.GridRow, ideas bool) {
 }
 
 templ TaskSummary(row task.GridRow) {
-	<small>Planned { hours(row.TotalHours) } h</small>
-	<small>Spent { hours(row.SpentHours) } h</small>
-	<small>Progress { percent(row.Progress) }%</small>
+	<div class="task-summary">
+		<small>Planned { hours(row.TotalHours) } h</small>
+		<small>Spent { hours(row.SpentHours) } h</small>
+		<small>Progress { percent(row.Progress) }%</small>
+	</div>
 }
