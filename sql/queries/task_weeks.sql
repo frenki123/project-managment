@@ -140,8 +140,6 @@ WITH RECURSIVE bounds AS (
 SELECT
     CAST(week_start AS TEXT) AS week_start,
     CAST(planned_hours AS REAL) AS planned_hours,
-    CAST(spent_hours AS REAL) AS spent_hours,
-    CAST(SUM(planned_hours) OVER (ORDER BY week_start ROWS UNBOUNDED PRECEDING) AS REAL) AS cumulative_planned_hours,
-    CAST(SUM(spent_hours) OVER (ORDER BY week_start ROWS UNBOUNDED PRECEDING) AS REAL) AS cumulative_spent_hours
+    CAST(spent_hours AS REAL) AS spent_hours
 FROM weekly
 ORDER BY week_start;

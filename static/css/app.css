@@ -6,9 +6,9 @@ body.modal-open { overflow: hidden; }
 	--task-col: 8.5rem;
 	--project-col: 7rem;
 	--subproject-col: 7rem;
-	--total-col: 4.5rem;
+	--total-col: 5.5rem;
 	--spent-col: 4.5rem;
-	--progress-col: 5.25rem;
+	--progress-col: 6rem;
 }
 
 .app-header,
@@ -168,9 +168,9 @@ body.modal-open { overflow: hidden; }
 .delete-actions :is(form, button) { margin: 0; }
 
 .table-scroll { max-height: calc(100vh - 14rem); overflow-x: auto; overflow-y: auto; }
-.week-table { border-collapse: separate; border-spacing: 0; font-size: 0.72rem; white-space: nowrap; }
+.week-table { width: max-content; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 0.72rem; white-space: nowrap; }
 .week-table th,
-.week-table td { border: 1px solid var(--pico-muted-border-color); padding: 0.15rem 0.25rem; background: var(--pico-background-color); }
+.week-table td { box-sizing: border-box; border: 1px solid var(--pico-muted-border-color); padding: 0.15rem 0.25rem; background: var(--pico-background-color); }
 .week-table tbody tr:hover td { background: color-mix(in srgb, var(--pico-primary) 7%, var(--pico-background-color)); }
 .week-table .sticky { position: sticky; z-index: 1; }
 .week-table thead .sticky { top: 0; z-index: 2; }
@@ -182,19 +182,26 @@ body.modal-open { overflow: hidden; }
 .week-table thead .column-row th.sticky { z-index: 4; }
 .month-group { text-align: center; background: var(--pico-card-sectioning-background-color) !important; color: var(--pico-muted-color); }
 .timeline-group { text-align: center; }
-.c0 { left: 0; min-width: var(--task-col); }
-.c1 { left: var(--task-col); min-width: var(--project-col); }
-.c2 { left: calc(var(--task-col) + var(--project-col)); min-width: var(--subproject-col); }
-.c3 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col)); min-width: var(--total-col); }
-.c4 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col)); min-width: var(--spent-col); }
-.c5 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col) + var(--spent-col)); min-width: var(--progress-col); }
-.ideas .c3.idea-status { min-width: 8rem; }
+.c0 { left: 0; }
+.c1 { left: var(--task-col); }
+.c2 { left: calc(var(--task-col) + var(--project-col)); }
+.c3 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col)); }
+.c4 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col)); }
+.c5 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col) + var(--spent-col)); }
+.week-table col.c0 { width: var(--task-col); }
+.week-table col.c1 { width: var(--project-col); }
+.week-table col.c2 { width: var(--subproject-col); }
+.week-table col.c3 { width: var(--total-col); }
+.week-table col.c4 { width: var(--spent-col); }
+.week-table col.c5 { width: var(--progress-col); }
+.week-table col.week-col { width: 4.5rem; }
+.ideas .week-table col.c3 { width: 8rem; }
 .week-table .c5 { box-shadow: 0.45rem 0 0.6rem -0.55rem rgb(0 0 0 / 70%); }
-.week-col,
-.week-cell { min-width: 4.5rem; }
 .week-col span,
 .week-col small,
-.week-total small { display: block; }
+.week-total small,
+.week-total-labels small { display: block; }
+.week-total-labels { text-align: right; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }
 .week-cell input { display: block; box-sizing: border-box; width: 100%; min-height: 1.7rem; margin: 0 0 0.1rem; padding: 0.1rem 0.25rem; font-size: 0.75rem; }

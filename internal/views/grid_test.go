@@ -34,8 +34,11 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") {
 		t.Fatalf("unexpected ideas grid: %s", ideas)
 	}
-	if strings.Contains(ideas, "Weekly inputs") || strings.Contains(ideas, "Scroll horizontally") {
+	if strings.Contains(ideas, "Weekly inputs") || strings.Contains(ideas, "Scroll horizontally") || strings.Contains(ideas, "History unlocked") || strings.Contains(ideas, "Unlock history") || strings.Contains(ideas, "Lock history") {
 		t.Fatalf("removed grid guidance is still rendered: %s", ideas)
+	}
+	if strings.Count(ideas, `<col class="`) != 4 {
+		t.Fatalf("ideas grid should have four fixed columns: %s", ideas)
 	}
 
 	project := renderGrid(t, task.Grid{
@@ -46,6 +49,28 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 		if !strings.Contains(project, label) {
 			t.Fatalf("project grid is missing %q: %s", label, project)
 		}
+	}
+	if strings.Count(project, `<col class="`) != 7 || !strings.Contains(project, `colspan="6" class="sticky c0"`) {
+		t.Fatalf("project grid has unexpected fixed/footer structure: %s", project)
+	}
+	for _, label := range []string{"Plan", "Spent"} {
+		if !strings.Contains(project, ">"+label+"<") {
+			t.Fatalf("project footer is missing %q: %s", label, project)
+		}
+	}
+	if strings.Contains(project, ">Totals<") {
+		t.Fatalf("redundant totals label is still rendered: %s", project)
+	}
+	if strings.Contains(project, ">Earned<") {
+		t.Fatalf("project footer should not render earned values: %s", project)
+	}
+	if strings.Contains(project, "Cum plan") || strings.Contains(project, "Cum spent") {
+		t.Fatalf("cumulative footer values are still rendered: %s", project)
+	}
+
+	subproject := renderGrid(t, task.Grid{Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}}})
+	if strings.Contains(subproject, ">Earned<") {
+		t.Fatalf("subproject footer should not render earned values: %s", subproject)
 	}
 }
 

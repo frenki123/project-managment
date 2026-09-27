@@ -66,11 +66,8 @@ type GridCell struct {
 }
 
 type GridWeekTotal struct {
-	Planned           float64
-	Spent             float64
-	CumulativeEarned  float64
-	CumulativePlanned float64
-	CumulativeSpent   float64
+	Planned float64
+	Spent   float64
 }
 
 type projectFilter struct {
@@ -199,7 +196,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		for _, row := range rows {
 			addWeekTotal(GridWeekTotal{
 				Planned: row.PlannedHours, Spent: row.SpentHours,
-				CumulativePlanned: row.CumulativePlannedHours, CumulativeSpent: row.CumulativeSpentHours,
 			})
 		}
 	} else {
@@ -221,8 +217,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 		for _, row := range rows {
 			addWeekTotal(GridWeekTotal{
-				Planned: row.PlannedHours, Spent: row.SpentHours, CumulativeEarned: row.EarnedHours,
-				CumulativePlanned: row.CumulativePlannedHours, CumulativeSpent: row.CumulativeSpentHours,
+				Planned: row.PlannedHours, Spent: row.SpentHours,
 			})
 		}
 	}

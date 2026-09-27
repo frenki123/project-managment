@@ -67,29 +67,44 @@ templ GridPage(data task.Grid) {
 					</label>
 				}
 			</form>
-			<div class="lock-controls">
-				<span class="lock-status">
-					if data.HistoryUnlocked {
-						History unlocked
-					} else {
-						Past months locked
-					}
-				</span>
-				<div class="locks">
-					<form hx-post="/month-locks/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+			if !data.Ideas {
+				<div class="lock-controls">
+					<span class="lock-status">
 						if data.HistoryUnlocked {
-							<input type="hidden" name="unlocked" value="false"/>
-							<button type="submit" class="secondary outline">Lock history</button>
+							History unlocked
 						} else {
-							<input type="hidden" name="unlocked" value="true"/>
-							<button type="submit" class="secondary outline">Unlock history</button>
+							Past months locked
+						}
+					</span>
+					<div class="locks">
+						<form hx-post="/month-locks/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+							if data.HistoryUnlocked {
+								<input type="hidden" name="unlocked" value="false"/>
+								<button type="submit" class="secondary outline">Lock history</button>
+							} else {
+								<input type="hidden" name="unlocked" value="true"/>
+								<button type="submit" class="secondary outline">Unlock history</button>
 						}
 					</form>
+					</div>
 				</div>
-			</div>
+			}
 		</div>
 		<div class="table-scroll">
 			<table class="week-table">
+				<colgroup>
+					<col class="c0"/>
+					<col class="c1"/>
+					<col class="c2"/>
+					<col class="c3"/>
+					if !data.Ideas {
+						<col class="c4"/>
+						<col class="c5"/>
+						for range data.Weeks {
+							<col class="week-col"/>
+						}
+					}
+				</colgroup>
 				<thead>
 					if !data.Ideas {
 						<tr class="group-row">
@@ -134,9 +149,14 @@ templ GridPage(data task.Grid) {
 				if !data.Ideas {
 					<tfoot>
 						<tr>
-							<th colspan="6" class="sticky c0">Totals</th>
-			for i, total := range data.WeekTotals {
-				@WeekTotalCell(i, total, data.ProgressPct != nil)
+							<th colspan="6" class="sticky c0">
+								<div class="week-total-labels">
+									<small>Plan</small>
+									<small>Spent</small>
+								</div>
+							</th>
+							for i, total := range data.WeekTotals {
+								@WeekTotalCell(i, total)
 							}
 						</tr>
 					</tfoot>
@@ -179,20 +199,16 @@ func gridClass(data task.Grid) string {
 	return class
 }
 
-templ WeekTotalCell(index int, total task.GridWeekTotal, showEarned bool) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total, showEarned)</td>
+templ WeekTotalCell(index int, total task.GridWeekTotal) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total)</td>
 }
 
-templ WeekTotalCellOOB(index int, total task.GridWeekTotal, showEarned bool) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total, showEarned)</td>
+templ WeekTotalCellOOB(index int, total task.GridWeekTotal) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total)</td>
 }
 
-templ WeekTotalContent(total task.GridWeekTotal, showEarned bool) {
-	<small>Plan { hours(total.Planned) }</small><small>Spent { hours(total.Spent) }</small>
-	if showEarned {
-		<small>Earned { hours(total.CumulativeEarned) }</small>
-	}
-	<small>Cum plan { hours(total.CumulativePlanned) }</small><small>Cum spent { hours(total.CumulativeSpent) }</small>
+templ WeekTotalContent(total task.GridWeekTotal) {
+	<small>{ hours(total.Planned) }</small><small>{ hours(total.Spent) }</small>
 }
 
 templ TaskGridRow(row task.GridRow, ideas bool) {

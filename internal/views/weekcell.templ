@@ -27,7 +27,7 @@ func maxAttr(max string) templ.Attributes {
 templ WeekRowResponse(data task.Grid, rowIndex int) {
 			@TaskGridRow(data.Rows[rowIndex], false)
 	for i, total := range data.WeekTotals {
-		@WeekTotalCellOOB(i, total, data.ProgressPct != nil)
+		@WeekTotalCellOOB(i, total)
 	}
 	@GridTotalsOOB(data)
 }

@@ -424,8 +424,8 @@ func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 	}
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/?project=ideas", nil))
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Lock history") {
-		t.Fatalf("global control missing from ideas view: %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
+		t.Fatalf("history controls should not render in ideas view: %d %s", rr.Code, rr.Body.String())
 	}
 }
 
