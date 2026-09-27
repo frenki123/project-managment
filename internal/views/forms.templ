@@ -26,7 +26,7 @@ templ ResourceHeader(resource string, title string, context string, deleteAction
 	} else {
 		<p class="panel-kicker">NEW { resource }</p>
 	}
-	<h2 class="panel-title">{ title }</h2>
+	<h2 id="modal-title" class="panel-title">{ title }</h2>
 	if context != "" {
 		<p class="panel-context">{ context }</p>
 	}
@@ -150,9 +150,10 @@ templ ProjectFields(data ProjectFormData) {
 	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Project.Name } required/></label><label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label></section>
 	<section class="panel-section"><h3>Budget and schedule</h3><div class="form-grid form-grid-three">
 		<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
-		<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
-		<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
+		<label>Start date<input id="project-start-date" type="date" name="start_date" value={ data.Project.StartDate } required/></label>
+		<label>End date<input id="project-end-date" type="date" name="end_date" value={ data.Project.EndDate } required/></label>
 	</div></section>
+	<small id="project-date-error" class="form-hint error" role="alert" hidden>End date must be on or after start date.</small>
 	<small class="form-hint">Weekly task planning is tracked separately; planned hours may exceed this project budget.</small>
 }
 
@@ -201,7 +202,7 @@ templ TaskPanel(data TaskPanelData) {
 
 templ TaskPanelHeader(data TaskPanelData, kicker string) {
 	<p class="panel-kicker">{ kicker }</p>
-	<h2 class="panel-title">{ data.Task.Name }</h2>
+	<h2 id="modal-title" class="panel-title">{ data.Task.Name }</h2>
 	<p class="panel-context"><span>{ data.Task.ProjectName }</span>
 		if data.Task.Subproject != "" {
 			<span>{ data.Task.Subproject }</span>

@@ -88,9 +88,6 @@ templ GridPage(data task.Grid) {
 				</div>
 			</div>
 		</div>
-		if !data.Ideas {
-			<p class="week-legend"><strong>Weekly inputs</strong><span>Plan</span><span>Spent</span><span>Progress</span><span>Progress carries forward when no value is entered.</span></p>
-		}
 		<div class="table-scroll">
 			<table class="week-table">
 				<thead>
@@ -111,11 +108,17 @@ templ GridPage(data task.Grid) {
 					}
 					<tr class="column-row">
 						<th class="sticky c0">Task</th>
-						<th class="sticky c1">Project</th>
-						<th class="sticky c2">Subproject</th>
-						<th class="sticky c3">total h</th>
-						<th class="sticky c4">spent h</th>
-						<th class="sticky c5">progress %</th>
+						if data.Ideas {
+							<th class="sticky c1">Project</th>
+							<th class="sticky c2">Subproject</th>
+							<th class="sticky c3 idea-status">Assignment</th>
+						} else {
+							<th class="sticky c1">Project</th>
+							<th class="sticky c2">Subproject</th>
+							<th class="sticky c3">Planned [h]</th>
+							<th class="sticky c4">Spent [h]</th>
+							<th class="sticky c5">Progress [%]</th>
+						}
 						if !data.Ideas {
 							for _, w := range data.Weeks {
 								<th class="week-col" title={ w.Start }><span>W{ strconv.Itoa(w.Number) }</span><small>{ w.Date }</small></th>
@@ -160,16 +163,20 @@ templ GridTotalsOOB(data task.Grid) {
 		<div class={ "metric " + overrunClass(data.Overrun) }><small>Planned</small><strong>{ hours(data.PlannedHours) } h</strong></div>
 		<div class="metric"><small>Spent</small><strong>{ hours(data.SpentHours) } h</strong></div>
 		if data.ProgressPct != nil {
-			<div class="metric"><small>Earned progress</small><strong>{ percent(*data.ProgressPct) }%</strong></div>
+			<div class="metric"><small>Progress</small><strong>{ percent(*data.ProgressPct) }%</strong></div>
 		}
 		<small class={ "budget-hint " + overrunClass(data.Overrun) }>Planned { hours(data.PlannedHours) } h of { hours(data.BudgetHours) } h budget</small>
 }
 
 func gridClass(data task.Grid) string {
-	if data.HistoryUnlocked {
-		return "grid-main history-unlocked"
+	class := "grid-main"
+	if data.Ideas {
+		class += " ideas"
 	}
-	return "grid-main"
+	if data.HistoryUnlocked {
+		class += " history-unlocked"
+	}
+	return class
 }
 
 templ WeekTotalCell(index int, total task.GridWeekTotal, showEarned bool) {
@@ -195,10 +202,12 @@ templ TaskGridRow(row task.GridRow, ideas bool) {
 		</td>
 		<td class="sticky c1">{ row.ProjectName }</td>
 		<td class="sticky c2">{ row.Subproject }</td>
-		<td class="sticky c3">{ hours(row.TotalHours) }</td>
-		<td class="sticky c4">{ hours(row.SpentHours) }</td>
-		<td class="sticky c5">{ percent(row.Progress) }</td>
-		if !ideas {
+		if ideas {
+			<td class="sticky c3 idea-status">Unassigned</td>
+		} else {
+			<td class="sticky c3">{ hours(row.TotalHours) }</td>
+			<td class="sticky c4">{ hours(row.SpentHours) }</td>
+			<td class="sticky c5">{ percent(row.Progress) }</td>
 			for _, cell := range row.Cells {
 				@WeekCellEditor(cell)
 			}

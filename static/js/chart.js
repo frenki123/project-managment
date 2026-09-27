@@ -36,8 +36,8 @@
 				options: {
 					responsive: true,
 					maintainAspectRatio: false,
-					scales: { y: { beginAtZero: true, title: { display: true, text: "Hours" } } },
-					plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatHours(c.parsed.y)}` } } },
+					scales: { y: { beginAtZero: true, title: { display: true, text: "Hours [h]" } } },
+					plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label.replace(/\s\[h\]$/, "")}: ${formatHours(c.parsed.y)} h` } } },
 				},
 			});
 		}

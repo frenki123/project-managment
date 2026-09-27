@@ -17,7 +17,8 @@ templ Layout(title string) {
 		</head>
 		<body hx-status:4xx:inherited="swap:none" hx-status:5xx:inherited="swap:none">
 			<div id="toast" class="toast" role="alert" hidden></div>
-			<aside id="modal-root" class="side-modal" role="dialog" aria-modal="true" aria-label="Modal"></aside>
+			<div id="modal-backdrop" class="modal-backdrop" hidden></div>
+			<aside id="modal-root" class="side-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true" tabindex="-1"></aside>
 			<header class="app-header">
 				<a href="/" class="brand">CAD Development</a>
 				<nav class="primary-nav" aria-label="Primary">

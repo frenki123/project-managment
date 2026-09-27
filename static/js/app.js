@@ -51,21 +51,84 @@
 
 	const closeModal = () => {
 		abortSubprojectRequest();
-		document.getElementById("modal-root")?.replaceChildren();
+		const modal = document.getElementById("modal-root");
+		const backdrop = document.getElementById("modal-backdrop");
+		modal?.replaceChildren();
+		modal?.classList.remove("is-form");
+		modal?.setAttribute("aria-hidden", "true");
+		if (backdrop) backdrop.hidden = true;
+		document.body.classList.remove("modal-open");
 		if (modalOpener?.isConnected) modalOpener.focus();
 		modalOpener = null;
 	};
 
+	const focusableSelector = "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])";
+
+	const showModal = () => {
+		const modal = document.getElementById("modal-root");
+		if (!modal || !modal.hasChildNodes()) return;
+		const backdrop = document.getElementById("modal-backdrop");
+		modal.classList.toggle("is-form", Boolean(modal.querySelector(".resource-form")));
+		modal.setAttribute("aria-hidden", "false");
+		if (backdrop) backdrop.hidden = false;
+		document.body.classList.add("modal-open");
+		const first = modal.querySelector("[autofocus], .panel-close, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])");
+		(first || modal).focus();
+	};
+
+	const setupDateRange = () => {
+		const start = document.getElementById("project-start-date");
+		const end = document.getElementById("project-end-date");
+		const message = document.getElementById("project-date-error");
+		if (!start || !end) return;
+		if (start.value) end.min = start.value;
+		else end.removeAttribute("min");
+		if (end.value) start.max = end.value;
+		else start.removeAttribute("max");
+		const invalid = Boolean(start.value && end.value && end.value < start.value);
+		end.setCustomValidity(invalid ? "End date must be on or after start date." : "");
+		if (message) message.hidden = !invalid;
+	};
+
 	document.addEventListener("click", (event) => {
 		const trigger = event.target.closest('[hx-target="#modal-root"]');
-		if (trigger && !document.getElementById("modal-root")?.contains(trigger)) modalOpener = trigger;
+		if (trigger && !document.getElementById("modal-root")?.contains(trigger)) {
+			modalOpener = trigger;
+		}
 		if (event.target.closest("[data-close-modal]")) closeModal();
+		if (event.target.id === "modal-backdrop") closeModal();
 	});
 
 	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape") {
+		const modal = document.getElementById("modal-root");
+		if (event.key === "Escape" && modal?.hasChildNodes()) {
 			closeModal();
+			return;
 		}
+		if (event.key !== "Tab" || !modal?.hasChildNodes()) return;
+		const focusable = [...modal.querySelectorAll(focusableSelector)];
+		if (!focusable.length) {
+			event.preventDefault();
+			modal.focus();
+			return;
+		}
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+
+	document.addEventListener("input", (event) => {
+		if (event.target.matches("#project-start-date, #project-end-date")) setupDateRange();
+	});
+
+	document.addEventListener("change", (event) => {
+		if (event.target.matches("#project-start-date, #project-end-date")) setupDateRange();
 	});
 
 	const showToast = (message) => {
@@ -84,8 +147,13 @@
 	});
 
 	document.body.addEventListener("htmx:after:swap", (event) => {
+		const target = event.detail.target || event.detail.ctx?.target;
+		if (target?.id === "modal-root") {
+			showModal();
+			setupDateRange();
+		}
 		if (!lastActive) return;
-		if (!event.detail.ctx.target?.matches("tr.task-row")) return;
+		if (!target?.matches("tr.task-row")) return;
 		const selector = `[name="${lastActive.name}"][data-save-path="${lastActive.dataset.savePath || ""}"]`;
 		const replacement = document.querySelector(selector);
 		if (replacement) replacement.focus();
@@ -108,4 +176,9 @@
 		if (ctx.sourceElement?.matches(".week-cell input")) lastActive = null;
 		showToast(ctx.text || `Request failed (${ctx.response?.status})`);
 	});
+
+	document.addEventListener("DOMContentLoaded", () => {
+		setupDateRange();
+	});
+
 })();

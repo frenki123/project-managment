@@ -97,9 +97,9 @@ func series(curve projectdomain.SCurve) views.ChartSeries {
 	return views.ChartSeries{
 		Labels: labels,
 		Datasets: []views.ChartDataset{
-			{Label: "Planned (PV)", Data: planned},
-			{Label: "Actual (AC)", Data: spent},
-			{Label: "Earned (EV)", Data: earned},
+			{Label: "Planned [h]", Data: planned},
+			{Label: "Spent [h]", Data: spent},
+			{Label: "Earned [h]", Data: earned},
 		},
 	}
 }
