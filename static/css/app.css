@@ -98,8 +98,7 @@ body { margin: 0; }
 .locks { flex-wrap: wrap; gap: 0.4rem 0.75rem; }
 .locks form { gap: 0.5rem; margin: 0; }
 .locks button { margin: 0; padding: 0.35rem 0.55rem; font-size: 0.75rem; }
-.lock-status,
-.history-label { color: var(--pico-muted-color); font-size: 0.75rem; }
+.lock-status { color: var(--pico-muted-color); font-size: 0.75rem; }
 .lock-status strong { color: var(--pico-color); }
 
 .totals {
@@ -155,12 +154,10 @@ body { margin: 0; }
 .resource-form input,
 .resource-form select { min-height: 1.9rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }
 .resource-form textarea { min-height: 3.5rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }
-.resource-form .form-grid { gap: 0 0.5rem; }
 .resource-actions { justify-content: space-between; gap: 0.75rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
 .resource-actions button { margin: 0; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
-.resource-delete,
-.task-delete-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
-:is(.resource-delete, .task-delete-actions) :is(form, button) { margin: 0; }
+.delete-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
+.delete-actions :is(form, button) { margin: 0; }
 
 .table-scroll { max-height: calc(100vh - 14rem); overflow-x: auto; overflow-y: auto; }
 .week-table { border-collapse: separate; border-spacing: 0; font-size: 0.72rem; white-space: nowrap; }
@@ -200,3 +197,5 @@ body { margin: 0; }
 .toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; max-width: 28rem; padding: 0.75rem 1rem; border: 1px solid var(--pico-del-color); border-radius: 0.25rem; background: var(--pico-background-color); color: var(--pico-del-color); }
 .chart-page { padding: 1rem; }
 .chart-container { position: relative; height: 60vh; }
+.chart-filter { max-width: 24rem; }
+.chart-summary { display: flex; gap: 1.5rem; margin: 1rem 0; }

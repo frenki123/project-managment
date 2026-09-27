@@ -16,5 +16,5 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 	subprojecthandler.Register(mux, q)
 	taskhandler.Register(mux, q)
 	monthlockhandler.Register(mux, q)
-	charthandler.Register(mux)
+	charthandler.Register(mux, q)
 }

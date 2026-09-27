@@ -38,6 +38,13 @@ func FromDB(s db.Subproject) Subproject {
 	}
 }
 
+func fromTotals(id, projectID int64, name string, totalHours, plannedHours, spentHours float64) Subproject {
+	return Subproject{
+		ID: id, ProjectID: projectID, Name: name, TotalHours: totalHours,
+		PlannedHours: plannedHours, SpentHours: spentHours,
+	}
+}
+
 func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
@@ -92,7 +99,10 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 		}
 		return err
 	})
-	return result, err
+	if err != nil {
+		return Subproject{}, err
+	}
+	return Get(ctx, q, result.ID)
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Subproject, error) {
@@ -127,7 +137,7 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Subproject, error) {
 	}
 	out := make([]Subproject, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, Subproject{ID: row.ID, ProjectID: row.ProjectID, Name: row.Name, TotalHours: row.TotalHours, PlannedHours: row.PlannedHours, SpentHours: row.SpentHours})
+		out = append(out, fromTotals(row.ID, row.ProjectID, row.Name, row.TotalHours, row.PlannedHours, row.SpentHours))
 	}
 	return out, nil
 }
@@ -151,7 +161,7 @@ func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64
 	}
 	out := make([]Subproject, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, Subproject{ID: row.ID, ProjectID: row.ProjectID, Name: row.Name, TotalHours: row.TotalHours, PlannedHours: row.PlannedHours, SpentHours: row.SpentHours})
+		out = append(out, fromTotals(row.ID, row.ProjectID, row.Name, row.TotalHours, row.PlannedHours, row.SpentHours))
 	}
 	return out, nil
 }

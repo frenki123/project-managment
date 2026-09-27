@@ -20,7 +20,7 @@ templ WeekInput(cell task.GridCell, label string, name string, value float64, ma
 templ WeekRowResponse(data task.Grid, rowIndex int) {
 			@TaskGridRow(data.Rows[rowIndex], false)
 	for i, total := range data.WeekTotals {
-		@WeekTotalCellOOB(i, total)
+		@WeekTotalCellOOB(i, total, data.ProgressPct != nil)
 	}
 	@GridTotalsOOB(data)
 }

@@ -121,7 +121,7 @@ func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals 
 	httpErr := app.HTTPErrorFrom(err)
 	data, formErr := taskFormData(r, q, vals, canReassign, httpErr.Message)
 	if formErr != nil {
-		app.WriteError(w, r, formErr)
+		app.WriteFragmentError(w, r, formErr)
 		return
 	}
 	data.Action, data.Title, data.DeleteAction = action, title, deleteAction
@@ -140,7 +140,7 @@ func newForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pid, err := app.FormInt64Checked(r, "project_id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		vals := views.TaskFormValues{}
@@ -149,7 +149,7 @@ func newForm(q *db.Queries) http.HandlerFunc {
 		}
 		data, err := taskFormData(r, q, vals, true, "")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		data.Action, data.Title = "/tasks", "New task"
@@ -161,17 +161,17 @@ func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		t, err := taskdomain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		data, err := taskFormData(r, q, taskFormValues(t), len(t.Weeks) == 0, "")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		idStr := strconv.FormatInt(id, 10)
@@ -179,7 +179,7 @@ func editForm(q *db.Queries) http.HandlerFunc {
 		data.DetailPath = "/tasks/" + idStr
 		data.Summary, err = taskPanelData(r, q, t)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		app.RenderFragment(w, r, http.StatusOK, views.TaskFormPanel(data))
@@ -207,7 +207,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		in, err := formInput(r)
@@ -252,19 +252,19 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		t, err := taskdomain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		if err := taskdomain.Delete(r.Context(), q, id); err != nil {
 			idStr := strconv.FormatInt(id, 10)
 			summary, summaryErr := taskPanelData(r, q, t)
 			if summaryErr != nil {
-				app.WriteError(w, r, summaryErr)
+				app.WriteFragmentError(w, r, summaryErr)
 				return
 			}
 			renderTaskForm(w, r, q, taskFormValues(t), len(t.Weeks) == 0, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err, &summary)

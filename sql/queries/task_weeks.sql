@@ -124,20 +124,14 @@ WITH RECURSIVE bounds AS (
     FROM weeks
     WHERE week_start < last_week
 ), scope AS (
-    SELECT t.id, tt.planned_hours AS complexity
+    SELECT t.id
     FROM tasks t
-    JOIN v_task_totals tt ON tt.task_id = t.id
     WHERE t.subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER)
 ), weekly AS (
     SELECT
         w.week_start,
         COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours,
-        COALESCE(SUM(scope.complexity * COALESCE((
-            SELECT MAX(p.progress)
-            FROM task_weeks p
-            WHERE p.task_id = scope.id AND p.week_start <= w.week_start
-        ), 0) / 100.0), 0) AS earned_hours
+        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours
     FROM weeks w
     LEFT JOIN scope ON TRUE
     LEFT JOIN task_weeks tw ON tw.task_id = scope.id AND tw.week_start = w.week_start
@@ -147,7 +141,6 @@ SELECT
     CAST(week_start AS TEXT) AS week_start,
     CAST(planned_hours AS REAL) AS planned_hours,
     CAST(spent_hours AS REAL) AS spent_hours,
-    CAST(earned_hours AS REAL) AS earned_hours,
     CAST(SUM(planned_hours) OVER (ORDER BY week_start ROWS UNBOUNDED PRECEDING) AS REAL) AS cumulative_planned_hours,
     CAST(SUM(spent_hours) OVER (ORDER BY week_start ROWS UNBOUNDED PRECEDING) AS REAL) AS cumulative_spent_hours
 FROM weekly

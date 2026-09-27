@@ -133,7 +133,7 @@ templ GridPage(data task.Grid) {
 						<tr>
 							<th colspan="6" class="sticky c0">Totals</th>
 			for i, total := range data.WeekTotals {
-				@WeekTotalCell(i, total)
+				@WeekTotalCell(i, total, data.ProgressPct != nil)
 							}
 						</tr>
 					</tfoot>
@@ -164,16 +164,20 @@ templ GridTotalsOOB(data task.Grid) {
 		}
 }
 
-templ WeekTotalCell(index int, total task.GridWeekTotal) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total)</td>
+templ WeekTotalCell(index int, total task.GridWeekTotal, showEarned bool) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total, showEarned)</td>
 }
 
-templ WeekTotalCellOOB(index int, total task.GridWeekTotal) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total)</td>
+templ WeekTotalCellOOB(index int, total task.GridWeekTotal, showEarned bool) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total, showEarned)</td>
 }
 
-templ WeekTotalContent(total task.GridWeekTotal) {
-	<small>Plan { formatNum(total.Planned) }</small><small>Spent { formatNum(total.Spent) }</small><small>Earned { formatNum(total.Earned) }</small><small>Cum plan { formatNum(total.CumulativePlanned) }</small><small>Cum spent { formatNum(total.CumulativeSpent) }</small>
+templ WeekTotalContent(total task.GridWeekTotal, showEarned bool) {
+	<small>Plan { formatNum(total.Planned) }</small><small>Spent { formatNum(total.Spent) }</small>
+	if showEarned {
+		<small>Earned { formatNum(total.CumulativeEarned) }</small>
+	}
+	<small>Cum plan { formatNum(total.CumulativePlanned) }</small><small>Cum spent { formatNum(total.CumulativeSpent) }</small>
 }
 
 templ TaskGridRow(row task.GridRow, ideas bool) {

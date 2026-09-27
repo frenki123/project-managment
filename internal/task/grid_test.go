@@ -62,7 +62,7 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 			continue
 		}
 		total := grid.WeekTotals[i]
-		if total.Planned != 200 || total.Spent != 200 || total.Earned != 75 || total.CumulativePlanned != 200 || total.CumulativeSpent != 200 {
+		if total.Planned != 200 || total.Spent != 200 || total.CumulativeEarned != 75 || total.CumulativePlanned != 200 || total.CumulativeSpent != 200 {
 			t.Fatalf("unexpected SQL week total: %#v", total)
 		}
 		goto weekTotalFound
@@ -155,6 +155,11 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	if grid.ProgressPct != nil || len(grid.Rows) != 1 || grid.Rows[0].TotalHours != planned || grid.Rows[0].SpentHours != spent || grid.Rows[0].Progress != progress {
 		t.Fatalf("unexpected subproject grid: %#v", grid)
+	}
+	for _, total := range grid.WeekTotals {
+		if total.CumulativeEarned != 0 {
+			t.Fatalf("subproject should not calculate earned value: %#v", total)
+		}
 	}
 }
 

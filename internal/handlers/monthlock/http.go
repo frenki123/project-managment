@@ -47,9 +47,9 @@ func setHTML(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		now := time.Now()
-		pk, sid, err := taskhandler.ParseFilter(r)
+		pk, sid, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 		if err == nil {
-			_, err = taskdomain.LoadGrid(r.Context(), q, pk, sid, now)
+			err = taskdomain.ValidateFilter(r.Context(), q, pk, sid)
 		}
 		if err != nil {
 			app.WriteError(w, r, err)

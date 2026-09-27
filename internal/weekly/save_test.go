@@ -297,11 +297,14 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	if err := q.SetGlobalUnlock(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
-	p20, p50, hours := 20.0, 50.0, 3.0
+	p20, p50, p70, hours := 20.0, 50.0, 70.0, 3.0
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-02", weekly.Patch{Progress: &p20}, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p50, PlannedHours: &hours}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{Progress: &p70}, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := q.SetGlobalUnlock(ctx, 0); err != nil {
@@ -323,5 +326,9 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-03-30"})
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("explicit progress was not cleared: %#v %v", row, err)
+	}
+	later, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-04-06"})
+	if err != nil || !later.Progress.Valid || later.Progress.Float64 != p70 {
+		t.Fatalf("clearing earlier progress changed later explicit progress: %#v %v", later, err)
 	}
 }

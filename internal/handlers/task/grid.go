@@ -10,12 +10,6 @@ import (
 	"cad-development/internal/views"
 )
 
-func ParseFilter(r *http.Request) (projectKey string, subprojectID *int64, err error) {
-	projectKey = r.FormValue("project")
-	subprojectID, err = app.FormInt64Checked(r, "subproject")
-	return projectKey, subprojectID, err
-}
-
 func gridPage(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		RenderGrid(w, r, q, time.Now())
@@ -23,7 +17,7 @@ func gridPage(q *db.Queries) http.HandlerFunc {
 }
 
 func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTime time.Time) {
-	pk, sid, err := ParseFilter(r)
+	pk, sid, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		app.WriteError(w, r, err)
 		return

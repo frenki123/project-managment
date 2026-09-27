@@ -1,6 +1,9 @@
 package views
 
-import "cad-development/internal/task"
+import (
+	"cad-development/internal/project"
+	"cad-development/internal/task"
+)
 
 type TaskFormData struct {
 	Action       string
@@ -72,7 +75,10 @@ type TaskPanelData struct {
 }
 
 type ChartPageData struct {
-	Series ChartSeries
+	Projects        []project.Project
+	SelectedProject project.Project
+	HasProject      bool
+	Series          ChartSeries
 }
 
 type ChartSeries struct {

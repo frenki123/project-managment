@@ -68,7 +68,7 @@ type GridCell struct {
 type GridWeekTotal struct {
 	Planned           float64
 	Spent             float64
-	Earned            float64
+	CumulativeEarned  float64
 	CumulativePlanned float64
 	CumulativeSpent   float64
 }
@@ -163,12 +163,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
-	addWeekTotal := func(planned, spent, earned, cumulativePlanned, cumulativeSpent float64) {
-		data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-			Planned: planned, Spent: spent, Earned: earned,
-			CumulativePlanned: cumulativePlanned, CumulativeSpent: cumulativeSpent,
-		})
-	}
+	addWeekTotal := func(total GridWeekTotal) { data.WeekTotals = append(data.WeekTotals, total) }
 
 	weeks, err := q.ListTaskWeeksByProject(ctx, sql.NullInt64{Int64: pid, Valid: true})
 	if err != nil {
@@ -202,7 +197,10 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
+			addWeekTotal(GridWeekTotal{
+				Planned: row.PlannedHours, Spent: row.SpentHours,
+				CumulativePlanned: row.CumulativePlannedHours, CumulativeSpent: row.CumulativeSpentHours,
+			})
 		}
 	} else {
 		data.ProgressPct = new(0.0)
@@ -222,12 +220,20 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(row.PlannedHours, row.SpentHours, row.EarnedHours, row.CumulativePlannedHours, row.CumulativeSpentHours)
+			addWeekTotal(GridWeekTotal{
+				Planned: row.PlannedHours, Spent: row.SpentHours, CumulativeEarned: row.EarnedHours,
+				CumulativePlanned: row.CumulativePlannedHours, CumulativeSpent: row.CumulativeSpentHours,
+			})
 		}
 	}
 
 	for _, t := range tasks {
 		tweeks := byTask[t.ID]
+		requested := make([]string, 0, len(data.Weeks))
+		for _, info := range data.Weeks {
+			requested = append(requested, string(info.Start))
+		}
+		effective := weekly.EffectiveProgress(tweeks, requested)
 		cellByWeek := map[string]db.TaskWeek{}
 		for _, w := range tweeks {
 			cellByWeek[w.WeekStart] = w
@@ -244,21 +250,15 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}
-		prev := 0.0
 		for _, info := range data.Weeks {
 			ws := info.Start
 			cw := cellByWeek[string(ws)]
-			stored := weekly.StoredProgress(cw)
-			eff := weekly.EffectiveFromPrev(prev, stored)
-			if stored != nil {
-				prev = *stored
-			}
 			row.Cells = append(row.Cells, GridCell{
 				WeekStart: ws,
 				Planned:   cw.PlannedHours,
 				Spent:     cw.SpentHours,
-				Progress:  eff,
-				Stored:    stored != nil,
+				Progress:  effective[string(ws)],
+				Stored:    cw.Progress.Valid,
 				Locked:    monthlock.WeekLocked(string(ws), now, unlocked),
 				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),
 			})

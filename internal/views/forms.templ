@@ -1,17 +1,23 @@
 package views
 
-templ ResourceModal(resource string, title string, context string, errMsg string, deleteAction string, confirmMessage string, children ...templ.Component) {
+templ Panel(children ...templ.Component) {
 	<div class="panel-body">
 		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+		{ children... }
+	</div>
+}
+
+templ ResourceModal(resource string, title string, context string, errMsg string, deleteAction string, confirmMessage string, children ...templ.Component) {
+	@Panel() {
 		@ResourceHeader(resource, title, context, deleteAction)
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
 		{ children... }
 		if deleteAction != "" {
-			<div class="resource-delete">@DeleteForm(deleteAction, confirmMessage, "Delete")</div>
+			<div class="delete-actions">@DeleteForm(deleteAction, confirmMessage, "Delete")</div>
 		}
-	</div>
+	}
 }
 
 templ ResourceHeader(resource string, title string, context string, deleteAction string) {
@@ -60,8 +66,7 @@ templ TaskForm(data TaskFormData) {
 }
 
 templ TaskFormPanel(data TaskFormData) {
-	<div class="panel-body">
-		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+	@Panel() {
 		@TaskPanelHeader(data.Summary, "EDITING TASK")
 		@TaskPanelSummary(data.Summary)
 		if data.Error != "" {
@@ -69,9 +74,9 @@ templ TaskFormPanel(data TaskFormData) {
 		}
 		@TaskFormEditor(data)
 		if data.DeleteAction != "" {
-			<div class="task-delete-actions">@DeleteForm(data.DeleteAction, "Delete this task?", "Delete task")</div>
+			<div class="delete-actions">@DeleteForm(data.DeleteAction, "Delete this task?", "Delete task")</div>
 		}
-	</div>
+	}
 }
 
 templ TaskFormEditor(data TaskFormData) {
@@ -172,8 +177,7 @@ templ SubprojectFields(data SubprojectFormData) {
 }
 
 templ TaskPanel(data TaskPanelData) {
-	<div class="panel-body">
-		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+	@Panel() {
 		@TaskPanelHeader(data, "TASK DETAIL")
 		@TaskPanelSummary(data)
 		<section class="panel-section">
@@ -187,7 +191,7 @@ templ TaskPanel(data TaskPanelData) {
 			<section class="panel-section"><h3>Implementation notes</h3><p>{ data.Notes }</p></section>
 		}
 		<div class="panel-actions"><button type="button" class="linkish" hx-get={ templ.URL(data.EditPath) } hx-target="#modal-root" hx-swap="innerHTML">Edit task</button>@DeleteForm(data.DeletePath, "Delete this task?", "Delete")</div>
-	</div>
+	}
 }
 
 templ TaskPanelHeader(data TaskPanelData, kicker string) {

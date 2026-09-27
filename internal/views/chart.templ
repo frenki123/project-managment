@@ -1,12 +1,37 @@
 package views
 
+import "strconv"
+
 templ ChartPage(data ChartPageData) {
 	@Layout("S-curve") {
 		<main class="chart-page">
 			<h1>S-curve</h1>
-			<div class="chart-container" data-chart="s-curve" data-series={ templ.JSONString(data.Series) }>
-				<canvas id="s-curve"></canvas>
-			</div>
+			if len(data.Projects) == 0 {
+				<p>Create a project to see its S-curve.</p>
+			} else {
+				<form method="get" class="chart-filter">
+					<label>
+						Project
+						<select name="project" onchange="this.form.submit()">
+							for _, project := range data.Projects {
+								<option value={ strconv.FormatInt(project.ID, 10) } selected?={ data.HasProject && project.ID == data.SelectedProject.ID }>{ project.Name }</option>
+							}
+						</select>
+					</label>
+				</form>
+				if data.HasProject {
+					<p class="project-description"><span>PO { data.SelectedProject.PurchaseOrderName }</span><span>{ data.SelectedProject.StartDate } - { data.SelectedProject.EndDate }</span></p>
+					<div class="chart-summary">
+						<span>Budget <strong>{ formatNum(data.SelectedProject.TotalHours) } h</strong></span>
+						<span>Planned <strong>{ formatNum(data.SelectedProject.PlannedHours) } h</strong></span>
+						<span>Spent <strong>{ formatNum(data.SelectedProject.SpentHours) } h</strong></span>
+						<span>Progress <strong>{ formatNum(data.SelectedProject.ProgressPct) }%</strong></span>
+					</div>
+					<div class="chart-container" data-chart="s-curve" data-series={ templ.JSONString(data.Series) }>
+						<canvas id="s-curve"></canvas>
+					</div>
+				}
+			}
 		</main>
 	}
 }

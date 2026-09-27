@@ -42,34 +42,10 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		plannedValue, plannedPresent, err := app.FormFloatValue(r, "planned_hours")
+		patch, err := formWeekPatch(r)
 		if err != nil {
 			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
-		}
-		spentValue, spentPresent, err := app.FormFloatValue(r, "spent_hours")
-		if err != nil {
-			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
-			return
-		}
-		progressValue, progressPresent, err := app.FormFloatValue(r, "progress")
-		if err != nil {
-			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
-			return
-		}
-		var patch weekly.Patch
-		if plannedPresent {
-			patch.PlannedHours = &plannedValue
-		}
-		if spentPresent {
-			patch.SpentHours = &spentValue
-		}
-		if progressPresent {
-			if strings.TrimSpace(r.FormValue("progress")) == "" {
-				patch.ClearProgress = true
-			} else {
-				patch.Progress = &progressValue
-			}
 		}
 		grid, rowIndex, err := weekGrid(r, q, id, currentTime)
 		if err != nil {
@@ -90,6 +66,36 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 	}
 }
 
+func formWeekPatch(r *http.Request) (weekly.Patch, error) {
+	var patch weekly.Patch
+	planned, present, err := app.FormFloatValue(r, "planned_hours")
+	if err != nil {
+		return weekly.Patch{}, err
+	}
+	if present {
+		patch.PlannedHours = &planned
+	}
+	spent, present, err := app.FormFloatValue(r, "spent_hours")
+	if err != nil {
+		return weekly.Patch{}, err
+	}
+	if present {
+		patch.SpentHours = &spent
+	}
+	progress, present, err := app.FormFloatValue(r, "progress")
+	if err != nil {
+		return weekly.Patch{}, err
+	}
+	if present {
+		if strings.TrimSpace(r.FormValue("progress")) == "" {
+			patch.ClearProgress = true
+		} else {
+			patch.Progress = &progress
+		}
+	}
+	return patch, nil
+}
+
 func weekIndex(grid taskdomain.Grid, rowIndex int, weekStart string) int {
 	for i, cell := range grid.Rows[rowIndex].Cells {
 		if string(cell.WeekStart) == weekStart {
@@ -100,7 +106,7 @@ func weekIndex(grid taskdomain.Grid, rowIndex int, weekStart string) int {
 }
 
 func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time) (taskdomain.Grid, int, error) {
-	projectKey, subprojectID, err := ParseFilter(r)
+	projectKey, subprojectID, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}

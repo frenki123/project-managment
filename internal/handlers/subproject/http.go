@@ -77,7 +77,7 @@ func renderSubprojectForm(w http.ResponseWriter, r *http.Request, q *db.Queries,
 	selected, _ := strconv.ParseInt(vals.ProjectID, 10, 64)
 	opts, optsErr := projectOpts(q, r, selected)
 	if optsErr != nil {
-		app.WriteError(w, r, optsErr)
+		app.WriteFragmentError(w, r, optsErr)
 		return
 	}
 	data := views.SubprojectFormData{
@@ -90,7 +90,7 @@ func newForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pid, err := app.FormInt64Checked(r, "project_id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		selected := int64(0)
@@ -99,14 +99,14 @@ func newForm(q *db.Queries) http.HandlerFunc {
 		}
 		opts, err := projectOpts(q, r, selected)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		data := views.SubprojectFormData{
-			Action:     "/subprojects",
-			Title:      "New subproject",
-			Context:    "Project assignment and budget",
-			Projects:   opts,
+			Action:   "/subprojects",
+			Title:    "New subproject",
+			Context:  "Project assignment and budget",
+			Projects: opts,
 		}
 		app.RenderFragment(w, r, http.StatusOK, views.SubprojectForm(data))
 	}
@@ -116,17 +116,17 @@ func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		s, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		opts, err := projectOpts(q, r, s.ProjectID)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		data := subFormData(s, opts, "")
@@ -137,9 +137,9 @@ func editForm(q *db.Queries) http.HandlerFunc {
 func subFormData(s domain.Subproject, opts []task.Option, errMsg string) views.SubprojectFormData {
 	id := strconv.FormatInt(s.ID, 10)
 	return views.SubprojectFormData{
-		Action:     "/subprojects/" + id,
-		Title:      s.Name,
-		Context:    "Project assignment and budget",
+		Action:  "/subprojects/" + id,
+		Title:   s.Name,
+		Context: "Project assignment and budget",
 		Subproject: views.SubprojectFormValues{
 			Name:       s.Name,
 			ProjectID:  strconv.FormatInt(s.ProjectID, 10),
@@ -176,7 +176,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		in, err := formInput(r)
@@ -197,12 +197,12 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		s, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {

@@ -58,9 +58,9 @@ func renderProjectForm(w http.ResponseWriter, r *http.Request, vals views.Projec
 func newForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := views.ProjectFormData{
-			Action:     "/projects",
-			Title:      "New project",
-			Context:    "Define budget and schedule",
+			Action:  "/projects",
+			Title:   "New project",
+			Context: "Define budget and schedule",
 		}
 		app.RenderFragment(w, r, http.StatusOK, views.ProjectForm(data))
 	}
@@ -70,12 +70,12 @@ func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		p, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		data := projectFormData(p, "")
@@ -86,9 +86,9 @@ func editForm(q *db.Queries) http.HandlerFunc {
 func projectFormData(p domain.Project, errMsg string) views.ProjectFormData {
 	id := strconv.FormatInt(p.ID, 10)
 	return views.ProjectFormData{
-		Action:     "/projects/" + id,
-		Title:      p.Name,
-		Context:    "PO " + p.PurchaseOrderName + " · " + p.StartDate + " - " + p.EndDate,
+		Action:  "/projects/" + id,
+		Title:   p.Name,
+		Context: "PO " + p.PurchaseOrderName + " · " + p.StartDate + " - " + p.EndDate,
 		Project: views.ProjectFormValues{
 			Name:              p.Name,
 			PurchaseOrderName: p.PurchaseOrderName,
@@ -129,7 +129,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		in, err := formInput(r)
@@ -150,12 +150,12 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := app.PathID(r, "id")
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		p, err := domain.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteError(w, r, err)
+			app.WriteFragmentError(w, r, err)
 			return
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {

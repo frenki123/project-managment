@@ -1,4 +1,6 @@
 (() => {
+	if (!window.Chart) return;
+	const Chart = window.Chart;
 	const dark = window.matchMedia("(prefers-color-scheme: dark)");
 
 	const applyTheme = () => {
@@ -11,10 +13,28 @@
 		for (const holder of document.querySelectorAll("[data-chart]")) {
 			const canvas = holder.querySelector("canvas");
 			if (!canvas || !holder.dataset.series || Chart.getChart(canvas)) continue;
+			const styles = getComputedStyle(document.documentElement);
+			const colors = ["--pico-primary", "--pico-del-color", "--pico-ins-color"].map((name) => styles.getPropertyValue(name).trim());
+			let data;
+			try {
+				data = JSON.parse(holder.dataset.series);
+			} catch {
+				continue;
+			}
+			data.datasets.forEach((dataset, index) => {
+				dataset.borderColor = colors[index] || colors[0];
+				dataset.backgroundColor = dataset.borderColor;
+				dataset.tension = 0.2;
+				dataset.pointRadius = 3;
+			});
 			new Chart(canvas, {
 				type: "line",
-				data: JSON.parse(holder.dataset.series),
-				options: { scales: { y: { beginAtZero: true } } },
+				data,
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					scales: { y: { beginAtZero: true, title: { display: true, text: "Hours" } } },
+				},
 			});
 		}
 	};

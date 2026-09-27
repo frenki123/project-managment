@@ -2,6 +2,7 @@
 	let timer;
 	let lastActive;
 	let subprojectRequest;
+	let modalOpener;
 
 	const abortSubprojectRequest = () => {
 		subprojectRequest?.abort();
@@ -22,7 +23,10 @@
 				select.replaceChildren(new Option(emptyLabel, ""));
 				for (const item of payload.subprojects || []) select.append(new Option(item.name, item.id));
 			})
-			.catch(() => {});
+			.catch((error) => {
+				if (error.name === "AbortError" || subprojectRequest !== controller || !select.isConnected) return;
+				select.replaceChildren(new Option("Unable to load subprojects", ""));
+			});
 	};
 
 	document.addEventListener("change", (event) => {
@@ -54,9 +58,13 @@
 	const closeModal = () => {
 		abortSubprojectRequest();
 		document.getElementById("modal-root")?.replaceChildren();
+		if (modalOpener?.isConnected) modalOpener.focus();
+		modalOpener = null;
 	};
 
 	document.addEventListener("click", (event) => {
+		const trigger = event.target.closest('[hx-target="#modal-root"]');
+		if (trigger && !document.getElementById("modal-root")?.contains(trigger)) modalOpener = trigger;
 		if (event.target.closest("[data-close-modal]")) closeModal();
 	});
 
@@ -82,6 +90,13 @@
 
 	document.body.addEventListener("htmx:beforeSwap", (event) => {
 		if (event.detail.target?.id === "modal-root") abortSubprojectRequest();
+	});
+
+	document.body.addEventListener("htmx:beforeRequest", (event) => {
+		const trigger = event.detail.elt;
+		if (trigger?.getAttribute("hx-target") === "#modal-root" && !document.getElementById("modal-root")?.contains(trigger)) {
+			modalOpener = trigger;
+		}
 	});
 
 	document.body.addEventListener("htmx:responseError", (event) => {

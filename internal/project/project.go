@@ -48,6 +48,15 @@ func FromDB(p db.Project) Project {
 	}
 }
 
+func fromTotals(row db.ListProjectsWithTotalsRow) Project {
+	return Project{
+		ID: row.ID, Name: row.Name, PurchaseOrderName: row.PurchaseOrderName,
+		TotalHours: row.TotalHours, StartDate: row.StartDate, EndDate: row.EndDate,
+		PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
+		ProgressPct: row.Progress, EarnedHours: row.Progress * row.TotalHours / 100,
+	}
+}
+
 func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
@@ -91,7 +100,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 	if err != nil {
 		return Project{}, err
 	}
-	return FromDB(row), nil
+	return Get(ctx, q, row.ID)
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
@@ -140,12 +149,7 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Project, error) {
 	}
 	out := make([]Project, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, Project{
-			ID: row.ID, Name: row.Name, PurchaseOrderName: row.PurchaseOrderName,
-			TotalHours: row.TotalHours, StartDate: row.StartDate, EndDate: row.EndDate,
-			PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
-			ProgressPct: row.Progress, EarnedHours: row.Progress * row.TotalHours / 100,
-		})
+		out = append(out, fromTotals(row))
 	}
 	return out, nil
 }

@@ -71,7 +71,6 @@ GROUP BY t.id;
 DROP VIEW v_task_totals;
 DROP TABLE task_weeks;
 DROP TABLE IF EXISTS edit_lock;
-DROP TABLE IF EXISTS month_locks;
 DROP TABLE tasks;
 DROP TABLE subprojects;
 DROP TABLE projects;

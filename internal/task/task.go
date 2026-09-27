@@ -115,7 +115,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	return FromDB(row), nil
+	return Get(ctx, q, row.ID)
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
@@ -139,7 +139,11 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
 	out.Weeks = make([]weekly.Cell, 0, len(weeks))
-	prev := 0.0
+	requested := make([]string, 0, len(weeks))
+	for _, w := range weeks {
+		requested = append(requested, w.WeekStart)
+	}
+	effective := weekly.EffectiveProgress(weeks, requested)
 	for _, w := range weeks {
 		c := weekly.Cell{
 			TaskID:       w.TaskID,
@@ -147,10 +151,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 			PlannedHours: w.PlannedHours,
 			SpentHours:   w.SpentHours,
 		}
-		if w.Progress.Valid {
-			prev = w.Progress.Float64
-		}
-		c.Progress = new(prev)
+		c.Progress = new(effective[w.WeekStart])
 		out.Weeks = append(out.Weeks, c)
 	}
 	return out, nil
