@@ -198,19 +198,27 @@ body.modal-open { overflow: hidden; }
 .week-col small,
 .week-total small,
 .week-total-labels small { display: block; }
-.task-summary small {
-	display: flex;
+.task-summary {
+	display: block;
+	margin: 0;
+}
+.task-summary > div {
+	display: grid;
 	box-sizing: border-box;
+	grid-template-columns: 1fr auto;
 	align-items: center;
-	justify-content: space-between;
 	gap: 0.5rem;
 	height: 3.125rem;
 	min-height: 3.125rem;
-	margin: 0 0 0.1rem;
+	margin-bottom: 0.1rem;
 	padding: 0.1rem 0.25rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--pico-muted-border-color) 45%, var(--pico-background-color));
 	font-size: 0.75rem;
 }
-.task-summary-value { margin-left: auto; text-align: right; }
+.task-summary > div:last-child { margin-bottom: 0; border-bottom: 0; }
+.task-summary dt,
+.task-summary dd { margin: 0; }
+.task-summary dd { text-align: right; }
 .week-total-labels { text-align: right; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }
