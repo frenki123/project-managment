@@ -214,6 +214,7 @@ templ TaskPanelSummary(data TaskPanelData) {
 	<section class="panel-section panel-highlight">
 		<h3>Progress</h3>
 		<strong>{ percent(data.Task.Progress) }%</strong>
+		<small>{ data.Task.Status }</small>
 	</section>
 	<section class="panel-section">
 		<h3>Task totals</h3>

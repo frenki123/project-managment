@@ -25,7 +25,22 @@ type Task struct {
 	TotalHours          float64       `json:"total_hours,omitempty"`
 	SpentHours          float64       `json:"spent_hours,omitempty"`
 	Progress            float64       `json:"progress,omitempty"`
+	Status              string        `json:"status"`
 	Weeks               []weekly.Cell `json:"weeks,omitempty"`
+}
+
+// Status returns the task status derived from its cumulative progress.
+func Status(progress float64) string {
+	switch {
+	case progress <= 0:
+		return "Planned"
+	case progress < 80:
+		return "Development"
+	case progress < 100:
+		return "Internal Testing"
+	default:
+		return "Deployment"
+	}
 }
 
 type Input struct {
@@ -138,6 +153,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.TotalHours = totals.PlannedHours
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
+	out.Status = Status(out.Progress)
 	out.Weeks = make([]weekly.Cell, 0, len(weeks))
 	requested := make([]string, 0, len(weeks))
 	for _, w := range weeks {
@@ -273,6 +289,7 @@ func mapTasks(ctx context.Context, q *db.Queries, rows []db.Task, scope string, 
 		t.TotalHours = total.PlannedHours
 		t.SpentHours = total.SpentHours
 		t.Progress = total.Progress
+		t.Status = Status(t.Progress)
 		out = append(out, t)
 	}
 	return out, nil
