@@ -13,6 +13,7 @@ import (
 )
 
 func formInput(r *http.Request) (taskdomain.Input, error) {
+	vals := formValues(r)
 	projectID, err := app.FormInt64Checked(r, "project_id")
 	if err != nil {
 		return taskdomain.Input{}, err
@@ -22,12 +23,12 @@ func formInput(r *http.Request) (taskdomain.Input, error) {
 		return taskdomain.Input{}, err
 	}
 	return taskdomain.Input{
-		Name:                r.FormValue("name"),
-		Description:         r.FormValue("description"),
-		ImplementationNotes: r.FormValue("implementation_notes"),
-		Department:          r.FormValue("department"),
-		Developers:          r.FormValue("developers"),
-		Priority:            r.FormValue("priority"),
+		Name:                vals.Name,
+		Description:         vals.Description,
+		ImplementationNotes: vals.ImplementationNotes,
+		Department:          vals.Department,
+		Developers:          vals.Developers,
+		Priority:            vals.Priority,
 		ProjectID:           projectID,
 		SubprojectID:        subprojectID,
 	}, nil
@@ -116,7 +117,7 @@ func taskFormData(r *http.Request, q *db.Queries, vals views.TaskFormValues, can
 	}, nil
 }
 
-func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.TaskFormValues, canReassign bool, action, title, deleteAction string, err error) {
+func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.TaskFormValues, canReassign bool, action, title, deleteAction string, err error, summary *views.TaskPanelData) {
 	httpErr := app.HTTPErrorFrom(err)
 	data, formErr := taskFormData(r, q, vals, canReassign, httpErr.Message)
 	if formErr != nil {
@@ -124,7 +125,15 @@ func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals 
 		return
 	}
 	data.Action, data.Title, data.DeleteAction = action, title, deleteAction
-	app.RenderPage(w, r, httpErr.Status, views.TaskForm(data))
+	if summary != nil {
+		data.Summary = *summary
+		data.DetailPath = "/tasks/" + strconv.FormatInt(summary.Task.ID, 10)
+	}
+	if summary != nil {
+		app.RenderFragment(w, r, httpErr.Status, views.TaskFormPanel(data))
+		return
+	}
+	app.RenderFragment(w, r, httpErr.Status, views.TaskForm(data))
 }
 
 func newForm(q *db.Queries) http.HandlerFunc {
@@ -134,23 +143,17 @@ func newForm(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		po, so, err := taskSelects(r, q, pid, nil)
-		if err != nil {
-			app.WriteError(w, r, err)
-			return
-		}
 		vals := views.TaskFormValues{}
 		if pid != nil {
 			vals.ProjectID = strconv.FormatInt(*pid, 10)
 		}
-		app.RenderPage(w, r, http.StatusOK, views.TaskForm(views.TaskFormData{
-			Action:      "/tasks",
-			Title:       "New task",
-			Task:        vals,
-			Projects:    po,
-			Subprojects: so,
-			CanReassign: true,
-		}))
+		data, err := taskFormData(r, q, vals, true, "")
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
+		data.Action, data.Title = "/tasks", "New task"
+		app.RenderFragment(w, r, http.StatusOK, views.TaskForm(data))
 	}
 }
 
@@ -173,20 +176,27 @@ func editForm(q *db.Queries) http.HandlerFunc {
 		}
 		idStr := strconv.FormatInt(id, 10)
 		data.Action, data.Title, data.DeleteAction = "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete"
-		app.RenderPage(w, r, http.StatusOK, views.TaskForm(data))
+		data.DetailPath = "/tasks/" + idStr
+		data.Summary, err = taskPanelData(r, q, t)
+		if err != nil {
+			app.WriteError(w, r, err)
+			return
+		}
+		app.RenderFragment(w, r, http.StatusOK, views.TaskFormPanel(data))
 	}
 }
 
 func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		vals := formValues(r)
 		in, err := formInput(r)
 		if err != nil {
-			renderTaskForm(w, r, q, formValues(r), true, "/tasks", "New task", "", err)
+			renderTaskForm(w, r, q, vals, true, "/tasks", "New task", "", err, nil)
 			return
 		}
 		t, err := taskdomain.Create(r.Context(), q, in)
 		if err != nil {
-			renderTaskForm(w, r, q, formValues(r), true, "/tasks", "New task", "", err)
+			renderTaskForm(w, r, q, vals, true, "/tasks", "New task", "", err, nil)
 			return
 		}
 		app.Redirect(w, r, afterTask(t))
@@ -217,7 +227,12 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 func renderTaskUpdateError(w http.ResponseWriter, r *http.Request, q *db.Queries, id int64, err error) {
 	vals := formValues(r)
 	canReassign := true
+	var summary *views.TaskPanelData
 	if current, getErr := taskdomain.Get(r.Context(), q, id); getErr == nil {
+		panel, panelErr := taskPanelData(r, q, current)
+		if panelErr == nil {
+			summary = &panel
+		}
 		canReassign = len(current.Weeks) == 0
 		if !canReassign {
 			vals.ProjectID, vals.SubprojectID = "", ""
@@ -230,7 +245,7 @@ func renderTaskUpdateError(w http.ResponseWriter, r *http.Request, q *db.Queries
 		}
 	}
 	idStr := strconv.FormatInt(id, 10)
-	renderTaskForm(w, r, q, vals, canReassign, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err)
+	renderTaskForm(w, r, q, vals, canReassign, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err, summary)
 }
 
 func deleteHTML(q *db.Queries) http.HandlerFunc {
@@ -247,7 +262,12 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 		}
 		if err := taskdomain.Delete(r.Context(), q, id); err != nil {
 			idStr := strconv.FormatInt(id, 10)
-			renderTaskForm(w, r, q, taskFormValues(t), len(t.Weeks) == 0, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err)
+			summary, summaryErr := taskPanelData(r, q, t)
+			if summaryErr != nil {
+				app.WriteError(w, r, summaryErr)
+				return
+			}
+			renderTaskForm(w, r, q, taskFormValues(t), len(t.Weeks) == 0, "/tasks/"+idStr, "Edit task", "/tasks/"+idStr+"/delete", err, &summary)
 			return
 		}
 		app.Redirect(w, r, afterTask(t))

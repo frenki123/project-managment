@@ -1,116 +1,212 @@
 package views
 
-templ FormShell(title string, errMsg string, deleteAction string, confirmMessage string, children ...templ.Component) {
-	@Layout(title) {
-		<main class="container form-page">
-			<h1>{ title }</h1>
-			if errMsg != "" {
-				<p class="error">{ errMsg }</p>
-			}
-			{ children... }
-			if deleteAction != "" {
-				<form method="post" action={ templ.URL(deleteAction) } data-confirm={ confirmMessage }>
-					<button type="submit" class="secondary">Delete</button>
-				</form>
-			}
-		</main>
+templ ResourceModal(resource string, title string, context string, errMsg string, deleteAction string, confirmMessage string, children ...templ.Component) {
+	<div class="panel-body">
+		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+		@ResourceHeader(resource, title, context, deleteAction)
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		{ children... }
+		if deleteAction != "" {
+			<div class="resource-delete">@DeleteForm(deleteAction, confirmMessage, "Delete")</div>
+		}
+	</div>
+}
+
+templ ResourceHeader(resource string, title string, context string, deleteAction string) {
+	if deleteAction != "" {
+		<p class="panel-kicker">EDITING { resource }</p>
+	} else {
+		<p class="panel-kicker">NEW { resource }</p>
 	}
+	<h2 class="panel-title">{ title }</h2>
+	if context != "" {
+		<p class="panel-context">{ context }</p>
+	}
+}
+
+templ DeleteForm(action string, message string, label string) {
+	<form hx-post={ templ.URL(action) } hx-target="#modal-root" hx-swap="innerHTML" data-confirm={ message }>
+		<button type="submit" class="secondary outline">{ label }</button>
+	</form>
+}
+
+templ ResourceForm(action string, children ...templ.Component) {
+	<form class="resource-form" hx-post={ templ.URL(action) } hx-target="#modal-root" hx-swap="innerHTML">
+		{ children... }
+	</form>
+}
+
+templ ResourceActions(editing bool, createLabel string, cancelPath string) {
+	<div class="resource-actions">
+		if cancelPath != "" {
+			<button type="button" class="secondary outline" hx-get={ templ.URL(cancelPath) } hx-target="#modal-root" hx-swap="innerHTML">Cancel</button>
+		} else {
+			<button type="button" class="secondary outline" data-close-modal>Cancel</button>
+		}
+		if editing {
+			<button type="submit">Save changes</button>
+		} else {
+			<button type="submit">{ createLabel }</button>
+		}
+	</div>
 }
 
 templ TaskForm(data TaskFormData) {
-	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this task?") {
-		<form method="post" action={ templ.URL(data.Action) }>
-			<label>Name<input type="text" name="name" value={ data.Task.Name } required/></label>
-			<label>Description<textarea name="description">{ data.Task.Description }</textarea></label>
-			<label>Implementation notes<textarea name="implementation_notes">{ data.Task.ImplementationNotes }</textarea></label>
-			<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
-			<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
-			<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
-			<label>
-				Project
-				<select name="project_id" id="task-project-filter" disabled?={ !data.CanReassign }>
-					<option value="">Ideas</option>
-					for _, o := range data.Projects {
-						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-					}
-				</select>
-				if !data.CanReassign {
-					<input type="hidden" name="project_id" value={ data.Task.ProjectID }/>
-				}
-			</label>
-			<label>
-				Subproject
-				<select name="subproject_id" id="task-subproject-filter" disabled?={ !data.CanReassign }>
-					<option value="">None</option>
-					for _, o := range data.Subprojects {
-						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-					}
-				</select>
-				if !data.CanReassign {
-					<input type="hidden" name="subproject_id" value={ data.Task.SubprojectID }/>
-				}
-			</label>
-			if !data.CanReassign {
-				<small>{ data.ReassignNote }</small>
-			}
-			<button type="submit">Save</button>
-		</form>
+	@ResourceModal("TASK", data.Title, "Create a new task", data.Error, data.DeleteAction, "Delete this task?") {
+		@TaskFormEditor(data)
 	}
+}
+
+templ TaskFormPanel(data TaskFormData) {
+	<div class="panel-body">
+		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+		@TaskPanelHeader(data.Summary, "EDITING TASK")
+		@TaskPanelSummary(data.Summary)
+		if data.Error != "" {
+			<p class="error">{ data.Error }</p>
+		}
+		@TaskFormEditor(data)
+		if data.DeleteAction != "" {
+			<div class="task-delete-actions">@DeleteForm(data.DeleteAction, "Delete this task?", "Delete task")</div>
+		}
+	</div>
+}
+
+templ TaskFormEditor(data TaskFormData) {
+	@ResourceForm(data.Action) {
+		@TaskIdentitySection(data)
+		@TaskOwnershipSection(data)
+		@TaskDescriptionSection(data)
+		@TaskNotesSection(data)
+		@TaskAssignmentSection(data)
+		@ResourceActions(data.DetailPath != "", "Create task", data.DetailPath)
+	}
+}
+
+templ TaskIdentitySection(data TaskFormData) {
+	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Task.Name } required/></label></section>
+}
+
+templ TaskOwnershipSection(data TaskFormData) {
+	<section class="panel-section"><h3>Ownership</h3><div class="form-grid form-grid-three">
+		<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
+		<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
+		<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
+	</div></section>
+}
+
+templ TaskDescriptionSection(data TaskFormData) {
+	<section class="panel-section"><h3>Description</h3><label><span class="sr-only">Description</span><textarea name="description">{ data.Task.Description }</textarea></label></section>
+}
+
+templ TaskNotesSection(data TaskFormData) {
+	<section class="panel-section"><h3>Implementation notes</h3><label><span class="sr-only">Implementation notes</span><textarea name="implementation_notes">{ data.Task.ImplementationNotes }</textarea></label></section>
+}
+
+templ TaskAssignmentSection(data TaskFormData) {
+	<section class="panel-section"><h3>Assignment</h3><div class="form-grid form-grid-two">
+		<label>Project<select name="project_id" id="task-project-filter" disabled?={ !data.CanReassign }><option value="">Ideas</option>
+			for _, o := range data.Projects {
+				<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+			}
+		</select>
+		if !data.CanReassign {
+			<input type="hidden" name="project_id" value={ data.Task.ProjectID }/>
+		}
+		</label>
+		<label>Subproject<select name="subproject_id" id="task-subproject-filter" disabled?={ !data.CanReassign }><option value="">None</option>
+			for _, o := range data.Subprojects {
+				<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+			}
+		</select>
+		if !data.CanReassign {
+			<input type="hidden" name="subproject_id" value={ data.Task.SubprojectID }/>
+		}
+		</label>
+	</div>
+	if !data.CanReassign {
+		<small>{ data.ReassignNote }</small>
+	}
+	</section>
 }
 
 templ ProjectForm(data ProjectFormData) {
-	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this project?") {
-		<form method="post" action={ templ.URL(data.Action) }>
-			<label>Name<input type="text" name="name" value={ data.Project.Name } required/></label>
-			<label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label>
-			<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
-			<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
-			<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
-			<button type="submit">Save</button>
-		</form>
+	@ResourceModal("PROJECT", data.Title, data.Context, data.Error, data.DeleteAction, "Delete this project?") {
+		@ResourceForm(data.Action) {
+			@ProjectFields(data)
+			@ResourceActions(data.DeleteAction != "", "Create project", "")
+		}
 	}
+}
+
+templ ProjectFields(data ProjectFormData) {
+	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Project.Name } required/></label><label>Purchase order name<input type="text" name="purchase_order_name" value={ data.Project.PurchaseOrderName }/></label></section>
+	<section class="panel-section"><h3>Budget and schedule</h3><div class="form-grid form-grid-three">
+		<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Project.TotalHours } required/></label>
+		<label>Start date<input type="date" name="start_date" value={ data.Project.StartDate } required/></label>
+		<label>End date<input type="date" name="end_date" value={ data.Project.EndDate } required/></label>
+	</div></section>
 }
 
 templ SubprojectForm(data SubprojectFormData) {
-	@FormShell(data.Title, data.Error, data.DeleteAction, "Delete this subproject?") {
-		<form method="post" action={ templ.URL(data.Action) }>
-			<label>Name<input type="text" name="name" value={ data.Subproject.Name } required/></label>
-			<label>
-				Project
-				<select name="project_id" required>
-					for _, o := range data.Projects {
-						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
-					}
-				</select>
-			</label>
-			<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
-			<button type="submit">Save</button>
-		</form>
+	@ResourceModal("SUBPROJECT", data.Title, data.Context, data.Error, data.DeleteAction, "Delete this subproject?") {
+		@ResourceForm(data.Action) {
+			@SubprojectFields(data)
+			@ResourceActions(data.DeleteAction != "", "Create subproject", "")
+		}
 	}
 }
 
-templ TaskPanelPage(data TaskPanelData) {
-	@Layout("Task") {
-		<main class="container form-page">
-			@TaskPanel(data)
-		</main>
-	}
+templ SubprojectFields(data SubprojectFormData) {
+	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Subproject.Name } required/></label></section>
+	<section class="panel-section"><h3>Assignment and budget</h3><div class="form-grid form-grid-two">
+		<label>Project<select name="project_id" required>
+			for _, o := range data.Projects {
+				<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+			}
+		</select></label>
+		<label>Total hours<input type="number" step="any" min="0" name="total_hours" value={ data.Subproject.TotalHours } required/></label>
+	</div></section>
 }
 
 templ TaskPanel(data TaskPanelData) {
 	<div class="panel-body">
-		<button type="button" class="panel-close" data-close-panel aria-label="Close">Close</button>
-		<h2>{ data.Task.Name }</h2>
-		<p><strong>Project:</strong> { data.Task.ProjectName }</p>
-		<p><strong>Subproject:</strong> { data.Task.Subproject }</p>
-		<p><strong>Department:</strong> { data.Department }</p>
-		<p><strong>Developers:</strong> { data.Developers }</p>
-		<p><strong>Priority:</strong> { data.Priority }</p>
-		<p><strong>Total h:</strong> { formatNum(data.Task.TotalHours) }</p>
-		<p><strong>Spent h:</strong> { formatNum(data.Task.SpentHours) }</p>
-		<p><strong>Progress:</strong> { formatNum(data.Task.Progress) }%</p>
-		<p>{ data.Desc }</p>
-		<p>{ data.Notes }</p>
-		<p class="panel-actions"><a href={ templ.URL(data.EditPath) }>EDIT</a><form method="post" action={ templ.URL(data.DeletePath) } data-confirm="Delete this task?"><button type="submit" class="secondary">DELETE</button></form></p>
+		<button type="button" class="panel-close" data-close-modal aria-label="Close">Close</button>
+		@TaskPanelHeader(data, "TASK DETAIL")
+		@TaskPanelSummary(data)
+		<section class="panel-section">
+			<h3>Ownership</h3>
+			<dl class="panel-details"><dt>Department</dt><dd>{ data.Department }</dd><dt>Developers</dt><dd>{ data.Developers }</dd><dt>Priority</dt><dd>{ data.Priority }</dd></dl>
+		</section>
+		if data.Desc != "" {
+			<section class="panel-section"><h3>Description</h3><p>{ data.Desc }</p></section>
+		}
+		if data.Notes != "" {
+			<section class="panel-section"><h3>Implementation notes</h3><p>{ data.Notes }</p></section>
+		}
+		<div class="panel-actions"><button type="button" class="linkish" hx-get={ templ.URL(data.EditPath) } hx-target="#modal-root" hx-swap="innerHTML">Edit task</button>@DeleteForm(data.DeletePath, "Delete this task?", "Delete")</div>
 	</div>
+}
+
+templ TaskPanelHeader(data TaskPanelData, kicker string) {
+	<p class="panel-kicker">{ kicker }</p>
+	<h2 class="panel-title">{ data.Task.Name }</h2>
+	<p class="panel-context"><span>{ data.Task.ProjectName }</span>
+		if data.Task.Subproject != "" {
+			<span>{ data.Task.Subproject }</span>
+		}
+	</p>
+}
+
+templ TaskPanelSummary(data TaskPanelData) {
+	<section class="panel-section panel-highlight">
+		<h3>Progress</h3>
+		<strong>{ formatNum(data.Task.Progress) }%</strong>
+	</section>
+	<section class="panel-section">
+		<h3>Task totals</h3>
+		<div class="panel-stats"><div><small>Total</small><strong>{ formatNum(data.Task.TotalHours) } h</strong></div><div><small>Spent</small><strong>{ formatNum(data.Task.SpentHours) } h</strong></div></div>
+	</section>
 }

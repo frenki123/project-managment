@@ -45,6 +45,13 @@ func monthLabel(ym string) string {
 	return ym
 }
 
+func dateLabel(value string) string {
+	if parsed, err := time.Parse(time.DateOnly, value); err == nil {
+		return parsed.Format("02 Jan 2006")
+	}
+	return value
+}
+
 func distinctMonths(weeks []weekly.WeekInfo) []MonthGroup {
 	var groups []MonthGroup
 	for _, week := range weeks {

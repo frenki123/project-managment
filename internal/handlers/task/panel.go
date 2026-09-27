@@ -24,43 +24,46 @@ func panel(q *db.Queries) http.HandlerFunc {
 			app.WriteFragmentError(w, r, err)
 			return
 		}
-		row := taskdomain.GridRow{
-			ID:         t.ID,
-			Name:       t.Name,
-			TotalHours: t.TotalHours,
-			SpentHours: t.SpentHours,
-			Progress:   t.Progress,
-		}
-		if t.ProjectID != nil {
-			p, err := project.Get(r.Context(), q, *t.ProjectID)
-			if err != nil {
-				app.WriteFragmentError(w, r, err)
-				return
-			}
-			row.ProjectName = p.Name
-		}
-		if t.SubprojectID != nil {
-			s, err := subproject.Get(r.Context(), q, *t.SubprojectID)
-			if err != nil {
-				app.WriteFragmentError(w, r, err)
-				return
-			}
-			row.Subproject = s.Name
-		}
-		data := views.TaskPanelData{
-			Task:       row,
-			Department: t.Department,
-			Developers: t.Developers,
-			Priority:   t.Priority,
-			Notes:      t.ImplementationNotes,
-			Desc:       t.Description,
-			EditPath:   "/tasks/" + strconv.FormatInt(t.ID, 10) + "/edit",
-			DeletePath: "/tasks/" + strconv.FormatInt(t.ID, 10) + "/delete",
-		}
-		if app.IsHTMX(r) {
-			app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
+		data, err := taskPanelData(r, q, t)
+		if err != nil {
+			app.WriteFragmentError(w, r, err)
 			return
 		}
-		app.RenderPage(w, r, http.StatusOK, views.TaskPanelPage(data))
+	app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
 	}
+}
+
+func taskPanelData(r *http.Request, q *db.Queries, t taskdomain.Task) (views.TaskPanelData, error) {
+	row := taskdomain.GridRow{
+		ID:         t.ID,
+		Name:       t.Name,
+		TotalHours: t.TotalHours,
+		SpentHours: t.SpentHours,
+		Progress:   t.Progress,
+	}
+	if t.ProjectID != nil {
+		p, err := project.Get(r.Context(), q, *t.ProjectID)
+		if err != nil {
+			return views.TaskPanelData{}, err
+		}
+		row.ProjectName = p.Name
+	}
+	if t.SubprojectID != nil {
+		s, err := subproject.Get(r.Context(), q, *t.SubprojectID)
+		if err != nil {
+			return views.TaskPanelData{}, err
+		}
+		row.Subproject = s.Name
+	}
+	id := strconv.FormatInt(t.ID, 10)
+	return views.TaskPanelData{
+		Task:       row,
+		Department: t.Department,
+		Developers: t.Developers,
+		Priority:   t.Priority,
+		Notes:      t.ImplementationNotes,
+		Desc:       t.Description,
+		EditPath:   "/tasks/" + id + "/edit",
+		DeletePath: "/tasks/" + id + "/delete",
+	}, nil
 }

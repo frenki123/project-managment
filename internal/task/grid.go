@@ -20,6 +20,10 @@ type Grid struct {
 	FilterProject    string
 	FilterSubproject string
 	Ideas            bool
+	ProjectName      string
+	SubprojectName   string
+	StartDate        string
+	EndDate          string
 	Weeks            []weekly.WeekInfo
 	WeekTotals       []GridWeekTotal
 	Rows             []GridRow
@@ -88,7 +92,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	if err != nil {
 		return Grid{}, err
 	}
-	filter, err := parseProjectFilter(projectKey, projects)
+	filter, err := parseProjectFilter(projectKey)
 	if err != nil {
 		return Grid{}, err
 	}
@@ -97,6 +101,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		FilterProject:    filter.Value,
 		FilterSubproject: "",
 		Ideas:            filter.Ideas,
+		ProjectName:      "Ideas",
 		Projects:         projectOptions(projects, filter.Value),
 		LastMonth:        string(monthlock.PreviousMonth(now)),
 	}
@@ -133,6 +138,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		return Grid{}, err
 	}
 	data.Subprojects = subprojectOptions(subs, subprojectID)
+	data.ProjectName = proj.Name
+	data.StartDate = proj.StartDate
+	data.EndDate = proj.EndDate
 	var sp subproject.Subproject
 	if subprojectID != nil {
 		sp, err = subproject.Get(ctx, q, *subprojectID)
@@ -146,6 +154,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	if subprojectID != nil {
 		data.FilterSubproject = strconv.FormatInt(*subprojectID, 10)
+		data.SubprojectName = sp.Name
 	}
 
 	start, err := weekly.ParseDate(proj.StartDate)
@@ -304,7 +313,7 @@ func projectOptions(projects []project.Project, selected string) []Option {
 	return out
 }
 
-func parseProjectFilter(value string, projects []project.Project) (projectFilter, error) {
+func parseProjectFilter(value string) (projectFilter, error) {
 	if value == "" || value == "ideas" {
 		return projectFilter{Value: "ideas", Ideas: true}, nil
 	}

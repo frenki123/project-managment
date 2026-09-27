@@ -10,60 +10,109 @@ templ GridPage(data task.Grid) {
 	@Layout("CAD Development") {
 		<div class="workspace">
 			@Grid(data)
-			<aside id="panel" class="side-panel"></aside>
 		</div>
 	}
 }
 
 	templ Grid(data task.Grid) {
 		<section id="grid" class="grid-main">
-		<form id="filters" class="filters" hx-get="/" hx-target="#grid" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
-			<label>
-				Project
-			<select name="project" id="project-filter">
-					for _, o := range data.Projects {
-						<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+		<header class="project-header">
+			<div class="project-heading">
+				<p class="eyebrow">WORKBOARD
+					if data.SubprojectName != "" {
+						<span> / { data.SubprojectName }</span>
 					}
-				</select>
-			</label>
+				</p>
+				<h1>{ data.ProjectName }</h1>
+				if data.Ideas {
+					<p class="project-description">Unassigned tasks and ideas. Weekly planning is available after assigning a project.</p>
+				} else {
+					<p class="project-description"><span>PO { data.POName }</span><span>{ dateLabel(data.StartDate) } - { dateLabel(data.EndDate) }</span></p>
+				}
+			</div>
 			if !data.Ideas {
+				<div class="project-actions">
+					<button type="button" hx-get={ templ.URL("/projects/" + data.FilterProject + "/edit") } hx-target="#modal-root" hx-swap="innerHTML">Edit project</button>
+					if data.FilterSubproject != "" {
+						<button type="button" hx-get={ templ.URL("/subprojects/" + data.FilterSubproject + "/edit") } hx-target="#modal-root" hx-swap="innerHTML">Edit subproject</button>
+					} else {
+						<button type="button" hx-get={ templ.URL("/subprojects/new?project_id=" + data.FilterProject) } hx-target="#modal-root" hx-swap="innerHTML">+ Add subproject</button>
+					}
+					<button type="button" hx-get={ templ.URL("/tasks/new?project_id=" + data.FilterProject) } hx-target="#modal-root" hx-swap="innerHTML" class="action-primary">+ Add task</button>
+				</div>
+			}
+		</header>
+		if !data.Ideas {
+			@GridTotals(data)
+		}
+		<div class="workboard-toolbar">
+			<form id="filters" class="filters" hx-get="/" hx-target="#grid" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+				<span class="toolbar-label">View</span>
 				<label>
-					Subproject
-					<select name="subproject" id="subproject-filter">
-						for _, o := range data.Subprojects {
+					<span class="sr-only">Project</span>
+					<select name="project" id="project-filter">
+						for _, o := range data.Projects {
 							<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 						}
 					</select>
 				</label>
-			}
-		</form>
-		if !data.Ideas {
-			@GridTotals(data)
-			<div class="locks">
-				<form hx-post="/month-locks/last/toggle" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
-					if data.LastMonthUnlock {
-						<button type="submit">Lock { data.LastMonth }</button>
-					} else {
-						<button type="submit">Unlock last month ({ data.LastMonth })</button>
-					}
-				</form>
-				if len(data.PastMonths) > 0 {
-					<form hx-post="/month-locks/unlock" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
-						<label>Historical month
-						<select name="year_month">
-							for _, ym := range data.PastMonths {
-							<option value={ ym }>{ monthLabel(ym) }</option>
+				if !data.Ideas {
+					<label>
+						<span class="sr-only">Subproject</span>
+						<select name="subproject" id="subproject-filter">
+							for _, o := range data.Subprojects {
+								<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
 							}
 						</select>
-						</label>
-						<button type="submit">Toggle month lock</button>
-					</form>
+					</label>
 				}
-			</div>
+			</form>
+			if !data.Ideas {
+				<div class="lock-controls">
+					<span class="lock-status">
+						if data.LastMonthUnlock {
+							Last month unlocked
+						} else {
+							Last month locked
+						}
+						<strong>{ monthLabel(data.LastMonth) }</strong>
+					</span>
+					<div class="locks">
+						<form hx-post="/month-locks/last/toggle" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+							if data.LastMonthUnlock {
+								<button type="submit" class="secondary outline">Lock month</button>
+							} else {
+								<button type="submit" class="secondary outline">Unlock month</button>
+							}
+						</form>
+						if len(data.PastMonths) > 0 {
+							<form hx-post="/month-locks/unlock" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+								<span class="history-label">History</span>
+								<label><span class="sr-only">Historical month</span><select name="year_month">
+									for _, ym := range data.PastMonths {
+										<option value={ ym }>{ monthLabel(ym) }</option>
+									}
+								</select></label>
+								<button type="submit" class="secondary outline">Toggle history</button>
+							</form>
+						}
+					</div>
+				</div>
+			}
+		</div>
+		if !data.Ideas {
+			<p class="week-legend"><strong>Weekly inputs</strong><span>Plan</span><span>Spent</span><span>Progress</span><span>Progress carries forward when no value is entered.</span></p>
 		}
 		<div class="table-scroll">
 			<table class="week-table">
 				<thead>
+					if !data.Ideas {
+						<tr class="group-row">
+							<th colspan="3" class="sticky c0">Task information</th>
+							<th colspan="3" class="sticky c3">Task totals</th>
+							<th colspan={ len(data.Weeks) } class="timeline-group">Weekly timeline</th>
+						</tr>
+					}
 					if !data.Ideas {
 						<tr class="month-row">
 							<th colspan="6" class="sticky c0">Month</th>
@@ -72,12 +121,12 @@ templ GridPage(data task.Grid) {
 							}
 						</tr>
 					}
-					<tr>
+					<tr class="column-row">
 						<th class="sticky c0">Task</th>
 						<th class="sticky c1">Project</th>
 						<th class="sticky c2">Subproject</th>
-						<th class="sticky c3">total hr</th>
-						<th class="sticky c4">spent hr</th>
+						<th class="sticky c3">total h</th>
+						<th class="sticky c4">spent h</th>
 						<th class="sticky c5">progress %</th>
 						if !data.Ideas {
 							for _, w := range data.Weeks {
@@ -118,19 +167,12 @@ templ GridTotalsOOB(data task.Grid) {
 	</div>
 }
 
-templ GridTotalsContent(data task.Grid) {
-		<span>PO: { data.POName }</span>
-		<a href={ templ.URL("/projects/" + data.FilterProject + "/edit") }>Edit project</a>
-		if data.FilterSubproject != "" {
-			<a href={ templ.URL("/subprojects/" + data.FilterSubproject + "/edit") }>Edit subproject</a>
-		}
-		<a href={ templ.URL("/subprojects/new?project_id=" + data.FilterProject) }>+ subproject</a>
-		<a href={ templ.URL("/tasks/new?project_id=" + data.FilterProject) }>+ task</a>
-		<span>Total h: { formatNum(data.BudgetHours) }</span>
-		<span class={ overrunClass(data.Overrun) }>Planned h: { formatNum(data.PlannedHours) }</span>
-		<span>Spent h: { formatNum(data.SpentHours) }</span>
+	templ GridTotalsContent(data task.Grid) {
+		<div class="metric"><small>Budget</small><strong>{ formatNum(data.BudgetHours) } h</strong></div>
+		<div class={ "metric " + overrunClass(data.Overrun) }><small>Planned</small><strong>{ formatNum(data.PlannedHours) } h</strong></div>
+		<div class="metric"><small>Spent</small><strong>{ formatNum(data.SpentHours) } h</strong></div>
 		if data.ProgressPct != nil {
-			<span>Progress: { formatNum(*data.ProgressPct) }%</span>
+			<div class="metric"><small>Earned progress</small><strong>{ formatNum(*data.ProgressPct) }%</strong></div>
 		}
 }
 
@@ -147,9 +189,9 @@ templ WeekTotalContent(total task.GridWeekTotal) {
 }
 
 templ TaskGridRow(row task.GridRow, ideas bool) {
-	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row" hx-get={ templ.URL(row.DetailPath) } hx-target="#panel" hx-swap="innerHTML" hx-trigger="click[!event.target.closest('input, a, select')]">
+	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row">
 		<td class="sticky c0">
-			<button type="button" class="linkish">{ row.Name }</button>
+			<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#modal-root" hx-swap="innerHTML">{ row.Name }</button>
 		</td>
 		<td class="sticky c1">{ row.ProjectName }</td>
 		<td class="sticky c2">{ row.Subproject }</td>

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -151,7 +152,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	projID := createProject(t, mux, "Alpha", start)
 	tk := struct {
 		ID int64 `json:"id"`
-	}{ID: createTask(t, mux, []byte(`{"name":"Grid task","project_id":` + strconv.FormatInt(projID, 10) + `}`))}
+	}{ID: createTask(t, mux, []byte(`{"name":"Grid task","project_id":`+strconv.FormatInt(projID, 10)+`}`))}
 
 	body := "planned_hours=8&spent_hours=3&progress=25&project=" + strconv.FormatInt(projID, 10)
 	r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
@@ -181,6 +182,56 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	}
 	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
 		t.Fatalf("week edit not persisted: %#v", got)
+	}
+}
+
+func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := nextMonday(time.Now())
+	projectID := createProject(t, mux, "Alpha", start)
+	taskID := createTask(t, mux, []byte(`{"name":"Original task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
+
+	r := httptest.NewRequest(http.MethodGet, "/tasks/"+strconv.FormatInt(taskID, 10)+"/edit", nil)
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="name"`) || !strings.Contains(rr.Body.String(), `value="Original task"`) {
+		t.Fatalf("expected task edit fragment with name, got %d %s", rr.Code, rr.Body.String())
+	}
+
+	values := url.Values{
+		"name":                 {"Renamed task"},
+		"description":          {""},
+		"implementation_notes": {""},
+		"department":           {""},
+		"developers":           {""},
+		"priority":             {""},
+		"project_id":           {strconv.FormatInt(projectID, 10)},
+		"subproject_id":        {""},
+	}
+	r = httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10), strings.NewReader(values.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("task update status: got %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"Renamed task"`) {
+		t.Fatalf("task name was not preserved: %d %s", rr.Code, rr.Body.String())
+	}
+
+	r = httptest.NewRequest(http.MethodPost, "/projects/"+strconv.FormatInt(projectID, 10)+"/delete", nil)
+	r.Header.Set("HX-Request", "true")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") || !strings.Contains(rr.Body.String(), "EDITING PROJECT") || !strings.Contains(rr.Body.String(), `hx-post="/projects/`) {
+		t.Fatalf("expected project edit fragment after delete conflict, got %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -361,7 +412,7 @@ func TestEditTaskReassignConflictKeepsStoredProject(t *testing.T) {
 
 	tk := struct {
 		ID int64 `json:"id"`
-	}{ID: createTask(t, mux, []byte(`{"name":"Tracked","project_id":` + strconv.FormatInt(a, 10) + `}`))}
+	}{ID: createTask(t, mux, []byte(`{"name":"Tracked","project_id":`+strconv.FormatInt(a, 10)+`}`))}
 
 	weekBody := []byte(`{"planned_hours":1}`)
 	rr := httptest.NewRecorder()

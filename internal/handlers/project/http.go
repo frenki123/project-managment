@@ -37,12 +37,8 @@ func formInput(r *http.Request) (domain.Input, error) {
 	if err != nil {
 		return domain.Input{}, err
 	}
-	in := domain.Input{
-		Name:              r.FormValue("name"),
-		PurchaseOrderName: r.FormValue("purchase_order_name"),
-		StartDate:         r.FormValue("start_date"),
-		EndDate:           r.FormValue("end_date"),
-	}
+	vals := submittedFormValues(r)
+	in := domain.Input{Name: vals.Name, PurchaseOrderName: vals.PurchaseOrderName, StartDate: vals.StartDate, EndDate: vals.EndDate}
 	in.TotalHours = &hours
 	return in, nil
 }
@@ -53,17 +49,20 @@ func submittedFormValues(r *http.Request) views.ProjectFormValues {
 
 func renderProjectForm(w http.ResponseWriter, r *http.Request, vals views.ProjectFormValues, action, title, deleteAction string, err error) {
 	httpErr := app.HTTPErrorFrom(err)
-	app.RenderPage(w, r, httpErr.Status, views.ProjectForm(views.ProjectFormData{
-		Action: action, Title: title, Project: vals, Error: httpErr.Message, DeleteAction: deleteAction,
-	}))
+	data := views.ProjectFormData{
+		Action: action, Title: title, Context: projectContext(vals), Project: vals, Error: httpErr.Message, DeleteAction: deleteAction,
+	}
+	app.RenderFragment(w, r, httpErr.Status, views.ProjectForm(data))
 }
 
 func newForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		app.RenderPage(w, r, http.StatusOK, views.ProjectForm(views.ProjectFormData{
-			Action: "/projects",
-			Title:  "New project",
-		}))
+		data := views.ProjectFormData{
+			Action:     "/projects",
+			Title:      "New project",
+			Context:    "Define budget and schedule",
+		}
+		app.RenderFragment(w, r, http.StatusOK, views.ProjectForm(data))
 	}
 }
 
@@ -79,15 +78,17 @@ func editForm(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		app.RenderPage(w, r, http.StatusOK, views.ProjectForm(projectFormData(p, "")))
+		data := projectFormData(p, "")
+		app.RenderFragment(w, r, http.StatusOK, views.ProjectForm(data))
 	}
 }
 
 func projectFormData(p domain.Project, errMsg string) views.ProjectFormData {
 	id := strconv.FormatInt(p.ID, 10)
 	return views.ProjectFormData{
-		Action: "/projects/" + id,
-		Title:  "Edit project",
+		Action:     "/projects/" + id,
+		Title:      p.Name,
+		Context:    "PO " + p.PurchaseOrderName + " · " + p.StartDate + " - " + p.EndDate,
 		Project: views.ProjectFormValues{
 			Name:              p.Name,
 			PurchaseOrderName: p.PurchaseOrderName,
@@ -100,16 +101,24 @@ func projectFormData(p domain.Project, errMsg string) views.ProjectFormData {
 	}
 }
 
+func projectContext(vals views.ProjectFormValues) string {
+	if vals.PurchaseOrderName == "" && vals.StartDate == "" && vals.EndDate == "" {
+		return "Define budget and schedule"
+	}
+	return "PO " + vals.PurchaseOrderName + " · " + vals.StartDate + " - " + vals.EndDate
+}
+
 func createHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		vals := submittedFormValues(r)
 		in, err := formInput(r)
 		if err != nil {
-			renderProjectForm(w, r, submittedFormValues(r), "/projects", "New project", "", err)
+			renderProjectForm(w, r, vals, "/projects", "New project", "", err)
 			return
 		}
 		p, err := domain.Create(r.Context(), q, in)
 		if err != nil {
-			renderProjectForm(w, r, submittedFormValues(r), "/projects", "New project", "", err)
+			renderProjectForm(w, r, vals, "/projects", "New project", "", err)
 			return
 		}
 		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
@@ -151,7 +160,7 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
 			httpErr := app.HTTPErrorFrom(err)
-			app.RenderPage(w, r, httpErr.Status, views.ProjectForm(projectFormData(p, httpErr.Message)))
+			app.RenderFragment(w, r, httpErr.Status, views.ProjectForm(projectFormData(p, httpErr.Message)))
 			return
 		}
 		app.Redirect(w, r, "/")

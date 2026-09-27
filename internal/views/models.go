@@ -6,6 +6,8 @@ type TaskFormData struct {
 	Action       string
 	Title        string
 	Task         TaskFormValues
+	Summary      TaskPanelData
+	DetailPath   string
 	Projects     []task.Option
 	Subprojects  []task.Option
 	CanReassign  bool
@@ -28,6 +30,7 @@ type TaskFormValues struct {
 type ProjectFormData struct {
 	Action       string
 	Title        string
+	Context      string
 	Project      ProjectFormValues
 	Error        string
 	DeleteAction string
@@ -44,6 +47,7 @@ type ProjectFormValues struct {
 type SubprojectFormData struct {
 	Action       string
 	Title        string
+	Context      string
 	Subproject   SubprojectFormValues
 	Projects     []task.Option
 	Error        string

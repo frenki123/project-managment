@@ -69,6 +69,11 @@ func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {
+	if IsHTMX(r) {
+		w.Header().Set("HX-Redirect", url)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	http.Redirect(w, r, url, http.StatusSeeOther)
 }
 
@@ -166,6 +171,9 @@ func RenderPage(w http.ResponseWriter, r *http.Request, status int, component Co
 
 // RenderFragment renders an HTMX fragment, turning render failures into an error fragment.
 func RenderFragment(w http.ResponseWriter, r *http.Request, status int, component Component) {
+	if IsHTMX(r) && status >= http.StatusBadRequest {
+		status = http.StatusOK
+	}
 	if err := Render(w, r, status, component); err != nil {
 		writeRenderError(w, r, err, true)
 	}

@@ -33,14 +33,16 @@
 		if (event.target.matches(".week-cell input")) lastActive = event.target;
 	});
 
-	const closePanel = () => document.getElementById("panel")?.replaceChildren();
+	const closeModal = () => document.getElementById("modal-root")?.replaceChildren();
 
 	document.addEventListener("click", (event) => {
-		if (event.target.closest("[data-close-panel]")) closePanel();
+		if (event.target.closest("[data-close-modal]")) closeModal();
 	});
 
 	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape") closePanel();
+		if (event.key === "Escape") {
+			closeModal();
+		}
 	});
 
 	document.addEventListener("submit", (event) => {

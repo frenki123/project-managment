@@ -17,13 +17,17 @@ templ Layout(title string) {
 		</head>
 		<body>
 			<div id="toast" class="toast" role="alert" hidden></div>
+			<aside id="modal-root" class="side-modal" role="dialog" aria-modal="true" aria-label="Modal"></aside>
 			<header class="app-header">
 				<a href="/" class="brand">CAD Development</a>
-			<nav>
-					<a href="/tasks/new">New task</a>
-					<a href="/projects/new">New project</a>
-				<a href="/subprojects/new">New subproject</a>
-				<a href="/chart">Chart</a>
+				<nav class="primary-nav" aria-label="Primary">
+					<a href="/" class="active">Workboard</a>
+					<a href="/chart">S-curve</a>
+				</nav>
+				<nav class="header-actions" aria-label="Create">
+					<button type="button" hx-get="/tasks/new" hx-target="#modal-root" hx-swap="innerHTML">+ New task</button>
+					<button type="button" hx-get="/projects/new" hx-target="#modal-root" hx-swap="innerHTML">+ New project</button>
+					<button type="button" hx-get="/subprojects/new" hx-target="#modal-root" hx-swap="innerHTML">+ New subproject</button>
 				</nav>
 			</header>
 			{ children... }
