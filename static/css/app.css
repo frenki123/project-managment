@@ -6,9 +6,8 @@ body.modal-open { overflow: hidden; }
 	--task-col: 8.5rem;
 	--project-col: 7rem;
 	--subproject-col: 7rem;
-	--total-col: 5.5rem;
-	--spent-col: 4.5rem;
-	--progress-col: 6rem;
+	--status-col: 7rem;
+	--summary-col: 8rem;
 }
 
 .app-header,
@@ -186,21 +185,40 @@ body.modal-open { overflow: hidden; }
 .c1 { left: var(--task-col); }
 .c2 { left: calc(var(--task-col) + var(--project-col)); }
 .c3 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col)); }
-.c4 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col)); }
-.c5 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--total-col) + var(--spent-col)); }
+.c4 { left: calc(var(--task-col) + var(--project-col) + var(--subproject-col) + var(--status-col)); }
 .week-table col.c0 { width: var(--task-col); }
 .week-table col.c1 { width: var(--project-col); }
 .week-table col.c2 { width: var(--subproject-col); }
-.week-table col.c3 { width: var(--total-col); }
-.week-table col.c4 { width: var(--spent-col); }
-.week-table col.c5 { width: var(--progress-col); }
+.week-table col.c3 { width: var(--status-col); }
+.week-table col.c4 { width: var(--summary-col); }
 .week-table col.week-col { width: 4.5rem; }
 .ideas .week-table col.c3 { width: 8rem; }
-.week-table .c5 { box-shadow: 0.45rem 0 0.6rem -0.55rem rgb(0 0 0 / 70%); }
+.week-table .c4 { vertical-align: top; box-shadow: 0.45rem 0 0.6rem -0.55rem rgb(0 0 0 / 70%); }
 .week-col span,
 .week-col small,
 .week-total small,
 .week-total-labels small { display: block; }
+.task-summary {
+	display: block;
+	margin: 0;
+}
+.task-summary > div {
+	display: grid;
+	box-sizing: border-box;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 0.5rem;
+	height: 3.125rem;
+	min-height: 3.125rem;
+	margin-bottom: 0.1rem;
+	padding: 0.1rem 0.25rem;
+	border-bottom: 1px solid color-mix(in srgb, var(--pico-muted-border-color) 85%, var(--pico-background-color));
+	font-size: 0.75rem;
+}
+.task-summary > div:last-child { margin-bottom: 0; border-bottom: 0; }
+.task-summary dt,
+.task-summary dd { margin: 0; }
+.task-summary dd { text-align: right; }
 .week-total-labels { text-align: right; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }

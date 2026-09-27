@@ -50,6 +50,7 @@ type GridRow struct {
 	TotalHours  float64
 	SpentHours  float64
 	Progress    float64
+	Status      string
 	DetailPath  string
 	Cells       []GridCell
 }
@@ -239,7 +240,8 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			ProjectName: proj.Name,
 			TotalHours:  t.TotalHours,
 			SpentHours:  t.SpentHours,
-			Progress:    t.Progress,
+				Progress:    t.Progress,
+				Status:      t.Status,
 			DetailPath:  "/tasks/" + strconv.FormatInt(t.ID, 10),
 		}
 		if t.SubprojectID != nil {

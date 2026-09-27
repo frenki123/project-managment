@@ -103,11 +103,12 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		TotalHours float64 `json:"total_hours"`
 		SpentHours float64 `json:"spent_hours"`
 		Progress   float64 `json:"progress"`
+		Status     string  `json:"status"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
+	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 || got.Status != "Development" {
 		t.Fatalf("got %#v", got)
 	}
 
