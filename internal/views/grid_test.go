@@ -53,7 +53,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if strings.Count(project, `<col class="`) != 6 || !strings.Contains(project, `colspan="5" class="sticky c0"`) {
 		t.Fatalf("project grid has unexpected fixed/footer structure: %s", project)
 	}
-	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, `class="task-summary"`) || !strings.Contains(project, "Planned 0 h") || !strings.Contains(project, "Spent 0 h") || !strings.Contains(project, "Progress 0%") {
+	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, `class="task-summary"`) || !strings.Contains(project, `class="task-summary-value">0 h</span>`) || !strings.Contains(project, `class="task-summary-value">0%</span>`) {
 		t.Fatalf("project grid is missing task status: %s", project)
 	}
 	for _, label := range []string{"Plan", "Spent"} {

@@ -202,12 +202,15 @@ body.modal-open { overflow: hidden; }
 	display: flex;
 	box-sizing: border-box;
 	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
 	height: 3.125rem;
 	min-height: 3.125rem;
 	margin: 0 0 0.1rem;
 	padding: 0.1rem 0.25rem;
 	font-size: 0.75rem;
 }
+.task-summary-value { margin-left: auto; text-align: right; }
 .week-total-labels { text-align: right; }
 .week-col small { font-weight: 400; }
 .week-cell { vertical-align: top; }
