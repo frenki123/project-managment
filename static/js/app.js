@@ -40,14 +40,8 @@
 			}
 			loadSubprojects(subproject, event.target.value, "None");
 		} else if (event.target.id === "project-filter") {
-			const form = event.target.closest("form");
-			const subproject = form.querySelector("#subproject-filter");
+			const subproject = event.target.closest("form")?.querySelector("#subproject-filter");
 			if (subproject) subproject.value = "";
-			form.setAttribute("hx-params", "not subproject");
-		} else if (event.target.id === "subproject-filter") {
-			const form = event.target.closest("form");
-			if (event.target.value) form.removeAttribute("hx-params");
-			else form.setAttribute("hx-params", "not subproject");
 		}
 	}, true);
 
