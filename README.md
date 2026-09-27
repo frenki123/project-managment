@@ -8,10 +8,10 @@ estimated, 100 h spent, and still be only 50% done. Task complexity turns progre
 same hours metric, which makes it possible to plot **Planned**, **Spent**, and **Earned** on
 one S-curve per project.
 
-> **Pre-release: expect breaking changes.** The project is at `v0.0.1-alpha`. The data model,
-> `/api/v1` responses, and UI can change or break at any time, with no migration path for existing
-> data. Back up `data/app.db`; to start over after an upgrade, stop the server, delete it, and
-> start again — the schema is rebuilt on boot.
+> **Pre-release: expect breaking changes.** There is no tagged release yet; the nightly `dev` build
+> tracks `main`. The data model, `/api/v1` responses, and UI can change or break at any time, with
+> no migration path for existing data. Back up `data/app.db`; to start over after an upgrade, stop
+> the server, delete it, and start again — the schema is rebuilt on boot.
 
 ## Features
 
@@ -64,18 +64,28 @@ Run `just --list` to see every recipe. `just check` runs tests, vet, and a build
 
 ## Releases
 
-Binaries for each tag are attached to
-[GitHub Releases](https://github.com/frenki123/project-managment/releases): `server-linux-amd64`
-and `server-windows-amd64.exe`. Any binary reports what it is with `./server --version`.
+There are two release channels, both producing the same two binaries: `server-linux-amd64` and
+`server-windows-amd64.exe`. Any binary reports what it is with `./server --version`.
+
+**Nightly `dev` build.** Every night at 01:20 Europe/Zagreb, the latest commit on `main` is built
+and published as the rolling [`dev`](https://github.com/frenki123/project-managment/releases/tag/dev)
+pre-release. One binary per platform, always replaced in place, so there is never a list of stale
+builds to choose from:
 
 ```sh
-gh release download v0.0.1-alpha -R frenki123/project-managment -p server-linux-amd64
+gh release download dev -R frenki123/project-managment -p server-linux-amd64
+gh release download dev -R frenki123/project-managment -p server-windows-amd64.exe
 ```
 
-The tag is part of a direct download URL, because GitHub's `releases/latest` skips pre-releases:
+**Tagged releases.** Tag `v<semver>` and the Release workflow tests that exact commit before
+building and publishing it. A tag with a `-` suffix, such as `v0.0.2-alpha`, is published as a
+pre-release. None has shipped yet, so `dev` is the only downloadable build today.
+
+Download URLs must name the tag: GitHub's `releases/latest` skips pre-releases, and every build
+here is a pre-release, so that endpoint does not exist yet.
 
 ```
-https://github.com/frenki123/project-managment/releases/download/v0.0.1-alpha/server-linux-amd64
+https://github.com/frenki123/project-managment/releases/download/dev/server-linux-amd64
 ```
 
 The binary is self-contained: no runtime, no toolchain, no dependencies. It creates `data/app.db`

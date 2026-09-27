@@ -24,8 +24,15 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Do not add generic abstractions unless they clearly simplify the code; generic methods cannot implement interface methods.
 
 # Releases and compatibility
-- The project is pre-release (`v0.0.1-alpha`). Breaking changes are expected and allowed: schema, `/api/v1` contracts, and UI can change without deprecation or back-compat shims. `just db-reset` is the expected way to recover a local database.
-- Tag a release with `v<semver>`, prefixed `alpha` while unstable (`v0.0.1-alpha`). Pushing the tag builds, tests, and publishes a GitHub Release. A tag with a `-` suffix is published as a pre-release.
+- The project is pre-release; no tagged release has shipped yet. Breaking changes are expected and allowed: schema, `/api/v1` contracts, and UI can change without deprecation or back-compat shims. `just db-reset` is the expected way to recover a local database.
+- Tag a release with `v<semver>`, suffixed `alpha` while unstable (`v0.0.2-alpha`). Pushing the tag builds, tests, and publishes a GitHub Release. A tag with a `-` suffix is published as a pre-release.
+
+# Release cycle
+- Merging to `main` never publishes a release. Only pushing a `v*` tag does, and that path runs `just check` before it builds.
+- Merging to `main` runs CI only: `just check` plus a cross-compile canary. No binary is published from that path.
+- The rolling `dev` pre-release is a separate workflow, rebuilt nightly at 01:20 Europe/Zagreb for Linux and Windows. It skips tests, because `main` is already tested by CI. It is a convenience build, never a substitute for a tagged release.
+- `dev` is a single fixed tag. Its release body records the commit that was built; the tag itself never moves and old builds are overwritten, not accumulated.
+- `releases/latest` skips pre-releases, so every build is a pre-release and that endpoint does not resolve. Always name the tag in download URLs.
 
 # Domain model
 Planning, execution, and progress are three separate dimensions. Estimated hours, real hours spent, and task completion are tracked independently instead of assuming
