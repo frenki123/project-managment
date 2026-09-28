@@ -9,7 +9,7 @@ import (
 
 func TestTasksEncodesFilters(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/tasks/all" {
+		if r.URL.Path != "/api/v1/tasks" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("project_id"); got != "7" {
@@ -23,7 +23,7 @@ func TestTasksEncodesFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Tasks(context.Background(), true, false, 7, 0); err != nil {
+	if _, err := c.Tasks(context.Background(), false, 7, 0); err != nil {
 		t.Fatal(err)
 	}
 }

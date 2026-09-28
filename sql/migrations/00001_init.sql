@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE projects (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
     purchase_order_name TEXT NOT NULL DEFAULT '',
     total_hours REAL NOT NULL CHECK (total_hours >= 0),
     start_date TEXT NOT NULL,

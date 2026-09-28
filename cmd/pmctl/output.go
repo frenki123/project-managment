@@ -10,6 +10,8 @@ import (
 	"cad-development/internal/client"
 )
 
+const maxTableRows = 50
+
 type printer struct {
 	json     io.Writer
 	table    io.Writer
@@ -36,6 +38,17 @@ func (p printer) deleted(kind string, id int64) error {
 }
 
 func tableWriter(w io.Writer) *tabwriter.Writer { return tabwriter.NewWriter(w, 0, 4, 2, ' ', 0) }
+func tableLimit(total int) (int, int) {
+	if total <= maxTableRows {
+		return total, 0
+	}
+	return maxTableRows, total - maxTableRows
+}
+func tableMore(t *tabwriter.Writer, more int) {
+	if more > 0 {
+		fmt.Fprintf(t, "... %d more rows; use JSON output for the complete result\n", more)
+	}
+}
 func ellipsis(value string, width int) string {
 	value = strings.Join(strings.Fields(value), " ")
 	if len(value) <= width {
@@ -50,29 +63,35 @@ func ellipsis(value string, width int) string {
 func projectTable(w io.Writer, projects []client.Project) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tNAME\tPO\tTOTAL\tPLANNED\tSPENT\tPROGRESS")
-	for _, p := range projects {
+	limit, more := tableLimit(len(projects))
+	for _, p := range projects[:limit] {
 		fmt.Fprintf(t, "%d\t%s\t%s\t%.2f\t%.2f\t%.2f\t%.1f%%\n", p.ID, ellipsis(p.Name, 28), ellipsis(p.PurchaseOrderName, 18), p.TotalHours, p.PlannedHours, p.SpentHours, p.ProgressPct)
 	}
+	tableMore(t, more)
 	return t.Flush()
 }
 func subprojectTable(w io.Writer, values []client.Subproject) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tPROJECT\tNAME\tTOTAL\tPLANNED\tSPENT")
-	for _, s := range values {
+	limit, more := tableLimit(len(values))
+	for _, s := range values[:limit] {
 		fmt.Fprintf(t, "%d\t%d\t%s\t%.2f\t%.2f\t%.2f\n", s.ID, s.ProjectID, ellipsis(s.Name, 28), s.TotalHours, s.PlannedHours, s.SpentHours)
 	}
+	tableMore(t, more)
 	return t.Flush()
 }
 func taskTable(w io.Writer, values []client.Task) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tNAME\tPROJECT\tTOTAL\tSPENT\tPROGRESS\tSTATUS")
-	for _, v := range values {
+	limit, more := tableLimit(len(values))
+	for _, v := range values[:limit] {
 		project := "-"
 		if v.ProjectID != nil {
 			project = fmt.Sprint(*v.ProjectID)
 		}
 		fmt.Fprintf(t, "%d\t%s\t%s\t%.2f\t%.2f\t%.1f%%\t%s\n", v.ID, ellipsis(v.Name, 30), project, v.TotalHours, v.SpentHours, v.Progress, v.Status)
 	}
+	tableMore(t, more)
 	return t.Flush()
 }
 func taskDetailTable(w io.Writer, v client.Task) error { return taskTable(w, []client.Task{v}) }
@@ -90,8 +109,10 @@ func curveTable(w io.Writer, v client.SCurve) error {
 	t := tableWriter(w)
 	fmt.Fprintf(t, "PROJECT\t%s\n", ellipsis(v.Project.Name, 32))
 	fmt.Fprintln(t, "WEEK\tPLANNED\tSPENT\tEARNED")
-	for _, week := range v.Weeks {
+	limit, more := tableLimit(len(v.Weeks))
+	for _, week := range v.Weeks[:limit] {
 		fmt.Fprintf(t, "%s\t%.2f\t%.2f\t%.2f\n", week.WeekStart, week.PlannedHours, week.SpentHours, week.EarnedHours)
 	}
+	tableMore(t, more)
 	return t.Flush()
 }

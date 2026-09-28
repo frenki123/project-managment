@@ -18,6 +18,8 @@ one S-curve per project.
 - **Workboard** (`/`): the main grid. Rows are tasks, columns are weeks derived from the project
   start/end date. Editable cells for weekly planned hours, weekly spent hours, and current
   progress. Task, project, and subproject names come from forms, not the grid.
+- **All-task summary**: the default workboard view lists every task without weekly columns;
+  selecting a project opens that project's weekly planning grid, while Ideas shows unassigned tasks.
 - **Projects**: name, purchase order name, total hours, start/end date. Header strip shows
   budget, planned, spent, and progress %.
 - **Subprojects**: an extra label inside a project, with its own total hours. Sum of
@@ -37,7 +39,8 @@ one S-curve per project.
   cookie.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
-  add `--table` for compact terminal output. Weekly historical edits requiring `--unlock` perform
+  add `--table` for compact terminal output. `pmctl tasks list` returns all tasks by default and
+  supports name-based project filters. Weekly historical edits requiring `--unlock` perform
   unlock, update, and lock as one CLI workflow.
 
 ## Stack
@@ -106,7 +109,7 @@ The CLI targets the local server by default and can use `CAD_API_URL` or `--url`
 
 ```sh
 pmctl projects list --table
-pmctl tasks list --all
+pmctl tasks list --project "Project Alpha"
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ```
 

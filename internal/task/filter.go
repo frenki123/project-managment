@@ -12,7 +12,7 @@ import (
 
 func ParseFilter(projectKey, subprojectValue string) (string, *int64, error) {
 	if projectKey == "" {
-		projectKey = "ideas"
+		projectKey = "all"
 	}
 	if subprojectValue == "" {
 		return projectKey, nil, nil
@@ -32,7 +32,7 @@ func ValidateFilter(ctx context.Context, q *db.Queries, projectKey string, subpr
 	if err != nil {
 		return err
 	}
-	if filter.Ideas {
+	if filter.Ideas || filter.All {
 		return nil
 	}
 	if _, err := q.GetProject(ctx, filter.ID); errors.Is(err, sql.ErrNoRows) {
@@ -55,7 +55,7 @@ func NormalizeSubprojectFilter(ctx context.Context, q *db.Queries, projectKey st
 		return nil, nil
 	}
 	filter, err := parseProjectFilter(projectKey)
-	if err != nil || filter.Ideas {
+	if err != nil || filter.Ideas || filter.All {
 		return nil, err
 	}
 	sp, err := q.GetSubproject(ctx, *subprojectID)

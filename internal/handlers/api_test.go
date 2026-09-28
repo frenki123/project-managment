@@ -439,6 +439,9 @@ func TestRegisterServesGridRoot(t *testing.T) {
 	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.Len() == 0 {
 		t.Fatalf("root response %d: %s", rr.Code, rr.Body.String())
 	}
+	if !strings.Contains(rr.Body.String(), "All tasks") || strings.Contains(rr.Body.String(), "Weekly timeline") {
+		t.Fatalf("root should render the all-task summary view: %s", rr.Body.String())
+	}
 }
 
 func TestHTMXGridReturnsFragment(t *testing.T) {
@@ -813,7 +816,7 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 	start := nextMonday(time.Now())
-	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
+	createTask(t, mux, []byte(`{"name":"Idea"}`))
 	pid1 := createProject(t, mux, "P1", start)
 	pid2 := createProject(t, mux, "P2", start)
 	task1 := createTask(t, mux, []byte(`{"name":"In P1","project_id":`+strconv.FormatInt(pid1, 10)+`}`))
@@ -850,19 +853,17 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 		return out.Tasks
 	}
 
-	if tasks := getTasks(""); len(tasks) != 1 || tasks[0].ID != ideaID {
-		t.Fatalf("default view should be ideas only: %#v", tasks)
+	if tasks := getTasks(""); len(tasks) != 2 {
+		t.Fatalf("default view should include all tasks: %#v", tasks)
 	}
 	if tasks := getTasks("?project_id=" + strconv.FormatInt(pid1, 10)); len(tasks) != 1 || tasks[0].ID != task1 {
 		t.Fatalf("project filter: %#v", tasks)
 	}
-	if tasks := getTasks("?project_id=" + strconv.FormatInt(pid1, 10) + "&subproject_id=" + strconv.FormatInt(sp2.ID, 10)); len(tasks) != 1 || tasks[0].ID != task1 {
-		t.Fatalf("mismatched subproject should reset to project scope: %#v", tasks)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid1, 10)+"&subproject_id="+strconv.FormatInt(sp2.ID, 10), nil))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("mismatched subproject should be rejected by the API: %d %s", rr.Code, rr.Body.String())
 	}
-	if tasks := getTasks("/all"); len(tasks) != 2 {
-		t.Fatalf("all-tasks route should list every task: %#v", tasks)
-	}
-
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?subproject_id=999", nil))
 	if rr.Code != http.StatusNotFound {

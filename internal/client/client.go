@@ -20,15 +20,17 @@ type Client struct {
 }
 
 type APIError struct {
+	Method  string
+	Path    string
 	Status  int
 	Message string
 }
 
 func (e *APIError) Error() string {
 	if e.Message == "" {
-		return fmt.Sprintf("server returned HTTP %d", e.Status)
+		return fmt.Sprintf("HTTP %d from %s %s", e.Status, e.Method, e.Path)
 	}
-	return e.Message
+	return fmt.Sprintf("HTTP %d: %s", e.Status, e.Message)
 }
 
 func New(rawURL string) (*Client, error) {
@@ -80,7 +82,7 @@ func (c *Client) Do(ctx context.Context, method, path string, input, output any)
 			Error string `json:"error"`
 		}
 		_ = json.Unmarshal(data, &payload)
-		return &APIError{Status: resp.StatusCode, Message: payload.Error}
+		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: payload.Error}
 	}
 	if output == nil || resp.StatusCode == http.StatusNoContent || len(data) == 0 {
 		return nil
@@ -231,11 +233,8 @@ func (c *Client) DeleteSubproject(ctx context.Context, id int64) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/subprojects/%d", id), nil, nil)
 }
 
-func (c *Client) Tasks(ctx context.Context, all, ideas bool, projectID, subprojectID int64) (TasksResponse, error) {
+func (c *Client) Tasks(ctx context.Context, ideas bool, projectID, subprojectID int64) (TasksResponse, error) {
 	path := "/api/v1/tasks"
-	if all {
-		path += "/all"
-	}
 	values := url.Values{}
 	if ideas {
 		values.Set("ideas", "true")
