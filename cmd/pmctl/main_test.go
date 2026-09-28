@@ -251,6 +251,90 @@ func TestTaskListLeavesInvalidFilterValidationToServer(t *testing.T) {
 	}
 }
 
+func TestProjectUpdateSendsFullReplacement(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/projects/7" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		data, _ := io.ReadAll(r.Body)
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"name":"Alpha","purchase_order_name":"PO-7","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"projects", "update", "7", "--name", "Alpha", "--purchase-order-name", "PO-7", "--total-hours", "120", "--start-date", "2026-01-05", "--end-date", "2026-03-30"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"name":"Alpha"`, `"purchase_order_name":"PO-7"`, `"total_hours":120`, `"start_date":"2026-01-05"`, `"end_date":"2026-03-30"`} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("PUT body missing %s: %s", field, body)
+		}
+	}
+}
+
+func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/subprojects/9" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		data, _ := io.ReadAll(r.Body)
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":9,"project_id":7,"name":"Backend","total_hours":40}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"subprojects", "update", "9", "--project-id", "7", "--name", "Backend", "--total-hours", "40"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"project_id":7`, `"name":"Backend"`, `"total_hours":40`} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("PUT body missing %s: %s", field, body)
+		}
+	}
+}
+
+func TestProjectSCurveUsesProjectIDWithoutResolution(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/projects/7/s-curve" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"project":{"id":7,"name":"Alpha"},"weeks":[]}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"project-s-curve", "--project-id", "7"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskListSendsCombinedProjectAndSubprojectIDs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tasks" || r.URL.Query().Get("project_id") != "5" || r.URL.Query().Get("subproject_id") != "9" || r.URL.Query().Get("ideas") != "" {
+			t.Fatalf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tasks":[]}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "list", "--project-id", "5", "--subproject-id", "9", "--ideas"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestProjectSCurveRequiresProject(t *testing.T) {
 	var requests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
