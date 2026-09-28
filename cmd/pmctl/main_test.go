@@ -57,7 +57,7 @@ func TestWriteErrorIncludesHTTPStatusAsJSON(t *testing.T) {
 	}
 }
 
-func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
+func TestUpdateTaskWeekUnlocksSingleRequest(t *testing.T) {
 	var calls []string
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
 	}
 }
 
-func TestUpdateTaskWeekLocksAfterUpdateFailure(t *testing.T) {
+func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 	var calls []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.URL.Path)

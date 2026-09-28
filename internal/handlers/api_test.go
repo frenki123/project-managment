@@ -189,6 +189,49 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	}
 }
 
+func TestHTMLWeekHistoricalEditUsesUnlockCookie(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, -2, 0))
+	projectID := createProject(t, mux, "Historical UI", start)
+	taskID := createTask(t, mux, []byte(`{"name":"Historical task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
+	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	post := func(cookie *http.Cookie) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString("planned_hours=4&project="+strconv.FormatInt(projectID, 10)))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		if cookie != nil {
+			r.AddCookie(cookie)
+		}
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, r)
+		return rr
+	}
+	if rr := post(nil); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "history is locked") {
+		t.Fatalf("historical edit without cookie: %d %s", rr.Code, rr.Body.String())
+	}
+
+	unlock := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("project="+strconv.FormatInt(projectID, 10)+"&unlocked=true"))
+	unlock.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	unlock.Header.Set("HX-Request", "true")
+	unlockResponse := httptest.NewRecorder()
+	mux.ServeHTTP(unlockResponse, unlock)
+	cookieHeader := unlockResponse.Header().Get("Set-Cookie")
+	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") {
+		t.Fatalf("unlock response: %d %s", unlockResponse.Code, unlockResponse.Body.String())
+	}
+	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, monthlock.UnlockCookieName+"="), ";", 2)[0]
+	if rr := post(&http.Cookie{Name: monthlock.UnlockCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "history is locked") {
+		t.Fatalf("historical edit with cookie: %d %s", rr.Code, rr.Body.String())
+	}
+	weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
+	if err != nil || len(weeks) != 1 || weeks[0].PlannedHours != 4 {
+		t.Fatalf("historical edit was not saved: %#v %v", weeks, err)
+	}
+}
+
 func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
