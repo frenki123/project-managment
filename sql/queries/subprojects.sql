@@ -23,6 +23,10 @@ LEFT JOIN v_task_totals tt ON tt.subproject_id = s.id
 GROUP BY s.id
 ORDER BY s.name COLLATE NOCASE, s.id;
 
+-- name: ListSubprojects :many
+SELECT id, project_id, name, total_hours
+FROM subprojects ORDER BY name COLLATE NOCASE, id;
+
 -- name: ListSubprojectsByProject :many
 SELECT id, project_id, name, total_hours
 FROM subprojects WHERE project_id = ? ORDER BY name COLLATE NOCASE, id;

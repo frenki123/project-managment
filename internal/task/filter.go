@@ -51,6 +51,8 @@ func ValidateFilter(ctx context.Context, q *db.Queries, projectKey string, subpr
 }
 
 func NormalizeSubprojectFilter(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64) (*int64, error) {
+	// The UI recovers from stale filter links by dropping an invalid subproject;
+	// the REST API intentionally rejects the same combination for agents.
 	if subprojectID == nil {
 		return nil, nil
 	}
