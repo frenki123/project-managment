@@ -48,6 +48,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
+		patch.Unlock = monthlock.CookieValid(r, currentTime)
 		grid, rowIndex, err := weekGrid(r, q, id, currentTime)
 		if err != nil {
 			app.WriteError(w, r, err)
