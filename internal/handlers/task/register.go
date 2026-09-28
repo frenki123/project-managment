@@ -37,9 +37,6 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	if subprojectErr != nil {
 		return taskdomain.TasksResponse{}, subprojectErr
 	}
-	if r.URL.Query().Get("ideas") == "true" && (projectID != nil || subprojectID != nil) {
-		return taskdomain.TasksResponse{}, app.Invalid("ideas cannot be combined with project or subproject filters")
-	}
 	if projectID != nil {
 		if _, err := q.GetProject(ctx, *projectID); errors.Is(err, sql.ErrNoRows) {
 			return taskdomain.TasksResponse{}, app.Missing("project not found")
@@ -64,12 +61,12 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 		err  error
 	)
 	switch {
-	case r.URL.Query().Get("ideas") == "true":
-		list, err = taskdomain.ListIdeas(ctx, q)
 	case subprojectID != nil:
 		list, err = taskdomain.ListBySubproject(ctx, q, *subprojectID)
 	case projectID != nil:
 		list, err = taskdomain.ListByProject(ctx, q, *projectID)
+	case r.URL.Query().Get("ideas") == "true":
+		list, err = taskdomain.ListIdeas(ctx, q)
 	default:
 		list, err = taskdomain.List(ctx, q)
 	}

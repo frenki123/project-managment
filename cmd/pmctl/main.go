@@ -68,7 +68,7 @@ func newRoot(s *commandState) *cobra.Command {
 func (s *commandState) printer() printer {
 	return printer{json: s.out, table: s.out, useTable: s.table}
 }
-func idArg(cmd *cobra.Command, args []string) (int64, error) {
+func idArg(args []string) (int64, error) {
 	if len(args) != 1 {
 		return 0, fmt.Errorf("expected one numeric id")
 	}
@@ -140,7 +140,7 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, 
 }
 func deleteCommand(use, kind string, s *commandState, del func(context.Context, int64) error) *cobra.Command {
 	return &cobra.Command{Use: use + " <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(cmd, args)
+		id, err := idArg(args)
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func projectCommands(s *commandState) *cobra.Command {
 		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, v.Projects) })
 	}})
 	root.AddCommand(&cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(cmd, args)
+		id, err := idArg(args)
 		if err != nil {
 			return err
 		}
@@ -204,7 +204,7 @@ func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 		var err error
 		var v client.Project
 		if update {
-			id, e := idArg(cmd, args)
+			id, e := idArg(args)
 			if e != nil {
 				return e
 			}
@@ -245,7 +245,7 @@ func subprojectCommands(s *commandState) *cobra.Command {
 	list.Flags().StringVar(&projectName, "project", "", "filter by project name")
 	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project ID")
 	root.AddCommand(list, &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(cmd, args)
+		id, err := idArg(args)
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func subprojectCommand(use string, s *commandState, update bool) *cobra.Command 
 		var err error
 		var v client.Subproject
 		if update {
-			id, e := idArg(cmd, args)
+			id, e := idArg(args)
 			if e != nil {
 				return e
 			}
@@ -341,7 +341,7 @@ func taskCommands(s *commandState) *cobra.Command {
 	list.Flags().StringVar(&subprojectName, "subproject", "", "filter by subproject name within the project")
 	list.Flags().Int64Var(&subprojectID, "subproject-id", 0, "filter by subproject ID")
 	root.AddCommand(list, &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(cmd, args)
+		id, err := idArg(args)
 		if err != nil {
 			return err
 		}
@@ -349,7 +349,7 @@ func taskCommands(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskDetailTable(w, v) })
+		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []client.Task{v}) })
 	}}, taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
 	return root
 }
@@ -372,7 +372,7 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().BoolVar(&f.ideas, "ideas", false, "leave the task unassigned")
 }
 
-func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) (client.TaskInput, error) {
+func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) client.TaskInput {
 	in := client.TaskInput{}
 	if current != nil {
 		in = client.TaskInput{
@@ -404,7 +404,7 @@ func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) (client.Ta
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nil, nil
 	}
-	return in, nil
+	return in
 }
 
 func taskCommand(use string, s *commandState, update bool) *cobra.Command {
@@ -415,9 +415,11 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		}
 		return cobra.NoArgs(cmd, args)
 	}, RunE: func(cmd *cobra.Command, args []string) error {
+		var id int64
 		var current *client.Task
 		if update {
-			id, err := idArg(cmd, args)
+			var err error
+			id, err = idArg(args)
 			if err != nil {
 				return err
 			}
@@ -427,16 +429,10 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 			}
 			current = &value
 		}
-		in, err := taskInput(cmd, f, current)
-		if err != nil {
-			return err
-		}
+		in := taskInput(cmd, f, current)
 		var v client.Task
+		var err error
 		if update {
-			id, e := idArg(cmd, args)
-			if e != nil {
-				return e
-			}
 			v, err = s.client.UpdateTask(cmd.Context(), id, in)
 		} else {
 			v, err = s.client.CreateTask(cmd.Context(), in)
@@ -444,7 +440,7 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskDetailTable(w, v) })
+		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []client.Task{v}) })
 	}}
 	f.addFlags(c)
 	return c
@@ -518,6 +514,9 @@ func curveCommand(s *commandState) *cobra.Command {
 	var projectName string
 	var projectID int64
 	c := &cobra.Command{Use: "project-s-curve", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if projectName == "" && !cmd.Flags().Changed("project-id") {
+			return errors.New("--project or --project-id is required")
+		}
 		id := projectID
 		var err error
 		if projectName != "" {

@@ -186,3 +186,105 @@ func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTaskListDefaultsToAllTasks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tasks" || r.URL.RawQuery != "" {
+			t.Fatalf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tasks":[]}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "list"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskListResolvesSubprojectNameWithoutProject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/subprojects":
+			if r.URL.RawQuery != "" {
+				t.Fatalf("subproject query = %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"subprojects":[{"id":9,"project_id":3,"name":"Backend"}]}`))
+		case "/api/v1/tasks":
+			if r.URL.Query().Get("subproject_id") != "9" || r.URL.Query().Get("project_id") != "" || r.URL.Query().Get("ideas") != "" {
+				t.Fatalf("task query = %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"tasks":[]}`))
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "list", "--subproject", "Backend", "--subproject-id", "7", "--ideas"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskListLeavesInvalidFilterValidationToServer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("project_id") != "0" {
+			t.Fatalf("project_id = %q", r.URL.Query().Get("project_id"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"project not found"}`))
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "list", "--project-id", "0"})
+	err := root.Execute()
+	apiErr, ok := err.(*client.APIError)
+	if !ok || apiErr.Status != http.StatusBadRequest || apiErr.Message != "project not found" {
+		t.Fatalf("error = %#v", err)
+	}
+}
+
+func TestProjectSCurveRequiresProject(t *testing.T) {
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"project-s-curve"})
+	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--project or --project-id is required") {
+		t.Fatalf("error = %v", err)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
+	}
+}
+
+func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/projects":
+			_, _ = w.Write([]byte(`{"projects":[{"id":5,"name":"Alpha"}]}`))
+		case "/api/v1/projects/5/s-curve":
+			_, _ = w.Write([]byte(`{"project":{"id":5,"name":"Alpha"},"weeks":[]}`))
+		default:
+			t.Fatalf("unexpected request: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"project-s-curve", "--project", "Alpha", "--project-id", "7"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -14,6 +14,8 @@ import (
 
 const DefaultURL = "http://127.0.0.1:8080"
 
+const maxAPIErrorBody = 64 << 10
+
 type Client struct {
 	BaseURL *url.URL
 	HTTP    *http.Client
@@ -73,16 +75,27 @@ func (c *Client) Do(ctx context.Context, method, path string, input, output any)
 		return fmt.Errorf("request %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBody+1))
+		if err != nil {
+			return fmt.Errorf("read response: %w", err)
+		}
 		var payload struct {
 			Error string `json:"error"`
 		}
 		_ = json.Unmarshal(data, &payload)
-		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: payload.Error}
+		message := strings.TrimSpace(payload.Error)
+		if message == "" {
+			message = strings.TrimSpace(string(data))
+		}
+		if len(message) > maxAPIErrorBody {
+			message = message[:maxAPIErrorBody] + "..."
+		}
+		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message}
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
 	}
 	if output == nil || resp.StatusCode == http.StatusNoContent || len(data) == 0 {
 		return nil

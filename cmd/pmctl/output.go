@@ -94,7 +94,6 @@ func taskTable(w io.Writer, values []client.Task) error {
 	tableMore(t, more)
 	return t.Flush()
 }
-func taskDetailTable(w io.Writer, v client.Task) error { return taskTable(w, []client.Task{v}) }
 func weekTable(w io.Writer, v client.WeekCell) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "TASK\tWEEK\tPLANNED\tSPENT\tPROGRESS")
