@@ -59,19 +59,17 @@ func TestWriteErrorIncludesHTTPStatusAsJSON(t *testing.T) {
 
 func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
 	var calls []string
+	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/month-locks/unlock":
-			_, _ = w.Write([]byte(`{"unlocked":true}`))
-		case "/api/v1/tasks/4/weeks/2026-09-21":
-			_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
-		case "/api/v1/month-locks/lock":
-			_, _ = w.Write([]byte(`{"unlocked":false}`))
-		default:
+		if r.URL.Path != "/api/v1/tasks/4/weeks/2026-09-21" {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
 		}
+		data, _ := io.ReadAll(r.Body)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
 	}))
 	defer server.Close()
 	root := testRoot(t, server)
@@ -79,9 +77,16 @@ func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"POST /api/v1/month-locks/unlock", "PUT /api/v1/tasks/4/weeks/2026-09-21", "POST /api/v1/month-locks/lock"}
+	want := []string{"PUT /api/v1/tasks/4/weeks/2026-09-21"}
 	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls = %v, want %v", calls, want)
+	}
+	var patch client.WeekPatch
+	if err := json.Unmarshal([]byte(body), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if !patch.Unlock {
+		t.Fatalf("unlock flag missing from request: %s", body)
 	}
 }
 
@@ -95,7 +100,7 @@ func TestUpdateTaskWeekLocksAfterUpdateFailure(t *testing.T) {
 			_, _ = w.Write([]byte(`{"error":"invalid hours"}`))
 			return
 		}
-		_, _ = w.Write([]byte(`{"unlocked":false}`))
+		http.Error(w, "unexpected request", http.StatusBadRequest)
 	}))
 	defer server.Close()
 	root := testRoot(t, server)
@@ -103,40 +108,31 @@ func TestUpdateTaskWeekLocksAfterUpdateFailure(t *testing.T) {
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected update error")
 	}
-	if len(calls) != 3 || calls[2] != "/api/v1/month-locks/lock" {
+	if len(calls) != 1 || calls[0] != "/api/v1/tasks/4/weeks/2026-09-21" {
 		t.Fatalf("calls = %v", calls)
 	}
 }
 
-func TestUpdateTaskWeekRetriesRelock(t *testing.T) {
-	lockAttempts := 0
+func TestUpdateTaskWeekWithoutUnlockSendsFalse(t *testing.T) {
+	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/month-locks/unlock":
-			_, _ = w.Write([]byte(`{"unlocked":true}`))
-		case "/api/v1/tasks/4/weeks/2026-09-21":
-			_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
-		case "/api/v1/month-locks/lock":
-			lockAttempts++
-			if lockAttempts == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"error":"busy"}`))
-				return
-			}
-			_, _ = w.Write([]byte(`{"unlocked":false}`))
-		default:
-			http.Error(w, "unexpected request", http.StatusBadRequest)
-		}
+		data, _ := io.ReadAll(r.Body)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
 	}))
 	defer server.Close()
 	root := testRoot(t, server)
-	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--progress", "50", "--unlock"})
+	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--progress", "50"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if lockAttempts != 2 {
-		t.Fatalf("lock attempts = %d, want 2", lockAttempts)
+	var patch client.WeekPatch
+	if err := json.Unmarshal([]byte(body), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if patch.Unlock {
+		t.Fatalf("unexpected unlock value: %s", body)
 	}
 }
 

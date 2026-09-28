@@ -7,17 +7,19 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/monthlock"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 )
 
 func gridPage(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		RenderGrid(w, r, q, time.Now())
+		now := time.Now()
+		RenderGrid(w, r, q, now, monthlock.CookieValid(r, now))
 	}
 }
 
-func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTime time.Time) {
+func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTime time.Time, allowHistorical bool) {
 	pk, sid, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		app.WriteError(w, r, err)
@@ -38,7 +40,7 @@ func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTi
 			app.RememberProject(w, id)
 		}
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, pk, sid, currentTime)
+	grid, err := taskdomain.LoadGrid(r.Context(), q, pk, sid, currentTime, allowHistorical)
 	if err != nil {
 		app.WriteError(w, r, err)
 		return

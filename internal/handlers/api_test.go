@@ -14,7 +14,7 @@ import (
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/handlers"
-	"cad-development/internal/task"
+	"cad-development/internal/monthlock"
 	"cad-development/internal/weekly"
 )
 
@@ -309,47 +309,7 @@ func TestSubprojectListUnknownProjectIsNotFound(t *testing.T) {
 	}
 }
 
-func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
-	database := testkit.OpenDatabase(t)
-	q := database.Q
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	check := func(method, path string, want bool) {
-		t.Helper()
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(method, path, nil))
-		if rr.Code != http.StatusOK {
-			t.Fatalf("%s %s: %d %s", method, path, rr.Code, rr.Body.String())
-		}
-		var got map[string]bool
-		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		unlocked, ok := got["unlocked"]
-		if len(got) != 1 || !ok || unlocked != want {
-			t.Fatalf("%s %s: expected unlocked=%t, got %s", method, path, want, rr.Body.String())
-		}
-	}
-	check(http.MethodGet, "/api/v1/month-locks", false)
-	for range 2 {
-		check(http.MethodPost, "/api/v1/month-locks/unlock", true)
-	}
-	check(http.MethodGet, "/api/v1/month-locks", true)
-	stored, err := db.New(database.Conn).GetGlobalUnlock(t.Context())
-	if err != nil || stored != 1 {
-		t.Fatalf("unlock not visible through new queries instance: %d %v", stored, err)
-	}
-	for range 2 {
-		check(http.MethodPost, "/api/v1/month-locks/lock", false)
-	}
-	check(http.MethodGet, "/api/v1/month-locks", false)
-	stored, err = db.New(database.Conn).GetGlobalUnlock(t.Context())
-	if err != nil || stored != 0 {
-		t.Fatalf("lock not visible through new queries instance: %d %v", stored, err)
-	}
-}
-
-func TestGlobalUnlockOpensEveryPastWeekForAllWeeklyInputs(t *testing.T) {
+func TestJSONUnlockAppliesToOneWeeklyRequest(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
@@ -380,25 +340,10 @@ func TestGlobalUnlockOpensEveryPastWeekForAllWeeklyInputs(t *testing.T) {
 		}
 	}
 	put(first, `{"planned_hours":6,"progress":40}`, http.StatusForbidden)
+	put(first, `{"planned_hours":6,"progress":40,"unlock":true}`, http.StatusOK)
 	put(second, `{"spent_hours":3}`, http.StatusForbidden)
-	for _, route := range []string{"unlock", "lock"} {
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/month-locks/"+route, nil))
-		if rr.Code != http.StatusOK {
-			t.Fatalf("%s: %d %s", route, rr.Code, rr.Body.String())
-		}
-		if route == "unlock" {
-			put(first, `{"planned_hours":6,"progress":40}`, http.StatusOK)
-			put(second, `{"spent_hours":3,"progress":60}`, http.StatusOK)
-			grid, err := task.LoadGrid(t.Context(), q, strconv.FormatInt(p.ID, 10), nil, time.Now())
-			if err != nil || !grid.HistoryUnlocked || grid.Rows[0].Cells[0].Locked {
-				t.Fatalf("unlocked grid: %#v %v", grid, err)
-			}
-		} else {
-			put(first, `{"planned_hours":7}`, http.StatusForbidden)
-			put(second, `{"spent_hours":4}`, http.StatusForbidden)
-		}
-	}
+	put(second, `{"spent_hours":3,"progress":60,"unlock":true}`, http.StatusOK)
+	put(first, `{"planned_hours":7}`, http.StatusForbidden)
 	for _, want := range []struct {
 		week                  time.Time
 		plan, spent, progress float64
@@ -428,11 +373,10 @@ func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 		t.Fatalf("project filter not preserved: %s", rr.Body.String())
 	}
 	if !strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
-		t.Fatalf("grid did not reflect global unlock: %s", rr.Body.String())
+		t.Fatalf("grid did not reflect browser unlock: %s", rr.Body.String())
 	}
-	stored, err := q.GetGlobalUnlock(t.Context())
-	if err != nil || stored != 1 {
-		t.Fatalf("HTML unlock not stored: %d %v", stored, err)
+	if !strings.HasPrefix(rr.Header().Get("Set-Cookie"), monthlock.UnlockCookieName+"=") {
+		t.Fatalf("HTML unlock did not set a cookie: %s", rr.Header().Get("Set-Cookie"))
 	}
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/?project=ideas", nil))
@@ -484,9 +428,8 @@ func TestHTMLMonthLockRequiresBooleanState(t *testing.T) {
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
 		}
-		stored, err := q.GetGlobalUnlock(t.Context())
-		if err != nil || stored != 0 {
-			t.Fatalf("%q: invalid state modified unlock: %d %v", body, stored, err)
+		if len(rr.Result().Cookies()) != 0 {
+			t.Fatalf("%q: invalid state set a cookie: %v", body, rr.Result().Cookies())
 		}
 	}
 }
@@ -792,32 +735,21 @@ func TestHTMLMonthLockSetIsIdempotentAndValidatesView(t *testing.T) {
 		if rr.Code != http.StatusBadRequest && rr.Code != http.StatusNotFound {
 			t.Fatalf("invalid view %q: %d %s", body, rr.Code, rr.Body.String())
 		}
-		stored, err := q.GetGlobalUnlock(t.Context())
-		if err != nil || stored != 0 {
-			t.Fatalf("invalid view %q changed unlock: %d %v", body, stored, err)
+		if len(rr.Result().Cookies()) != 0 {
+			t.Fatalf("invalid view %q set a cookie: %v", body, rr.Result().Cookies())
 		}
 	}
-	for _, want := range []struct {
-		value  string
-		stored int64
-	}{{"true", 1}, {"true", 1}, {"false", 0}, {"false", 0}} {
-		rr := post("unlocked=" + want.value + "&project=ideas")
+	for _, value := range []string{"true", "true", "false", "false"} {
+		rr := post("unlocked=" + value + "&project=ideas")
 		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `<section id="grid"`) || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") {
-			t.Fatalf("set %s: %d %s", want.value, rr.Code, rr.Body.String())
+			t.Fatalf("set %s: %d %s", value, rr.Code, rr.Body.String())
 		}
-		stored, err := q.GetGlobalUnlock(t.Context())
-		if err != nil || stored != want.stored {
-			t.Fatalf("set %s: stored %d %v", want.value, stored, err)
+		cookieHeader := rr.Header().Get("Set-Cookie")
+		if value == "true" && !strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") {
+			t.Fatalf("set %s did not set unlock cookie: %s", value, cookieHeader)
 		}
-		if want.stored == 1 {
-			rr = post("unlocked=false&project=bad")
-			if rr.Code != http.StatusBadRequest {
-				t.Fatalf("invalid view while unlocked: %d %s", rr.Code, rr.Body.String())
-			}
-			stored, err = q.GetGlobalUnlock(t.Context())
-			if err != nil || stored != 1 {
-				t.Fatalf("invalid view locked global state: %d %v", stored, err)
-			}
+		if value == "false" && (!strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") || !strings.Contains(cookieHeader, "Max-Age=0")) {
+			t.Fatalf("set %s did not clear unlock cookie: %s", value, cookieHeader)
 		}
 	}
 }

@@ -29,8 +29,8 @@ one S-curve per project.
 - **Progress rules**: progress is cumulative, cannot decrease, an empty week keeps the last
   value, and lowering a week raises all later weeks to match.
 - **Month locks**: by default every week whose Monday falls in a past calendar month is locked.
-  A single global "Unlock history" toggle opens all history; "Lock history" restores the
-  automatic rule.
+  The UI's "Unlock history" control opens history for that browser for two hours; API clients
+  can set `unlock: true` on an individual weekly update. No unlock state is stored in SQLite.
 - **S-curve** (`/chart`): per-project Chart.js chart of cumulative planned, spent, and
   earned hours. Earned value is computed in SQL from the recursive week series.
 - **Task detail**: click a row to open a side panel with all entered and calculated totals,
@@ -41,8 +41,8 @@ one S-curve per project.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
   add `--table` for compact terminal output. `pmctl tasks list` returns all tasks by default and
   supports name- or ID-based project filters. All create/update commands use flags and full
-  replacement semantics. Weekly historical edits requiring `--unlock` perform unlock,
-  update, and lock as one CLI workflow. When both name and ID filters are supplied, names win;
+  replacement semantics. Weekly historical edits requiring `--unlock` send `unlock: true` on
+  that one update request. When both name and ID filters are supplied, names win;
   project/subproject filters take precedence over `--ideas`. Project and subproject updates are
   full replacements: provide the complete replacement through flags; omitted required fields are
   rejected by the REST API.

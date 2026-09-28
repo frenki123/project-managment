@@ -18,6 +18,7 @@ type Patch struct {
 	SpentHours    *float64 `json:"spent_hours"`
 	Progress      *float64 `json:"progress"`
 	ClearProgress bool     `json:"clear_progress,omitempty"`
+	Unlock        bool     `json:"unlock,omitempty"`
 }
 
 type Cell struct {
@@ -55,13 +56,10 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		unlocked, err := monthlock.Unlocked(ctx, txq)
-		if err != nil {
-			return err
-		}
-		if monthlock.WeekLocked(string(weekStart), now, unlocked) {
+		if !patch.Unlock && monthlock.WeekLocked(string(weekStart), now) {
 			return app.Locked("history is locked")
 		}
+		var err error
 		task, err := txq.GetTask(ctx, taskID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
@@ -120,40 +118,6 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			}
 			progress = sql.NullFloat64{}
 		}
-		var later []db.TaskWeek
-		if patch.Progress != nil || patch.ClearProgress {
-			later, err = txq.ListTaskWeeksAfter(ctx, db.ListTaskWeeksAfterParams{TaskID: taskID, WeekStart: string(weekStart)})
-			if err != nil {
-				return err
-			}
-			oldEffective, newEffective := previous, previous
-			if existing.Progress.Valid {
-				oldEffective = existing.Progress.Float64
-			}
-			if patch.Progress != nil {
-				newEffective = *patch.Progress
-			}
-			next := 0
-			for _, ws := range validWeeks {
-				if ws <= weekStart {
-					continue
-				}
-				for next < len(later) && later[next].WeekStart < string(ws) {
-					next++
-				}
-				if next < len(later) && later[next].WeekStart == string(ws) && later[next].Progress.Valid {
-					oldEffective = later[next].Progress.Float64
-					newEffective = oldEffective
-					if patch.Progress != nil && newEffective < *patch.Progress {
-						newEffective = *patch.Progress
-					}
-				}
-				if oldEffective != newEffective && monthlock.WeekLocked(string(ws), now, unlocked) {
-					return app.Conflict("progress conflicts with a locked later week")
-				}
-			}
-		}
-
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
 			TaskID: taskID, WeekStart: string(weekStart), PlannedHours: planned, SpentHours: spent, Progress: progress,
 		})
