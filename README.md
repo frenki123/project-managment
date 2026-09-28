@@ -1,7 +1,7 @@
 # Project Managment web app
 
-Local-first web app for project hour planning, time tracking, and progress tracking. One Go
-binary, one SQLite file, no auth, no frontend build system.
+Local-first web app for project hour planning, time tracking, and progress tracking. A Go server
+and REST-backed CLI share one SQLite file, with no auth or frontend build system.
 
 Planned hours, spent hours, and progress are tracked independently, so a task can have 100 h
 estimated, 100 h spent, and still be only 50% done. Task complexity turns progress into the
@@ -36,6 +36,9 @@ one S-curve per project.
 - **Filters**: project (or "Ideas"), optional subproject filter; last project remembered in a
   cookie.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
+- **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
+  add `--table` for compact terminal output. Weekly historical edits requiring `--unlock` perform
+  unlock, update, and lock as one CLI workflow.
 
 ## Stack
 
@@ -64,8 +67,7 @@ Run `just --list` to see every recipe. `just check` runs tests, vet, and a build
 
 ## Releases
 
-There are two release channels, both producing the same two binaries: `server-linux-amd64` and
-`server-windows-amd64.exe`. Any binary reports what it is with `./server --version`.
+There are two release channels. They produce server and `pmctl` binaries for Linux and Windows.
 
 **Nightly `dev` build.** Every night at 01:20 Europe/Zagreb, the latest commit on `main` is built
 and published as the rolling [`dev`](https://github.com/frenki123/project-managment/releases/tag/dev)
@@ -75,6 +77,8 @@ builds to choose from:
 ```sh
 gh release download dev -R frenki123/project-managment -p server-linux-amd64
 gh release download dev -R frenki123/project-managment -p server-windows-amd64.exe
+gh release download dev -R frenki123/project-managment -p pmctl-linux-amd64
+gh release download dev -R frenki123/project-managment -p pmctl-windows-amd64.exe
 ```
 
 **Tagged releases.** Tag `v<semver>` and the Release workflow tests that exact commit before
@@ -96,6 +100,14 @@ the directory holding `data/`, which keeps the database outside the folder you u
 ./server-linux-amd64                # http://127.0.0.1:8080
 PORT=9000 ./server-linux-amd64      # or pick another port
 ./server-linux-amd64 --version      # prints the version
+```
+
+The CLI targets the local server by default and can use `CAD_API_URL` or `--url` for another API:
+
+```sh
+pmctl projects list --table
+pmctl tasks list --all
+pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ```
 
 ## Layout

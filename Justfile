@@ -20,10 +20,11 @@ fmt:
 modernize:
     go fix -diff ./...
 
-# Generate code and build the local server binary.
+# Generate code and build the local binaries.
 build: generate
     mkdir -p tmp
     go build -ldflags "-X main.version=$(git describe --tags --always)" -o ./tmp/server ./cmd/server
+    go build -ldflags "-X main.version=$(git describe --tags --always)" -o ./tmp/pmctl ./cmd/pmctl
 
 # Generate code and run all Go tests.
 test: generate
