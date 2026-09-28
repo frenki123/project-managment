@@ -47,12 +47,7 @@ func (f *projectFlags) addFlags(c *cobra.Command) {
 
 func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f projectFlags
-	c := &cobra.Command{Use: use, Args: func(cmd *cobra.Command, args []string) error {
-		if update {
-			return cobra.ExactArgs(1)(cmd, args)
-		}
-		return cobra.NoArgs(cmd, args)
-	}, RunE: func(cmd *cobra.Command, args []string) error {
+	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
 		var totalHours *float64
 		if cmd.Flags().Changed("total-hours") {
 			totalHours = &f.totalHours

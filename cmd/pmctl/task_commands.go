@@ -14,24 +14,13 @@ func taskCommands(s *commandState) *cobra.Command {
 	var projectName, subprojectName string
 	var projectID, subprojectID int64
 	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		var selectedProject, selectedSubproject *int64
-		if projectName != "" {
-			resolved, err := resolveProject(cmd.Context(), s.client, projectName)
-			if err != nil {
-				return err
-			}
-			selectedProject = &resolved
-		} else if cmd.Flags().Changed("project-id") {
-			selectedProject = &projectID
+		selectedProject, err := resolveProjectFilter(cmd.Context(), s.client, projectName, projectID, cmd.Flags().Changed("project-id"))
+		if err != nil {
+			return err
 		}
-		if subprojectName != "" {
-			resolved, err := resolveSubproject(cmd.Context(), s.client, selectedProject, subprojectName)
-			if err != nil {
-				return err
-			}
-			selectedSubproject = &resolved
-		} else if cmd.Flags().Changed("subproject-id") {
-			selectedSubproject = &subprojectID
+		selectedSubproject, err := resolveSubprojectFilter(cmd.Context(), s.client, selectedProject, subprojectName, subprojectID, cmd.Flags().Changed("subproject-id"))
+		if err != nil {
+			return err
 		}
 		useIdeas := ideas && selectedProject == nil && selectedSubproject == nil
 		v, err := s.client.Tasks(cmd.Context(), useIdeas, selectedProject, selectedSubproject)
@@ -77,31 +66,13 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().BoolVar(&f.ideas, "ideas", false, "leave the task unassigned")
 }
 
-func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) client.TaskInput {
-	in := client.TaskInput{}
-	if current != nil {
-		in = client.TaskInput{
-			Name: current.Name, Description: current.Description, ImplementationNotes: current.ImplementationNotes,
-			Department: current.Department, Developers: current.Developers, Priority: current.Priority,
-			ProjectID: current.ProjectID, SubprojectID: current.SubprojectID,
-		}
+func taskInput(cmd *cobra.Command, f taskFlags) client.TaskInput {
+	in := client.TaskInput{
+		Name: f.name, Description: f.description, ImplementationNotes: f.notes,
+		Department: f.department, Developers: f.developers, Priority: f.priority,
 	}
-	set := func(name string, dst *string, value string) {
-		if cmd.Flags().Changed(name) {
-			*dst = value
-		}
-	}
-	set("name", &in.Name, f.name)
-	set("description", &in.Description, f.description)
-	set("implementation-notes", &in.ImplementationNotes, f.notes)
-	set("department", &in.Department, f.department)
-	set("developers", &in.Developers, f.developers)
-	set("priority", &in.Priority, f.priority)
 	if cmd.Flags().Changed("project-id") {
 		in.ProjectID = &f.projectID
-		if current != nil && current.ProjectID != nil && *current.ProjectID != f.projectID && !cmd.Flags().Changed("subproject-id") {
-			in.SubprojectID = nil
-		}
 	}
 	if cmd.Flags().Changed("subproject-id") {
 		in.SubprojectID = &f.subprojectID
@@ -114,30 +85,15 @@ func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) client.Tas
 
 func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f taskFlags
-	c := &cobra.Command{Use: use, Args: func(cmd *cobra.Command, args []string) error {
-		if update {
-			return cobra.ExactArgs(1)(cmd, args)
-		}
-		return cobra.NoArgs(cmd, args)
-	}, RunE: func(cmd *cobra.Command, args []string) error {
-		var id int64
-		var current *client.Task
-		if update {
-			var err error
-			id, err = idArg(args)
-			if err != nil {
-				return err
-			}
-			value, err := s.client.Task(cmd.Context(), id)
-			if err != nil {
-				return err
-			}
-			current = &value
-		}
-		in := taskInput(cmd, f, current)
+	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
+		in := taskInput(cmd, f)
 		var v client.Task
 		var err error
 		if update {
+			id, err := idArg(args)
+			if err != nil {
+				return err
+			}
 			v, err = s.client.UpdateTask(cmd.Context(), id, in)
 		} else {
 			v, err = s.client.CreateTask(cmd.Context(), in)
