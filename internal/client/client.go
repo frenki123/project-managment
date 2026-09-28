@@ -198,9 +198,7 @@ type WeekPatch struct {
 	SpentHours    *float64 `json:"spent_hours"`
 	Progress      *float64 `json:"progress"`
 	ClearProgress bool     `json:"clear_progress,omitempty"`
-}
-type MonthLockState struct {
-	Unlocked bool `json:"unlocked"`
+	Unlock        bool     `json:"unlock,omitempty"`
 }
 type SCurve struct {
 	Project Project      `json:"project"`
@@ -293,14 +291,6 @@ func (c *Client) DeleteTask(ctx context.Context, id int64) error {
 func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in WeekPatch) (WeekCell, error) {
 	var v WeekCell
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d/weeks/%s", id, url.PathEscape(week)), in, &v)
-}
-func (c *Client) SetMonthLock(ctx context.Context, unlocked bool) (MonthLockState, error) {
-	var v MonthLockState
-	action := "lock"
-	if unlocked {
-		action = "unlock"
-	}
-	return v, c.Do(ctx, http.MethodPost, "/api/v1/month-locks/"+action, nil, &v)
 }
 func (c *Client) SCurve(ctx context.Context, id int64) (SCurve, error) {
 	var v SCurve

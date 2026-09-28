@@ -7,6 +7,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/monthlock"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 	"cad-development/internal/weekly"
@@ -110,7 +111,7 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time) (task
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now)
+	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, monthlock.CookieValid(r, now))
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}

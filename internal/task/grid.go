@@ -79,7 +79,7 @@ type projectFilter struct {
 	Ideas bool
 }
 
-func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time) (Grid, error) {
+func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time, allowHistorical bool) (Grid, error) {
 	projects, err := project.List(ctx, q)
 	if err != nil {
 		return Grid{}, err
@@ -96,11 +96,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		ProjectName:      "All tasks",
 		Projects:         projectOptions(projects, filter.Value),
 	}
-	unlocked, err := monthlock.Unlocked(ctx, q)
-	if err != nil {
-		return Grid{}, err
-	}
-	data.HistoryUnlocked = unlocked
+	data.HistoryUnlocked = allowHistorical
 	if filter.All {
 		data.SummaryOnly = true
 		tasks, err := List(ctx, q)
@@ -292,7 +288,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 				Spent:     cw.SpentHours,
 				Progress:  effective[string(ws)],
 				Stored:    cw.Progress.Valid,
-				Locked:    monthlock.WeekLocked(string(ws), now, unlocked),
+				Locked:    !allowHistorical && monthlock.WeekLocked(string(ws), now),
 				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),
 			})
 		}

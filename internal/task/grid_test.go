@@ -47,7 +47,7 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, now)
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now)
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	if _, err := task.Create(ctx, q, task.Input{Name: "Idea"}); err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, "ideas", nil, time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC))
+	grid, err := task.LoadGrid(ctx, q, "ideas", nil, time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
+	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	}
 }
 
-func TestGridUsesPersistedGlobalHistoryUnlock(t *testing.T) {
+func TestGridUsesRequestHistoryUnlock(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
@@ -219,15 +219,8 @@ func TestGridUsesPersistedGlobalHistoryUnlock(t *testing.T) {
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	for _, unlocked := range []bool{false, true, false} {
-		value := int64(0)
-		if unlocked {
-			value = 1
-		}
-		if err := q.SetGlobalUnlock(ctx, value); err != nil {
-			t.Fatal(err)
-		}
 		for _, id := range []int64{p.ID, other.ID} {
-			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now)
+			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now, unlocked)
 			if err != nil {
 				t.Fatal(err)
 			}
