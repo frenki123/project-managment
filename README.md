@@ -1,4 +1,4 @@
-# CAD Development
+# Project Managment web app
 
 Local-first web app for project hour planning, time tracking, and progress tracking. One Go
 binary, one SQLite file, no auth, no frontend build system.
