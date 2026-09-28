@@ -2,6 +2,8 @@ package subprojecthandler
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -33,6 +35,11 @@ func listSubprojects(ctx context.Context, q *db.Queries, r *http.Request) (domai
 	}
 	var list []domain.Subproject
 	if pid != nil {
+		if _, err := q.GetProject(ctx, *pid); errors.Is(err, sql.ErrNoRows) {
+			return domain.SubprojectsResponse{}, app.Missing("project not found")
+		} else if err != nil {
+			return domain.SubprojectsResponse{}, err
+		}
 		list, err = domain.ListByProjectWithTotals(ctx, q, *pid)
 	} else {
 		list, err = domain.ListWithTotals(ctx, q)

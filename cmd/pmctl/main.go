@@ -18,7 +18,6 @@ import (
 type commandState struct {
 	apiURL      string
 	table       bool
-	inputFile   string
 	out, errOut io.Writer
 	client      *client.Client
 }
@@ -27,7 +26,7 @@ type commandState struct {
 var version = "dev"
 
 func main() {
-	state := &commandState{apiURL: os.Getenv("CAD_API_URL"), inputFile: "-", out: os.Stdout, errOut: os.Stderr}
+	state := &commandState{apiURL: os.Getenv("CAD_API_URL"), out: os.Stdout, errOut: os.Stderr}
 	if state.apiURL == "" {
 		state.apiURL = client.DefaultURL
 	}
@@ -74,7 +73,7 @@ func idArg(cmd *cobra.Command, args []string) (int64, error) {
 		return 0, fmt.Errorf("expected one numeric id")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil || id < 1 {
+	if err != nil {
 		return 0, fmt.Errorf("invalid id %q", args[0])
 	}
 	return id, nil
@@ -84,7 +83,7 @@ func twoArgs(args []string) (int64, string, error) {
 		return 0, "", fmt.Errorf("expected task id and week start")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil || id < 1 {
+	if err != nil {
 		return 0, "", fmt.Errorf("invalid task id %q", args[0])
 	}
 	return id, args[1], nil
@@ -112,7 +111,7 @@ func resolveProject(ctx context.Context, c *client.Client, name string) (int64, 
 	return 0, fmt.Errorf("project %q not found", name)
 }
 
-func resolveSubproject(ctx context.Context, c *client.Client, projectID int64, name string) (int64, error) {
+func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, name string) (int64, error) {
 	subprojects, err := c.Subprojects(ctx, projectID)
 	if err != nil {
 		return 0, err
@@ -123,7 +122,10 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID int64, n
 		s := &subprojects.Subprojects[i]
 		if strings.EqualFold(s.Name, want) {
 			if match != nil {
-				return 0, fmt.Errorf("subproject %q is ambiguous in project %d", name, projectID)
+				if projectID == nil {
+					return 0, fmt.Errorf("subproject %q is ambiguous", name)
+				}
+				return 0, fmt.Errorf("subproject %q is ambiguous in project %d", name, *projectID)
 			}
 			match = s
 		}
@@ -131,23 +133,10 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID int64, n
 	if match != nil {
 		return match.ID, nil
 	}
-	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(projectID, 10))
-}
-func readInput[T any](file string) (T, error) {
-	var value T
-	var r io.Reader = os.Stdin
-	if file != "-" {
-		f, err := os.Open(file)
-		if err != nil {
-			return value, err
-		}
-		defer f.Close()
-		r = f
+	if projectID == nil {
+		return 0, fmt.Errorf("subproject %q not found", name)
 	}
-	if err := json.UnmarshalRead(r, &value, json.RejectUnknownMembers(true), json.MatchCaseInsensitiveNames(true)); err != nil {
-		return value, fmt.Errorf("invalid JSON input: %w", err)
-	}
-	return value, nil
+	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(*projectID, 10))
 }
 func deleteCommand(use, kind string, s *commandState, del func(context.Context, int64) error) *cobra.Command {
 	return &cobra.Command{Use: use + " <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
@@ -182,20 +171,37 @@ func projectCommands(s *commandState) *cobra.Command {
 		}
 		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []client.Project{v}) })
 	}})
-	root.AddCommand(jsonProjectCommand("create", s, false), jsonProjectCommand("update <id>", s, true), deleteCommand("delete", "project", s, func(ctx context.Context, id int64) error { return s.client.DeleteProject(ctx, id) }))
+	root.AddCommand(projectCommand("create", s, false), projectCommand("update <id>", s, true), deleteCommand("delete", "project", s, func(ctx context.Context, id int64) error { return s.client.DeleteProject(ctx, id) }))
 	return root
 }
-func jsonProjectCommand(use string, s *commandState, update bool) *cobra.Command {
+
+type projectFlags struct {
+	name, purchaseOrder, startDate, endDate string
+	totalHours                              float64
+}
+
+func (f *projectFlags) addFlags(c *cobra.Command) {
+	c.Flags().StringVar(&f.name, "name", "", "project name")
+	c.Flags().StringVar(&f.purchaseOrder, "purchase-order-name", "", "purchase order name")
+	c.Flags().Float64Var(&f.totalHours, "total-hours", 0, "project total hours")
+	c.Flags().StringVar(&f.startDate, "start-date", "", "project start date")
+	c.Flags().StringVar(&f.endDate, "end-date", "", "project end date")
+}
+
+func projectCommand(use string, s *commandState, update bool) *cobra.Command {
+	var f projectFlags
 	c := &cobra.Command{Use: use, Args: func(cmd *cobra.Command, args []string) error {
 		if update {
 			return cobra.ExactArgs(1)(cmd, args)
 		}
 		return cobra.NoArgs(cmd, args)
 	}, RunE: func(cmd *cobra.Command, args []string) error {
-		in, err := readInput[client.ProjectInput](s.inputFile)
-		if err != nil {
-			return err
+		var totalHours *float64
+		if cmd.Flags().Changed("total-hours") {
+			totalHours = &f.totalHours
 		}
+		in := client.ProjectInput{Name: f.name, PurchaseOrderName: f.purchaseOrder, TotalHours: totalHours, StartDate: f.startDate, EndDate: f.endDate}
+		var err error
 		var v client.Project
 		if update {
 			id, e := idArg(cmd, args)
@@ -211,7 +217,7 @@ func jsonProjectCommand(use string, s *commandState, update bool) *cobra.Command
 		}
 		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []client.Project{v}) })
 	}}
-	c.Flags().StringVar(&s.inputFile, "file", "-", "JSON input file, or - for stdin")
+	f.addFlags(c)
 	return c
 }
 
@@ -220,20 +226,17 @@ func subprojectCommands(s *commandState) *cobra.Command {
 	var projectName string
 	var projectID int64
 	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		var err error
-		if projectName != "" && cmd.Flags().Changed("project-id") {
-			return errors.New("--project and --project-id cannot be combined")
-		}
-		if cmd.Flags().Changed("project-id") && projectID < 1 {
-			return errors.New("--project-id must be positive")
-		}
+		var selectedProject *int64
 		if projectName != "" {
-			projectID, err = resolveProject(cmd.Context(), s.client, projectName)
+			resolved, err := resolveProject(cmd.Context(), s.client, projectName)
+			if err != nil {
+				return err
+			}
+			selectedProject = &resolved
+		} else if cmd.Flags().Changed("project-id") {
+			selectedProject = &projectID
 		}
-		if err != nil {
-			return err
-		}
-		v, err := s.client.Subprojects(cmd.Context(), projectID)
+		v, err := s.client.Subprojects(cmd.Context(), selectedProject)
 		if err != nil {
 			return err
 		}
@@ -251,20 +254,36 @@ func subprojectCommands(s *commandState) *cobra.Command {
 			return err
 		}
 		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []client.Subproject{v}) })
-	}}, jsonSubprojectCommand("create", s, false), jsonSubprojectCommand("update <id>", s, true), deleteCommand("delete", "subproject", s, func(ctx context.Context, id int64) error { return s.client.DeleteSubproject(ctx, id) }))
+	}}, subprojectCommand("create", s, false), subprojectCommand("update <id>", s, true), deleteCommand("delete", "subproject", s, func(ctx context.Context, id int64) error { return s.client.DeleteSubproject(ctx, id) }))
 	return root
 }
-func jsonSubprojectCommand(use string, s *commandState, update bool) *cobra.Command {
+
+type subprojectFlags struct {
+	projectID  int64
+	name       string
+	totalHours float64
+}
+
+func (f *subprojectFlags) addFlags(c *cobra.Command) {
+	c.Flags().Int64Var(&f.projectID, "project-id", 0, "project ID")
+	c.Flags().StringVar(&f.name, "name", "", "subproject name")
+	c.Flags().Float64Var(&f.totalHours, "total-hours", 0, "subproject total hours")
+}
+
+func subprojectCommand(use string, s *commandState, update bool) *cobra.Command {
+	var f subprojectFlags
 	c := &cobra.Command{Use: use, Args: func(cmd *cobra.Command, args []string) error {
 		if update {
 			return cobra.ExactArgs(1)(cmd, args)
 		}
 		return cobra.NoArgs(cmd, args)
 	}, RunE: func(cmd *cobra.Command, args []string) error {
-		in, err := readInput[client.SubprojectInput](s.inputFile)
-		if err != nil {
-			return err
+		totalHours := (*float64)(nil)
+		if cmd.Flags().Changed("total-hours") {
+			totalHours = &f.totalHours
 		}
+		in := client.SubprojectInput{ProjectID: f.projectID, Name: f.name, TotalHours: totalHours}
+		var err error
 		var v client.Subproject
 		if update {
 			id, e := idArg(cmd, args)
@@ -280,7 +299,7 @@ func jsonSubprojectCommand(use string, s *commandState, update bool) *cobra.Comm
 		}
 		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []client.Subproject{v}) })
 	}}
-	c.Flags().StringVar(&s.inputFile, "file", "-", "JSON input file, or - for stdin")
+	f.addFlags(c)
 	return c
 }
 
@@ -290,38 +309,27 @@ func taskCommands(s *commandState) *cobra.Command {
 	var projectName, subprojectName string
 	var projectID, subprojectID int64
 	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		if ideas && (projectName != "" || subprojectName != "" || cmd.Flags().Changed("project-id") || cmd.Flags().Changed("subproject-id")) {
-			return errors.New("--ideas cannot be combined with project or subproject filters")
-		}
-		if projectName != "" && cmd.Flags().Changed("project-id") {
-			return errors.New("--project and --project-id cannot be combined")
-		}
-		if subprojectName != "" && cmd.Flags().Changed("subproject-id") {
-			return errors.New("--subproject and --subproject-id cannot be combined")
-		}
-		if (subprojectName != "" || cmd.Flags().Changed("subproject-id")) && projectName == "" && !cmd.Flags().Changed("project-id") {
-			return errors.New("--subproject requires --project or --project-id")
-		}
-		if cmd.Flags().Changed("project-id") && projectID < 1 {
-			return errors.New("--project-id must be positive")
-		}
-		if cmd.Flags().Changed("subproject-id") && subprojectID < 1 {
-			return errors.New("--subproject-id must be positive")
-		}
-		var err error
+		var selectedProject, selectedSubproject *int64
 		if projectName != "" {
-			projectID, err = resolveProject(cmd.Context(), s.client, projectName)
+			resolved, err := resolveProject(cmd.Context(), s.client, projectName)
 			if err != nil {
 				return err
 			}
+			selectedProject = &resolved
+		} else if cmd.Flags().Changed("project-id") {
+			selectedProject = &projectID
 		}
 		if subprojectName != "" {
-			subprojectID, err = resolveSubproject(cmd.Context(), s.client, projectID, subprojectName)
+			resolved, err := resolveSubproject(cmd.Context(), s.client, selectedProject, subprojectName)
 			if err != nil {
 				return err
 			}
+			selectedSubproject = &resolved
+		} else if cmd.Flags().Changed("subproject-id") {
+			selectedSubproject = &subprojectID
 		}
-		v, err := s.client.Tasks(cmd.Context(), ideas, projectID, subprojectID)
+		useIdeas := ideas && selectedProject == nil && selectedSubproject == nil
+		v, err := s.client.Tasks(cmd.Context(), useIdeas, selectedProject, selectedSubproject)
 		if err != nil {
 			return err
 		}
@@ -384,33 +392,17 @@ func taskInput(cmd *cobra.Command, f taskFlags, current *client.Task) (client.Ta
 	set("department", &in.Department, f.department)
 	set("developers", &in.Developers, f.developers)
 	set("priority", &in.Priority, f.priority)
-	if f.ideas {
-		if cmd.Flags().Changed("project-id") || cmd.Flags().Changed("subproject-id") {
-			return client.TaskInput{}, errors.New("--ideas cannot be combined with project assignment flags")
-		}
-		in.ProjectID, in.SubprojectID = nil, nil
-	} else {
-		if cmd.Flags().Changed("project-id") {
-			if f.projectID < 1 {
-				return client.TaskInput{}, errors.New("--project-id must be positive")
-			}
-			in.ProjectID = &f.projectID
-			if current != nil && current.ProjectID != nil && *current.ProjectID != f.projectID && !cmd.Flags().Changed("subproject-id") {
-				in.SubprojectID = nil
-			}
-		}
-		if cmd.Flags().Changed("subproject-id") {
-			if f.subprojectID < 1 {
-				return client.TaskInput{}, errors.New("--subproject-id must be positive")
-			}
-			if in.ProjectID == nil {
-				return client.TaskInput{}, errors.New("--subproject-id requires a project assignment")
-			}
-			in.SubprojectID = &f.subprojectID
+	if cmd.Flags().Changed("project-id") {
+		in.ProjectID = &f.projectID
+		if current != nil && current.ProjectID != nil && *current.ProjectID != f.projectID && !cmd.Flags().Changed("subproject-id") {
+			in.SubprojectID = nil
 		}
 	}
-	if in.Name == "" {
-		return client.TaskInput{}, errors.New("--name is required")
+	if cmd.Flags().Changed("subproject-id") {
+		in.SubprojectID = &f.subprojectID
+	}
+	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
+		in.ProjectID, in.SubprojectID = nil, nil
 	}
 	return in, nil
 }
@@ -465,9 +457,6 @@ func updateWeekCommand(s *commandState) *cobra.Command {
 		id, week, err := twoArgs(args)
 		if err != nil {
 			return err
-		}
-		if !cmd.Flags().Changed("planned-hours") && !cmd.Flags().Changed("spent-hours") && !cmd.Flags().Changed("progress") && !clearProgress {
-			return errors.New("at least one weekly value is required")
 		}
 		in := client.WeekPatch{ClearProgress: clearProgress}
 		if cmd.Flags().Changed("planned-hours") {
@@ -529,15 +518,6 @@ func curveCommand(s *commandState) *cobra.Command {
 	var projectName string
 	var projectID int64
 	c := &cobra.Command{Use: "project-s-curve", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		if projectName != "" && cmd.Flags().Changed("project-id") {
-			return errors.New("--project and --project-id cannot be combined")
-		}
-		if projectName == "" && !cmd.Flags().Changed("project-id") {
-			return errors.New("--project is required")
-		}
-		if cmd.Flags().Changed("project-id") && projectID < 1 {
-			return errors.New("--project-id must be positive")
-		}
 		id := projectID
 		var err error
 		if projectName != "" {

@@ -23,7 +23,8 @@ func TestTasksEncodesFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Tasks(context.Background(), false, 7, 0); err != nil {
+	projectID := int64(7)
+	if _, err := c.Tasks(context.Background(), false, &projectID, nil); err != nil {
 		t.Fatal(err)
 	}
 }

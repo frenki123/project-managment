@@ -209,11 +209,11 @@ func (c *Client) DeleteProject(ctx context.Context, id int64) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/projects/%d", id), nil, nil)
 }
 
-func (c *Client) Subprojects(ctx context.Context, projectID int64) (SubprojectsResponse, error) {
+func (c *Client) Subprojects(ctx context.Context, projectID *int64) (SubprojectsResponse, error) {
 	var v SubprojectsResponse
 	path := "/api/v1/subprojects"
-	if projectID > 0 {
-		path += "?project_id=" + url.QueryEscape(fmt.Sprint(projectID))
+	if projectID != nil {
+		path += "?project_id=" + url.QueryEscape(fmt.Sprint(*projectID))
 	}
 	return v, c.Do(ctx, http.MethodGet, path, nil, &v)
 }
@@ -233,17 +233,17 @@ func (c *Client) DeleteSubproject(ctx context.Context, id int64) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/subprojects/%d", id), nil, nil)
 }
 
-func (c *Client) Tasks(ctx context.Context, ideas bool, projectID, subprojectID int64) (TasksResponse, error) {
+func (c *Client) Tasks(ctx context.Context, ideas bool, projectID, subprojectID *int64) (TasksResponse, error) {
 	path := "/api/v1/tasks"
 	values := url.Values{}
 	if ideas {
 		values.Set("ideas", "true")
 	}
-	if projectID > 0 {
-		values.Set("project_id", fmt.Sprint(projectID))
+	if projectID != nil {
+		values.Set("project_id", fmt.Sprint(*projectID))
 	}
-	if subprojectID > 0 {
-		values.Set("subproject_id", fmt.Sprint(subprojectID))
+	if subprojectID != nil {
+		values.Set("subproject_id", fmt.Sprint(*subprojectID))
 	}
 	if len(values) > 0 {
 		path += "?" + values.Encode()

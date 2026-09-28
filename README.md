@@ -40,8 +40,10 @@ one S-curve per project.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
   add `--table` for compact terminal output. `pmctl tasks list` returns all tasks by default and
-  supports name-based project filters. Weekly historical edits requiring `--unlock` perform
-  unlock, update, and lock as one CLI workflow.
+  supports name- or ID-based project filters. All create/update commands use flags; task updates
+  preserve omitted current values. Weekly historical edits requiring `--unlock` perform unlock,
+  update, and lock as one CLI workflow. When both name and ID filters are supplied, names win;
+  project/subproject filters take precedence over `--ideas`.
 
 ## Stack
 

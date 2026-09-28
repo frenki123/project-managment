@@ -298,6 +298,17 @@ func TestSubprojectListReturnsDatabaseError(t *testing.T) {
 	}
 }
 
+func TestSubprojectListUnknownProjectIsNotFound(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/subprojects?project_id=999", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("got status %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestMonthLockAPIUsesBooleanUnlocked(t *testing.T) {
 	database := testkit.OpenDatabase(t)
 	q := database.Q
