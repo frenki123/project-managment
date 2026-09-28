@@ -8,6 +8,10 @@ RETURNING id, name, purchase_order_name, total_hours, start_date, end_date;
 SELECT id, name, purchase_order_name, total_hours, start_date, end_date
 FROM projects WHERE id = ?;
 
+-- name: GetProjectByName :one
+SELECT id, name, purchase_order_name, total_hours, start_date, end_date
+FROM projects WHERE name = ? COLLATE NOCASE;
+
 -- name: GetProjectTotals :one
 WITH task_totals AS (
     SELECT project_id, planned_hours, spent_hours, progress

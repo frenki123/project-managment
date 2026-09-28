@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"cad-development/internal/client"
 	"github.com/spf13/cobra"
@@ -31,9 +33,22 @@ func main() {
 	}
 	root := newRoot(state)
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(state.errOut, err)
+		writeError(state.errOut, err)
 		os.Exit(1)
 	}
+}
+
+func writeError(w io.Writer, err error) {
+	payload := map[string]any{"error": err.Error()}
+	if apiErr, ok := errors.AsType[*client.APIError](err); ok {
+		payload["status"] = apiErr.Status
+	}
+	data, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		fmt.Fprintln(w, err)
+		return
+	}
+	fmt.Fprintln(w, string(data))
 }
 
 func newRoot(s *commandState) *cobra.Command {
@@ -74,6 +89,50 @@ func twoArgs(args []string) (int64, string, error) {
 	}
 	return id, args[1], nil
 }
+
+func resolveProject(ctx context.Context, c *client.Client, name string) (int64, error) {
+	projects, err := c.Projects(ctx)
+	if err != nil {
+		return 0, err
+	}
+	want := strings.TrimSpace(name)
+	var match *client.Project
+	for i := range projects.Projects {
+		p := &projects.Projects[i]
+		if strings.EqualFold(p.Name, want) {
+			if match != nil {
+				return 0, fmt.Errorf("project %q is ambiguous", name)
+			}
+			match = p
+		}
+	}
+	if match != nil {
+		return match.ID, nil
+	}
+	return 0, fmt.Errorf("project %q not found", name)
+}
+
+func resolveSubproject(ctx context.Context, c *client.Client, projectID int64, name string) (int64, error) {
+	subprojects, err := c.Subprojects(ctx, projectID)
+	if err != nil {
+		return 0, err
+	}
+	want := strings.TrimSpace(name)
+	var match *client.Subproject
+	for i := range subprojects.Subprojects {
+		s := &subprojects.Subprojects[i]
+		if strings.EqualFold(s.Name, want) {
+			if match != nil {
+				return 0, fmt.Errorf("subproject %q is ambiguous in project %d", name, projectID)
+			}
+			match = s
+		}
+	}
+	if match != nil {
+		return match.ID, nil
+	}
+	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(projectID, 10))
+}
 func readInput[T any](file string) (T, error) {
 	var value T
 	var r io.Reader = os.Stdin
@@ -105,7 +164,7 @@ func deleteCommand(use, kind string, s *commandState, del func(context.Context, 
 
 func projectCommands(s *commandState) *cobra.Command {
 	root := &cobra.Command{Use: "projects"}
-	root.AddCommand(&cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
+	root.AddCommand(&cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		v, err := s.client.Projects(cmd.Context())
 		if err != nil {
 			return err
@@ -158,15 +217,23 @@ func jsonProjectCommand(use string, s *commandState, update bool) *cobra.Command
 
 func subprojectCommands(s *commandState) *cobra.Command {
 	root := &cobra.Command{Use: "subprojects"}
-	var projectID int64
-	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
+	var projectName string
+	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		var projectID int64
+		var err error
+		if projectName != "" {
+			projectID, err = resolveProject(cmd.Context(), s.client, projectName)
+		}
+		if err != nil {
+			return err
+		}
 		v, err := s.client.Subprojects(cmd.Context(), projectID)
 		if err != nil {
 			return err
 		}
 		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, v.Subprojects) })
 	}}
-	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project")
+	list.Flags().StringVar(&projectName, "project", "", "filter by project name")
 	root.AddCommand(list, &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := idArg(cmd, args)
 		if err != nil {
@@ -212,19 +279,38 @@ func jsonSubprojectCommand(use string, s *commandState, update bool) *cobra.Comm
 
 func taskCommands(s *commandState) *cobra.Command {
 	root := &cobra.Command{Use: "tasks"}
-	var all, ideas bool
-	var projectID, subprojectID int64
-	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
-		v, err := s.client.Tasks(cmd.Context(), all, ideas, projectID, subprojectID)
+	var ideas bool
+	var projectName, subprojectName string
+	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if ideas && (projectName != "" || subprojectName != "") {
+			return errors.New("--ideas cannot be combined with --project or --subproject")
+		}
+		if subprojectName != "" && projectName == "" {
+			return errors.New("--subproject requires --project")
+		}
+		var projectID, subprojectID int64
+		var err error
+		if projectName != "" {
+			projectID, err = resolveProject(cmd.Context(), s.client, projectName)
+			if err != nil {
+				return err
+			}
+		}
+		if subprojectName != "" {
+			subprojectID, err = resolveSubproject(cmd.Context(), s.client, projectID, subprojectName)
+			if err != nil {
+				return err
+			}
+		}
+		v, err := s.client.Tasks(cmd.Context(), ideas, projectID, subprojectID)
 		if err != nil {
 			return err
 		}
 		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, v.Tasks) })
 	}}
-	list.Flags().BoolVar(&all, "all", false, "include all tasks instead of ideas by default")
 	list.Flags().BoolVar(&ideas, "ideas", false, "list unassigned idea tasks")
-	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project")
-	list.Flags().Int64Var(&subprojectID, "subproject-id", 0, "filter by subproject")
+	list.Flags().StringVar(&projectName, "project", "", "filter by unique project name")
+	list.Flags().StringVar(&subprojectName, "subproject", "", "filter by subproject name within the project")
 	root.AddCommand(list, &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := idArg(cmd, args)
 		if err != nil {
@@ -297,7 +383,7 @@ func updateWeekCommand(s *commandState) *cobra.Command {
 		v, updateErr := s.client.UpdateTaskWeek(cmd.Context(), id, week, in)
 		var lockErr error
 		if unlock {
-			lockErr = lockAfter(cmd.Context(), s.client)
+			lockErr = lockAfter(s.client)
 		}
 		if updateErr != nil {
 			if lockErr != nil {
@@ -317,14 +403,31 @@ func updateWeekCommand(s *commandState) *cobra.Command {
 	c.Flags().BoolVar(&unlock, "unlock", false, "temporarily unlock history for this update")
 	return c
 }
-func lockAfter(ctx context.Context, c *client.Client) error {
-	_, err := c.SetMonthLock(ctx, false)
+func lockAfter(c *client.Client) error {
+	cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if _, err = c.SetMonthLock(cleanup, false); err == nil {
+			return nil
+		}
+		if apiErr, ok := errors.AsType[*client.APIError](err); ok && apiErr.Status < 500 {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+		}
+	}
 	return err
 }
 
 func curveCommand(s *commandState) *cobra.Command {
-	return &cobra.Command{Use: "project-s-curve <project-id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(cmd, args)
+	var projectName string
+	c := &cobra.Command{Use: "project-s-curve", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if projectName == "" {
+			return errors.New("--project is required")
+		}
+		id, err := resolveProject(cmd.Context(), s.client, projectName)
 		if err != nil {
 			return err
 		}
@@ -334,4 +437,6 @@ func curveCommand(s *commandState) *cobra.Command {
 		}
 		return s.printer().print(v, func(w io.Writer) error { return curveTable(w, v) })
 	}}
+	c.Flags().StringVar(&projectName, "project", "", "project name")
+	return c
 }

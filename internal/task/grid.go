@@ -20,6 +20,7 @@ type Grid struct {
 	FilterProject    string
 	FilterSubproject string
 	Ideas            bool
+	SummaryOnly      bool
 	ProjectName      string
 	SubprojectName   string
 	StartDate        string
@@ -74,6 +75,7 @@ type GridWeekTotal struct {
 type projectFilter struct {
 	Value string
 	ID    int64
+	All   bool
 	Ideas bool
 }
 
@@ -91,7 +93,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		FilterProject:    filter.Value,
 		FilterSubproject: "",
 		Ideas:            filter.Ideas,
-		ProjectName:      "Ideas",
+		ProjectName:      "All tasks",
 		Projects:         projectOptions(projects, filter.Value),
 	}
 	unlocked, err := monthlock.Unlocked(ctx, q)
@@ -99,6 +101,40 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		return Grid{}, err
 	}
 	data.HistoryUnlocked = unlocked
+	if filter.All {
+		data.SummaryOnly = true
+		tasks, err := List(ctx, q)
+		if err != nil {
+			return Grid{}, err
+		}
+		projectNames := make(map[int64]string, len(projects))
+		for _, p := range projects {
+			projectNames[p.ID] = p.Name
+		}
+		subs, err := subproject.ListWithTotals(ctx, q)
+		if err != nil {
+			return Grid{}, err
+		}
+		subprojectNames := make(map[int64]string, len(subs))
+		for _, s := range subs {
+			subprojectNames[s.ID] = s.Name
+		}
+		for _, t := range tasks {
+			row := GridRow{
+				ID: t.ID, Name: t.Name, Status: t.Status,
+				TotalHours: t.TotalHours, SpentHours: t.SpentHours,
+				Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10),
+			}
+			if t.ProjectID != nil {
+				row.ProjectName = projectNames[*t.ProjectID]
+			}
+			if t.SubprojectID != nil {
+				row.Subproject = subprojectNames[*t.SubprojectID]
+			}
+			data.Rows = append(data.Rows, row)
+		}
+		return data, nil
+	}
 	if filter.Ideas {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
@@ -240,8 +276,8 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 			ProjectName: proj.Name,
 			TotalHours:  t.TotalHours,
 			SpentHours:  t.SpentHours,
-				Progress:    t.Progress,
-				Status:      t.Status,
+			Progress:    t.Progress,
+			Status:      t.Status,
 			DetailPath:  "/tasks/" + strconv.FormatInt(t.ID, 10),
 		}
 		if t.SubprojectID != nil {
@@ -277,7 +313,10 @@ func projectOptions(projects []project.Project, selected string) []Option {
 }
 
 func parseProjectFilter(value string) (projectFilter, error) {
-	if value == "" || value == "ideas" {
+	if value == "" || value == "all" {
+		return projectFilter{Value: "all", All: true}, nil
+	}
+	if value == "ideas" {
 		return projectFilter{Value: "ideas", Ideas: true}, nil
 	}
 	id, err := strconv.ParseInt(value, 10, 64)

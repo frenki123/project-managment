@@ -26,11 +26,13 @@ templ GridPage(data task.Grid) {
 				<h1>{ data.ProjectName }</h1>
 				if data.Ideas {
 					<p class="project-description">Unassigned tasks and ideas. Weekly planning is available after assigning a project.</p>
+				} else if data.SummaryOnly {
+					<p class="project-description">All tasks across projects. Select a project to open its weekly planning view.</p>
 				} else {
 					<p class="project-description"><span>PO { data.POName }</span><span>{ dateLabel(data.StartDate) } - { dateLabel(data.EndDate) }</span></p>
 				}
 			</div>
-			if !data.Ideas {
+			if !data.Ideas && !data.SummaryOnly {
 				<div class="project-actions">
 					<button type="button" hx-get={ templ.URL("/projects/" + data.FilterProject + "/edit") } hx-target="#modal-root" hx-swap="innerHTML">Edit project</button>
 					if data.FilterSubproject != "" {
@@ -42,7 +44,7 @@ templ GridPage(data task.Grid) {
 				</div>
 			}
 		</header>
-		if !data.Ideas {
+		if !data.Ideas && !data.SummaryOnly {
 			@GridTotals(data)
 		}
 		<div class="workboard-toolbar">
@@ -56,7 +58,7 @@ templ GridPage(data task.Grid) {
 						}
 					</select>
 				</label>
-				if !data.Ideas {
+				if !data.Ideas && !data.SummaryOnly {
 					<label>
 						<span class="sr-only">Subproject</span>
 						<select name="subproject" id="subproject-filter">
@@ -67,7 +69,7 @@ templ GridPage(data task.Grid) {
 					</label>
 				}
 			</form>
-			if !data.Ideas {
+			if !data.Ideas && !data.SummaryOnly {
 				<div class="lock-controls">
 					<span class="lock-status">
 						if data.HistoryUnlocked {
@@ -99,20 +101,22 @@ templ GridPage(data task.Grid) {
 					<col class="c3"/>
 					if !data.Ideas {
 						<col class="c4"/>
+					}
+					if !data.Ideas && !data.SummaryOnly {
 						for range data.Weeks {
 							<col class="week-col"/>
 						}
 					}
 				</colgroup>
 				<thead>
-					if !data.Ideas {
+					if !data.Ideas && !data.SummaryOnly {
 						<tr class="group-row">
 							<th colspan="4" class="sticky c0">Task information</th>
 							<th class="sticky c4">Summary</th>
 							<th colspan={ len(data.Weeks) } class="timeline-group">Weekly timeline</th>
 						</tr>
 					}
-					if !data.Ideas {
+					if !data.Ideas && !data.SummaryOnly {
 						<tr class="month-row">
 							<th colspan="5" class="sticky c0">Month</th>
 							for _, month := range distinctMonths(data.Weeks) {
@@ -132,7 +136,7 @@ templ GridPage(data task.Grid) {
 							<th class="sticky c3">Status</th>
 							<th class="sticky c4">Summary</th>
 						}
-						if !data.Ideas {
+						if !data.Ideas && !data.SummaryOnly {
 							for _, w := range data.Weeks {
 								<th class="week-col" title={ w.Start }><span>W{ strconv.Itoa(w.Number) }</span><small>{ w.Date }</small></th>
 							}
@@ -141,10 +145,10 @@ templ GridPage(data task.Grid) {
 				</thead>
 				<tbody>
 					for _, row := range data.Rows {
-						@TaskGridRow(row, data.Ideas)
+						@TaskGridRow(row, data.Ideas, data.SummaryOnly)
 					}
 				</tbody>
-				if !data.Ideas {
+				if !data.Ideas && !data.SummaryOnly {
 					<tfoot>
 						<tr>
 							<th colspan="5" class="sticky c0">
@@ -209,7 +213,7 @@ templ WeekTotalContent(total task.GridWeekTotal) {
 	<small>{ hours(total.Planned) }</small><small>{ hours(total.Spent) }</small>
 }
 
-templ TaskGridRow(row task.GridRow, ideas bool) {
+templ TaskGridRow(row task.GridRow, ideas bool, summaryOnly bool) {
 	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row">
 		<td class="sticky c0">
 			<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#modal-root" hx-swap="innerHTML">{ row.Name }</button>
@@ -223,8 +227,10 @@ templ TaskGridRow(row task.GridRow, ideas bool) {
 			<td class="sticky c4">
 				@TaskSummary(row)
 			</td>
-			for _, cell := range row.Cells {
-				@WeekCellEditor(cell)
+			if !summaryOnly {
+				for _, cell := range row.Cells {
+					@WeekCellEditor(cell)
+				}
 			}
 		}
 	</tr>

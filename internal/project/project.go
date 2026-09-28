@@ -57,11 +57,16 @@ func fromTotals(row db.ListProjectsWithTotalsRow) Project {
 	}
 }
 
-func validate(in Input) (Input, error) {
+func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.Name == "" {
 		return in, app.Invalid("name is required")
+	}
+	if existing, err := q.GetProjectByName(ctx, in.Name); err == nil && existing.ID != exceptID {
+		return in, app.Conflict("project name already exists")
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return in, err
 	}
 	if in.TotalHours == nil {
 		return in, app.Invalid("total_hours is required")
@@ -86,7 +91,7 @@ func validate(in Input) (Input, error) {
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
-	in, err := validate(in)
+	in, err := validate(ctx, q, in, 0)
 	if err != nil {
 		return Project{}, err
 	}
@@ -161,7 +166,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, er
 		} else if err != nil {
 			return err
 		}
-		in, err := validate(in)
+		in, err := validate(ctx, txq, in, id)
 		if err != nil {
 			return err
 		}

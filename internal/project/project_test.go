@@ -87,6 +87,17 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	}
 }
 
+func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
+		t.Fatal("expected duplicate project name to be rejected")
+	}
+}
+
 func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

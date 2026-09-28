@@ -85,18 +85,18 @@ func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 			}
 		}
 	}
-	check("/api/v1/tasks", ideaID)
-	check("/api/v1/tasks?ideas=true&project_id="+projectID, ideaID)
+	check("/api/v1/tasks", ideaID, trackedID, plainID)
+	check("/api/v1/tasks?ideas=true", ideaID)
+	check("/api/v1/tasks?ideas=true", ideaID)
 	check("/api/v1/tasks?project_id="+projectID, trackedID, plainID)
 	check("/api/v1/tasks?subproject_id="+strconv.FormatInt(sp.ID, 10), trackedID)
-	check("/api/v1/tasks/all", ideaID, trackedID, plainID)
 }
 
 func TestTaskListMissingProjectIsNotFound(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	for _, path := range []string{"/api/v1/tasks?project_id=999", "/api/v1/tasks?project_id=999&ideas=true"} {
+	for _, path := range []string{"/api/v1/tasks?project_id=999"} {
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
 		if rr.Code != http.StatusNotFound {
