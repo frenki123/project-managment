@@ -87,7 +87,6 @@ func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 	}
 	check("/api/v1/tasks", ideaID, trackedID, plainID)
 	check("/api/v1/tasks?ideas=true", ideaID)
-	check("/api/v1/tasks?ideas=true", ideaID)
 	check("/api/v1/tasks?project_id="+projectID, trackedID, plainID)
 	check("/api/v1/tasks?subproject_id="+strconv.FormatInt(sp.ID, 10), trackedID)
 }

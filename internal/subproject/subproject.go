@@ -142,6 +142,18 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Subproject, error) {
 	return out, nil
 }
 
+func List(ctx context.Context, q *db.Queries) ([]Subproject, error) {
+	rows, err := q.ListSubprojects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Subproject, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, FromDB(row))
+	}
+	return out, nil
+}
+
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Subproject, error) {
 	rows, err := q.ListSubprojectsByProject(ctx, projectID)
 	if err != nil {

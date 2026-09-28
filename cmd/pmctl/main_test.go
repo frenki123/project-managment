@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -121,5 +122,35 @@ func TestUpdateTaskWeekRetriesRelock(t *testing.T) {
 	}
 	if lockAttempts != 2 {
 		t.Fatalf("lock attempts = %d, want 2", lockAttempts)
+	}
+}
+
+func TestTaskUpdateFlagsPreserveOmittedValues(t *testing.T) {
+	var putBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/tasks/4" {
+			_, _ = w.Write([]byte(`{"id":4,"name":"Existing","description":"Keep me","implementation_notes":"Keep notes","department":"Engineering","developers":"Alice","priority":"low","project_id":5,"subproject_id":1}`))
+			return
+		}
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4" {
+			data, _ := io.ReadAll(r.Body)
+			putBody = string(data)
+			_, _ = w.Write([]byte(`{"id":4,"name":"Existing","description":"Keep me","implementation_notes":"Keep notes","department":"Engineering","developers":"Alice","priority":"high","project_id":5,"subproject_id":1}`))
+			return
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "update", "4", "--priority", "high"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"name":"Existing"`, `"description":"Keep me"`, `"implementation_notes":"Keep notes"`, `"project_id":5`, `"subproject_id":1`, `"priority":"high"`} {
+		if !strings.Contains(putBody, field) {
+			t.Fatalf("PUT body missing %s: %s", field, putBody)
+		}
 	}
 }

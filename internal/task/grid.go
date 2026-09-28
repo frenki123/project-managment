@@ -111,7 +111,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		for _, p := range projects {
 			projectNames[p.ID] = p.Name
 		}
-		subs, err := subproject.ListWithTotals(ctx, q)
+		subs, err := subproject.List(ctx, q)
 		if err != nil {
 			return Grid{}, err
 		}
@@ -304,7 +304,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 }
 
 func projectOptions(projects []project.Project, selected string) []Option {
-	out := []Option{{Value: "ideas", Label: "Ideas", Selected: selected == "ideas"}}
+	out := []Option{{Value: "all", Label: "All tasks", Selected: selected == "all"}, {Value: "ideas", Label: "Ideas", Selected: selected == "ideas"}}
 	for _, p := range projects {
 		v := strconv.FormatInt(p.ID, 10)
 		out = append(out, Option{Value: v, Label: p.Name, Selected: v == selected})

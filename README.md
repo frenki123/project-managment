@@ -110,6 +110,8 @@ The CLI targets the local server by default and can use `CAD_API_URL` or `--url`
 ```sh
 pmctl projects list --table
 pmctl tasks list --project "Project Alpha"
+pmctl tasks create --name "Implement API" --project-id 5 --priority high
+pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ```
 

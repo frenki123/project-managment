@@ -439,7 +439,7 @@ func TestRegisterServesGridRoot(t *testing.T) {
 	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.Len() == 0 {
 		t.Fatalf("root response %d: %s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "All tasks") || strings.Contains(rr.Body.String(), "Weekly timeline") {
+	if !strings.Contains(rr.Body.String(), `value="all" selected`) || !strings.Contains(rr.Body.String(), "All tasks") || strings.Contains(rr.Body.String(), "Weekly timeline") {
 		t.Fatalf("root should render the all-task summary view: %s", rr.Body.String())
 	}
 }
