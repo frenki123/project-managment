@@ -2,28 +2,37 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestTasksEncodesFilters(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/tasks" {
-			t.Fatalf("path = %q", r.URL.Path)
-		}
-		if got := r.URL.Query().Get("project_id"); got != "7" {
-			t.Fatalf("project_id = %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tasks":[]}`))
-	}))
-	defer server.Close()
+func newTestClient(t *testing.T, handler http.Handler) *Client {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
 	c, err := New(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return c
+}
+
+func TestTasksEncodesFilters(t *testing.T) {
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tasks" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		if got := r.URL.Query().Get("project_id"); got != "7" {
+			http.Error(w, "unexpected project id", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tasks":[]}`))
+	}))
 	projectID := int64(7)
 	if _, err := c.Tasks(context.Background(), false, &projectID, nil); err != nil {
 		t.Fatal(err)
@@ -31,17 +40,12 @@ func TestTasksEncodesFilters(t *testing.T) {
 }
 
 func TestAPIErrorPreservesStatusAndMessage(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte(`{"error":"history is locked"}`))
 	}))
-	defer server.Close()
-	c, err := New(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, nil)
-	apiErr, ok := err.(*APIError)
+	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, nil)
+	apiErr, ok := errors.AsType[*APIError](err)
 	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "history is locked" {
 		t.Fatalf("error = %#v", err)
 	}
@@ -59,17 +63,12 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(tc.body))
 			}))
-			defer server.Close()
-			c, err := New(server.URL)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
-			apiErr, ok := err.(*APIError)
+			err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
+			apiErr, ok := errors.AsType[*APIError](err)
 			if !ok || apiErr.Status != http.StatusBadGateway || apiErr.Message != tc.want {
 				t.Fatalf("error = %#v", err)
 			}
@@ -78,34 +77,25 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 }
 
 func TestAPIErrorBodyIsBounded(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(strings.Repeat("x", maxAPIErrorBody+1024)))
 	}))
-	defer server.Close()
-	c, err := New(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
-	apiErr, ok := err.(*APIError)
+	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
+	apiErr, ok := errors.AsType[*APIError](err)
 	if !ok || len(apiErr.Message) != maxAPIErrorBody+3 || !strings.HasSuffix(apiErr.Message, "...") {
 		t.Fatalf("error = %#v", err)
 	}
 }
 
-func TestTasksDecodeLargeSuccessfulResponseAsStream(t *testing.T) {
+func TestTasksDecodeLargeSuccessfulResponse(t *testing.T) {
 	item := `{"id":1,"name":"Task"}`
 	body := `{"tasks":[` + strings.Repeat(item+",", 10000) + item + `]}`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))
-	defer server.Close()
-	c, err := New(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
 	result, err := c.Tasks(context.Background(), false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -116,12 +106,7 @@ func TestTasksDecodeLargeSuccessfulResponseAsStream(t *testing.T) {
 }
 
 func TestEmptySuccessfulResponseIsAccepted(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	defer server.Close()
-	c, err := New(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	if err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, new(TasksResponse)); err != nil {
 		t.Fatal(err)
 	}

@@ -13,15 +13,9 @@ func subprojectCommands(s *commandState) *cobra.Command {
 	var projectName string
 	var projectID int64
 	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		var selectedProject *int64
-		if projectName != "" {
-			resolved, err := resolveProject(cmd.Context(), s.client, projectName)
-			if err != nil {
-				return err
-			}
-			selectedProject = &resolved
-		} else if cmd.Flags().Changed("project-id") {
-			selectedProject = &projectID
+		selectedProject, err := resolveProjectFilter(cmd.Context(), s.client, projectName, projectID, cmd.Flags().Changed("project-id"))
+		if err != nil {
+			return err
 		}
 		v, err := s.client.Subprojects(cmd.Context(), selectedProject)
 		if err != nil {
@@ -59,12 +53,7 @@ func (f *subprojectFlags) addFlags(c *cobra.Command) {
 
 func subprojectCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f subprojectFlags
-	c := &cobra.Command{Use: use, Args: func(cmd *cobra.Command, args []string) error {
-		if update {
-			return cobra.ExactArgs(1)(cmd, args)
-		}
-		return cobra.NoArgs(cmd, args)
-	}, RunE: func(cmd *cobra.Command, args []string) error {
+	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
 		totalHours := (*float64)(nil)
 		if cmd.Flags().Changed("total-hours") {
 			totalHours = &f.totalHours

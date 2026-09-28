@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +15,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func testRoot(server *httptest.Server) *cobra.Command {
+func testRoot(t *testing.T, server *httptest.Server) *cobra.Command {
+	t.Helper()
+	// Keep CLI setup consistent while each test keeps its protocol visible.
+	// The helper itself is intentionally small and only owns command wiring.
+	// Test-specific request assertions remain in the individual handlers.
 	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
 	return newRoot(state)
 }
@@ -65,11 +70,11 @@ func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
 		case "/api/v1/month-locks/lock":
 			_, _ = w.Write([]byte(`{"unlocked":false}`))
 		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--planned-hours", "8", "--unlock"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -93,7 +98,7 @@ func TestUpdateTaskWeekLocksAfterUpdateFailure(t *testing.T) {
 		_, _ = w.Write([]byte(`{"unlocked":false}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--spent-hours", "2", "--unlock"})
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected update error")
@@ -121,11 +126,11 @@ func TestUpdateTaskWeekRetriesRelock(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"unlocked":false}`))
 		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--progress", "50", "--unlock"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -135,37 +140,51 @@ func TestUpdateTaskWeekRetriesRelock(t *testing.T) {
 	}
 }
 
-func TestTaskUpdateFlagsPreserveOmittedValues(t *testing.T) {
+func TestTaskUpdateFlagsSendFullReplacement(t *testing.T) {
 	var putBody string
+	var methods []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/tasks/4" {
-			_, _ = w.Write([]byte(`{"id":4,"name":"Existing","description":"Keep me","implementation_notes":"Keep notes","department":"Engineering","developers":"Alice","priority":"low","project_id":5,"subproject_id":1}`))
-			return
-		}
+		methods = append(methods, r.Method+" "+r.URL.Path)
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4" {
 			data, _ := io.ReadAll(r.Body)
 			putBody = string(data)
-			_, _ = w.Write([]byte(`{"id":4,"name":"Existing","description":"Keep me","implementation_notes":"Keep notes","department":"Engineering","developers":"Alice","priority":"high","project_id":5,"subproject_id":1}`))
+			_, _ = w.Write([]byte(`{"id":4,"name":"","priority":"high"}`))
 			return
 		}
-		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusBadRequest)
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "update", "4", "--priority", "high"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
+	}
+	if strings.Join(methods, "\n") != "PUT /api/v1/tasks/4" {
+		t.Fatalf("requests = %v", methods)
 	}
 	var input client.TaskInput
 	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
 		t.Fatal(err)
 	}
-	if input.Name != "Existing" || input.Description != "Keep me" || input.ImplementationNotes != "Keep notes" || input.Priority != "high" {
+	if input.Name != "" || input.Description != "" || input.ImplementationNotes != "" || input.Department != "" || input.Developers != "" || input.Priority != "high" {
 		t.Fatalf("unexpected task fields: %+v", input)
 	}
-	if input.ProjectID == nil || *input.ProjectID != 5 || input.SubprojectID == nil || *input.SubprojectID != 1 {
+	if input.ProjectID != nil || input.SubprojectID != nil {
 		t.Fatalf("unexpected task assignment: %+v", input)
+	}
+}
+
+func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
+	var flags taskFlags
+	command := &cobra.Command{}
+	flags.addFlags(command)
+	if err := command.ParseFlags([]string{"--project-id", "5", "--ideas"}); err != nil {
+		t.Fatal(err)
+	}
+	in := taskInput(command, flags)
+	if in.ProjectID == nil || *in.ProjectID != 5 || in.SubprojectID != nil {
+		t.Fatalf("unexpected assignment: %+v", in)
 	}
 }
 
@@ -177,15 +196,16 @@ func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
 			_, _ = w.Write([]byte(`{"projects":[{"id":5,"name":"Alpha"}]}`))
 		case "/api/v1/tasks":
 			if r.URL.Query().Get("project_id") != "5" || r.URL.Query().Get("ideas") != "" {
-				t.Fatalf("query = %s", r.URL.RawQuery)
+				http.Error(w, "unexpected query", http.StatusBadRequest)
+				return
 			}
 			_, _ = w.Write([]byte(`{"tasks":[]}`))
 		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "list", "--project", "Alpha", "--project-id", "7", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -195,13 +215,14 @@ func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
 func TestTaskListDefaultsToAllTasks(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/tasks" || r.URL.RawQuery != "" {
-			t.Fatalf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"tasks":[]}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "list"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -214,20 +235,22 @@ func TestTaskListResolvesSubprojectNameWithoutProject(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/subprojects":
 			if r.URL.RawQuery != "" {
-				t.Fatalf("subproject query = %s", r.URL.RawQuery)
+				http.Error(w, "unexpected query", http.StatusBadRequest)
+				return
 			}
 			_, _ = w.Write([]byte(`{"subprojects":[{"id":9,"project_id":3,"name":"Backend"}]}`))
 		case "/api/v1/tasks":
 			if r.URL.Query().Get("subproject_id") != "9" || r.URL.Query().Get("project_id") != "" || r.URL.Query().Get("ideas") != "" {
-				t.Fatalf("task query = %s", r.URL.RawQuery)
+				http.Error(w, "unexpected query", http.StatusBadRequest)
+				return
 			}
 			_, _ = w.Write([]byte(`{"tasks":[]}`))
 		default:
-			t.Fatalf("unexpected request: %s", r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "list", "--subproject", "Backend", "--subproject-id", "7", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -237,17 +260,18 @@ func TestTaskListResolvesSubprojectNameWithoutProject(t *testing.T) {
 func TestTaskListLeavesInvalidFilterValidationToServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("project_id") != "0" {
-			t.Fatalf("project_id = %q", r.URL.Query().Get("project_id"))
+			http.Error(w, "unexpected project id", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":"project not found"}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "list", "--project-id", "0"})
 	err := root.Execute()
-	apiErr, ok := err.(*client.APIError)
+	apiErr, ok := errors.AsType[*client.APIError](err)
 	if !ok || apiErr.Status != http.StatusBadRequest || apiErr.Message != "project not found" {
 		t.Fatalf("error = %#v", err)
 	}
@@ -257,7 +281,8 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/projects/7" {
-			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
 		}
 		data, _ := io.ReadAll(r.Body)
 		body = string(data)
@@ -265,7 +290,7 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":7,"name":"Alpha","purchase_order_name":"PO-7","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"projects", "update", "7", "--name", "Alpha", "--purchase-order-name", "PO-7", "--total-hours", "120", "--start-date", "2026-01-05", "--end-date", "2026-03-30"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -286,7 +311,8 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/subprojects/9" {
-			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
 		}
 		data, _ := io.ReadAll(r.Body)
 		body = string(data)
@@ -294,7 +320,7 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":9,"project_id":7,"name":"Backend","total_hours":40}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"subprojects", "update", "9", "--project-id", "7", "--name", "Backend", "--total-hours", "40"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -311,13 +337,14 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 func TestProjectSCurveUsesProjectIDWithoutResolution(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/projects/7/s-curve" {
-			t.Fatalf("path = %s", r.URL.Path)
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"project":{"id":7,"name":"Alpha"},"weeks":[]}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"project-s-curve", "--project-id", "7"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -327,13 +354,14 @@ func TestProjectSCurveUsesProjectIDWithoutResolution(t *testing.T) {
 func TestTaskListSendsCombinedProjectAndSubprojectIDs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/tasks" || r.URL.Query().Get("project_id") != "5" || r.URL.Query().Get("subproject_id") != "9" || r.URL.Query().Get("ideas") != "" {
-			t.Fatalf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"tasks":[]}`))
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"tasks", "list", "--project-id", "5", "--subproject-id", "9", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -346,7 +374,7 @@ func TestProjectSCurveRequiresProject(t *testing.T) {
 		requests++
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"project-s-curve"})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--project or --project-id is required") {
 		t.Fatalf("error = %v", err)
@@ -365,11 +393,11 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 		case "/api/v1/projects/5/s-curve":
 			_, _ = w.Write([]byte(`{"project":{"id":5,"name":"Alpha"},"weeks":[]}`))
 		default:
-			t.Fatalf("unexpected request: %s", r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
 	}))
 	defer server.Close()
-	root := testRoot(server)
+	root := testRoot(t, server)
 	root.SetArgs([]string{"project-s-curve", "--project", "Alpha", "--project-id", "7"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
