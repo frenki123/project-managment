@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,8 +34,15 @@ func TestTableOutputIsBounded(t *testing.T) {
 func TestWriteErrorIncludesHTTPStatusAsJSON(t *testing.T) {
 	var out bytes.Buffer
 	writeError(&out, &client.APIError{Method: http.MethodGet, Path: "/api/v1/tasks/1", Status: http.StatusNotFound, Message: "task not found"})
-	if got := out.String(); got != `{"error":"HTTP 404: task not found","status":404}`+"\n" {
-		t.Fatalf("error output = %q", got)
+	var got struct {
+		Error  string `json:"error"`
+		Status int    `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Error != "HTTP 404: task not found" || got.Status != http.StatusNotFound {
+		t.Fatalf("error output = %q", out.String())
 	}
 }
 
@@ -152,5 +160,29 @@ func TestTaskUpdateFlagsPreserveOmittedValues(t *testing.T) {
 		if !strings.Contains(putBody, field) {
 			t.Fatalf("PUT body missing %s: %s", field, putBody)
 		}
+	}
+}
+
+func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/projects":
+			_, _ = w.Write([]byte(`{"projects":[{"id":5,"name":"Alpha"}]}`))
+		case "/api/v1/tasks":
+			if r.URL.Query().Get("project_id") != "5" || r.URL.Query().Get("ideas") != "" {
+				t.Fatalf("query = %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"tasks":[]}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"tasks", "list", "--project", "Alpha", "--project-id", "7", "--ideas"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
 	}
 }
