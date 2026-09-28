@@ -93,3 +93,36 @@ func TestAPIErrorBodyIsBounded(t *testing.T) {
 		t.Fatalf("error = %#v", err)
 	}
 }
+
+func TestTasksDecodeLargeSuccessfulResponseAsStream(t *testing.T) {
+	item := `{"id":1,"name":"Task"}`
+	body := `{"tasks":[` + strings.Repeat(item+",", 10000) + item + `]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	c, err := New(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.Tasks(context.Background(), false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Tasks) != 10001 {
+		t.Fatalf("tasks = %d, want 10001", len(result.Tasks))
+	}
+}
+
+func TestEmptySuccessfulResponseIsAccepted(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer server.Close()
+	c, err := New(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, new(TasksResponse)); err != nil {
+		t.Fatal(err)
+	}
+}

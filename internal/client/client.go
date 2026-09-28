@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,14 +95,23 @@ func (c *Client) Do(ctx context.Context, method, path string, input, output any)
 		}
 		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message}
 	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-	if output == nil || resp.StatusCode == http.StatusNoContent || len(data) == 0 {
+	if resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	if err := json.Unmarshal(data, output); err != nil {
+	if output == nil {
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			return fmt.Errorf("read response: %w", err)
+		}
+		return nil
+	}
+	reader := bufio.NewReader(resp.Body)
+	if _, err := reader.Peek(1); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return fmt.Errorf("read response: %w", err)
+	}
+	if err := json.UnmarshalRead(reader, output); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
