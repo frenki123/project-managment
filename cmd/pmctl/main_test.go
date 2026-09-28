@@ -11,7 +11,13 @@ import (
 	"testing"
 
 	"cad-development/internal/client"
+	"github.com/spf13/cobra"
 )
+
+func testRoot(server *httptest.Server) *cobra.Command {
+	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
+	return newRoot(state)
+}
 
 func TestTableOutputIsBounded(t *testing.T) {
 	values := make([]client.Task, 51)
@@ -63,9 +69,7 @@ func TestUpdateTaskWeekUnlocksUpdatesAndLocks(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	var out strings.Builder
-	state := &commandState{apiURL: server.URL, out: &out, errOut: &out}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--planned-hours", "8", "--unlock"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -89,8 +93,7 @@ func TestUpdateTaskWeekLocksAfterUpdateFailure(t *testing.T) {
 		_, _ = w.Write([]byte(`{"unlocked":false}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--spent-hours", "2", "--unlock"})
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected update error")
@@ -122,8 +125,7 @@ func TestUpdateTaskWeekRetriesRelock(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--progress", "50", "--unlock"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -150,16 +152,20 @@ func TestTaskUpdateFlagsPreserveOmittedValues(t *testing.T) {
 		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "update", "4", "--priority", "high"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{`"name":"Existing"`, `"description":"Keep me"`, `"implementation_notes":"Keep notes"`, `"project_id":5`, `"subproject_id":1`, `"priority":"high"`} {
-		if !strings.Contains(putBody, field) {
-			t.Fatalf("PUT body missing %s: %s", field, putBody)
-		}
+	var input client.TaskInput
+	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Name != "Existing" || input.Description != "Keep me" || input.ImplementationNotes != "Keep notes" || input.Priority != "high" {
+		t.Fatalf("unexpected task fields: %+v", input)
+	}
+	if input.ProjectID == nil || *input.ProjectID != 5 || input.SubprojectID == nil || *input.SubprojectID != 1 {
+		t.Fatalf("unexpected task assignment: %+v", input)
 	}
 }
 
@@ -179,8 +185,7 @@ func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "list", "--project", "Alpha", "--project-id", "7", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -196,8 +201,7 @@ func TestTaskListDefaultsToAllTasks(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tasks":[]}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "list"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -223,8 +227,7 @@ func TestTaskListResolvesSubprojectNameWithoutProject(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "list", "--subproject", "Backend", "--subproject-id", "7", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -241,8 +244,7 @@ func TestTaskListLeavesInvalidFilterValidationToServer(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"project not found"}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "list", "--project-id", "0"})
 	err := root.Execute()
 	apiErr, ok := err.(*client.APIError)
@@ -263,16 +265,20 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":7,"name":"Alpha","purchase_order_name":"PO-7","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"projects", "update", "7", "--name", "Alpha", "--purchase-order-name", "PO-7", "--total-hours", "120", "--start-date", "2026-01-05", "--end-date", "2026-03-30"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{`"name":"Alpha"`, `"purchase_order_name":"PO-7"`, `"total_hours":120`, `"start_date":"2026-01-05"`, `"end_date":"2026-03-30"`} {
-		if !strings.Contains(body, field) {
-			t.Fatalf("PUT body missing %s: %s", field, body)
-		}
+	var input client.ProjectInput
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Name != "Alpha" || input.PurchaseOrderName != "PO-7" || input.StartDate != "2026-01-05" || input.EndDate != "2026-03-30" {
+		t.Fatalf("unexpected project fields: %+v", input)
+	}
+	if input.TotalHours == nil || *input.TotalHours != 120 {
+		t.Fatalf("unexpected project total hours: %+v", input.TotalHours)
 	}
 }
 
@@ -288,16 +294,17 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":9,"project_id":7,"name":"Backend","total_hours":40}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"subprojects", "update", "9", "--project-id", "7", "--name", "Backend", "--total-hours", "40"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{`"project_id":7`, `"name":"Backend"`, `"total_hours":40`} {
-		if !strings.Contains(body, field) {
-			t.Fatalf("PUT body missing %s: %s", field, body)
-		}
+	var input client.SubprojectInput
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.ProjectID != 7 || input.Name != "Backend" || input.TotalHours == nil || *input.TotalHours != 40 {
+		t.Fatalf("unexpected subproject fields: %+v", input)
 	}
 }
 
@@ -310,8 +317,7 @@ func TestProjectSCurveUsesProjectIDWithoutResolution(t *testing.T) {
 		_, _ = w.Write([]byte(`{"project":{"id":7,"name":"Alpha"},"weeks":[]}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"project-s-curve", "--project-id", "7"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -327,8 +333,7 @@ func TestTaskListSendsCombinedProjectAndSubprojectIDs(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tasks":[]}`))
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"tasks", "list", "--project-id", "5", "--subproject-id", "9", "--ideas"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
@@ -341,8 +346,7 @@ func TestProjectSCurveRequiresProject(t *testing.T) {
 		requests++
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"project-s-curve"})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--project or --project-id is required") {
 		t.Fatalf("error = %v", err)
@@ -365,8 +369,7 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	state := &commandState{apiURL: server.URL, out: &strings.Builder{}, errOut: &strings.Builder{}}
-	root := newRoot(state)
+	root := testRoot(server)
 	root.SetArgs([]string{"project-s-curve", "--project", "Alpha", "--project-id", "7"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
