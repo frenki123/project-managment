@@ -7,7 +7,6 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/nullable"
 	domain "cad-development/internal/project"
 	"cad-development/internal/views"
 )
@@ -49,10 +48,7 @@ func formPatch(r *http.Request) (domain.Patch, error) {
 	if err != nil {
 		return domain.Patch{}, err
 	}
-	return domain.Patch{
-		Name: *nullable.Set(in.Name), PurchaseOrderName: *nullable.Set(in.PurchaseOrderName),
-		TotalHours: *nullable.Set(*in.TotalHours), StartDate: *nullable.Set(in.StartDate), EndDate: *nullable.Set(in.EndDate),
-	}, nil
+	return in.Patch(), nil
 }
 
 func submittedFormValues(r *http.Request) views.ProjectFormValues {

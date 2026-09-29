@@ -146,24 +146,24 @@ type ProjectPatch struct {
 	EndDate           *nullable.Optional[string]  `json:"end_date,omitempty"`
 }
 
+func addPatchField[T any](fields map[string]any, name string, value *T) {
+	if value != nil {
+		fields[name] = value
+	}
+}
+
+func marshalPatch(fields map[string]any) ([]byte, error) {
+	return json.Marshal(fields)
+}
+
 func (p ProjectPatch) MarshalJSON() ([]byte, error) {
 	fields := map[string]any{}
-	if p.Name != nil {
-		fields["name"] = p.Name
-	}
-	if p.PurchaseOrderName != nil {
-		fields["purchase_order_name"] = p.PurchaseOrderName
-	}
-	if p.TotalHours != nil {
-		fields["total_hours"] = p.TotalHours
-	}
-	if p.StartDate != nil {
-		fields["start_date"] = p.StartDate
-	}
-	if p.EndDate != nil {
-		fields["end_date"] = p.EndDate
-	}
-	return json.Marshal(fields)
+	addPatchField(fields, "name", p.Name)
+	addPatchField(fields, "purchase_order_name", p.PurchaseOrderName)
+	addPatchField(fields, "total_hours", p.TotalHours)
+	addPatchField(fields, "start_date", p.StartDate)
+	addPatchField(fields, "end_date", p.EndDate)
+	return marshalPatch(fields)
 }
 
 type ProjectsResponse struct {
@@ -191,16 +191,10 @@ type SubprojectPatch struct {
 
 func (p SubprojectPatch) MarshalJSON() ([]byte, error) {
 	fields := map[string]any{}
-	if p.ProjectID != nil {
-		fields["project_id"] = p.ProjectID
-	}
-	if p.Name != nil {
-		fields["name"] = p.Name
-	}
-	if p.TotalHours != nil {
-		fields["total_hours"] = p.TotalHours
-	}
-	return json.Marshal(fields)
+	addPatchField(fields, "project_id", p.ProjectID)
+	addPatchField(fields, "name", p.Name)
+	addPatchField(fields, "total_hours", p.TotalHours)
+	return marshalPatch(fields)
 }
 
 type SubprojectsResponse struct {
@@ -246,31 +240,15 @@ type TaskPatch struct {
 
 func (p TaskPatch) MarshalJSON() ([]byte, error) {
 	fields := map[string]any{}
-	if p.Name != nil {
-		fields["name"] = p.Name
-	}
-	if p.Description != nil {
-		fields["description"] = p.Description
-	}
-	if p.ImplementationNotes != nil {
-		fields["implementation_notes"] = p.ImplementationNotes
-	}
-	if p.Department != nil {
-		fields["department"] = p.Department
-	}
-	if p.Developers != nil {
-		fields["developers"] = p.Developers
-	}
-	if p.Priority != nil {
-		fields["priority"] = p.Priority
-	}
-	if p.ProjectID != nil {
-		fields["project_id"] = p.ProjectID
-	}
-	if p.SubprojectID != nil {
-		fields["subproject_id"] = p.SubprojectID
-	}
-	return json.Marshal(fields)
+	addPatchField(fields, "name", p.Name)
+	addPatchField(fields, "description", p.Description)
+	addPatchField(fields, "implementation_notes", p.ImplementationNotes)
+	addPatchField(fields, "department", p.Department)
+	addPatchField(fields, "developers", p.Developers)
+	addPatchField(fields, "priority", p.Priority)
+	addPatchField(fields, "project_id", p.ProjectID)
+	addPatchField(fields, "subproject_id", p.SubprojectID)
+	return marshalPatch(fields)
 }
 
 type TasksResponse struct {

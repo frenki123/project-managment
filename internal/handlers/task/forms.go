@@ -6,7 +6,6 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	taskdomain "cad-development/internal/task"
@@ -40,16 +39,7 @@ func formPatch(r *http.Request) (taskdomain.Patch, error) {
 	if err != nil {
 		return taskdomain.Patch{}, err
 	}
-	return taskdomain.Patch{
-		Name: *nullable.Set(in.Name), Description: *nullable.Set(in.Description),
-		ImplementationNotes: *nullable.Set(in.ImplementationNotes), Department: *nullable.Set(in.Department),
-		Developers: *nullable.Set(in.Developers), Priority: *nullable.Set(in.Priority),
-		ProjectID: optionalID(in.ProjectID), SubprojectID: optionalID(in.SubprojectID),
-	}, nil
-}
-
-func optionalID(value *int64) nullable.Optional[*int64] {
-	return nullable.Optional[*int64]{Value: &value, Set: true}
+	return in.Patch(), nil
 }
 
 func formValues(r *http.Request) views.TaskFormValues {

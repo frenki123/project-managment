@@ -11,11 +11,11 @@ type Optional[T any] struct {
 }
 
 func (o Optional[T]) Apply(current T) T {
-	if !o.Set || o.Value == nil {
+	if !o.Set {
+		return current
+	}
+	if o.Value == nil {
 		var zero T
-		if !o.Set {
-			return current
-		}
 		return zero
 	}
 	return *o.Value

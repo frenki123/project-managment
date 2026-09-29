@@ -9,7 +9,6 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	domain "cad-development/internal/subproject"
 	task "cad-development/internal/task"
@@ -72,9 +71,7 @@ func formPatch(r *http.Request) (domain.Patch, error) {
 	if err != nil {
 		return domain.Patch{}, err
 	}
-	return domain.Patch{
-		ProjectID: *nullable.Set(in.ProjectID), Name: *nullable.Set(in.Name), TotalHours: *nullable.Set(*in.TotalHours),
-	}, nil
+	return in.Patch(), nil
 }
 
 func projectOpts(ctxq *db.Queries, r *http.Request, selected int64) ([]task.Option, error) {

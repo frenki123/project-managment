@@ -86,29 +86,23 @@ func taskInput(cmd *cobra.Command, f taskFlags) client.TaskInput {
 
 func taskPatch(cmd *cobra.Command, f taskFlags) client.TaskPatch {
 	in := client.TaskPatch{}
-	setText := func(name, value string) *nullable.Optional[string] {
-		if value == "null" {
-			return nullable.Clear[string]()
-		}
-		return nullable.Set(value)
-	}
 	if cmd.Flags().Changed("name") {
-		in.Name = setText("name", f.name)
+		in.Name = textPatch(f.name)
 	}
 	if cmd.Flags().Changed("description") {
-		in.Description = setText("description", f.description)
+		in.Description = textPatch(f.description)
 	}
 	if cmd.Flags().Changed("implementation-notes") {
-		in.ImplementationNotes = setText("implementation-notes", f.notes)
+		in.ImplementationNotes = textPatch(f.notes)
 	}
 	if cmd.Flags().Changed("department") {
-		in.Department = setText("department", f.department)
+		in.Department = textPatch(f.department)
 	}
 	if cmd.Flags().Changed("developers") {
-		in.Developers = setText("developers", f.developers)
+		in.Developers = textPatch(f.developers)
 	}
 	if cmd.Flags().Changed("priority") {
-		in.Priority = setText("priority", f.priority)
+		in.Priority = textPatch(f.priority)
 	}
 	if cmd.Flags().Changed("project-id") {
 		id := f.projectID

@@ -32,6 +32,14 @@ type Patch struct {
 	TotalHours nullable.Optional[float64] `json:"total_hours"`
 }
 
+func (in Input) Patch() Patch {
+	patch := Patch{ProjectID: *nullable.Set(in.ProjectID), Name: *nullable.Set(in.Name)}
+	if in.TotalHours != nil {
+		patch.TotalHours = *nullable.Set(*in.TotalHours)
+	}
+	return patch
+}
+
 type SubprojectsResponse struct {
 	Subprojects []Subproject `json:"subprojects"`
 }
