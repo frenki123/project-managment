@@ -14,7 +14,7 @@ import (
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/handlers"
-	"cad-development/internal/monthlock"
+	"cad-development/internal/historylock"
 	"cad-development/internal/weekly"
 )
 
@@ -189,7 +189,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	}
 }
 
-func TestHTMLWeekHistoricalEditUsesUnlockCookie(t *testing.T) {
+func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
@@ -213,17 +213,17 @@ func TestHTMLWeekHistoricalEditUsesUnlockCookie(t *testing.T) {
 		t.Fatalf("historical edit without cookie: %d %s", rr.Code, rr.Body.String())
 	}
 
-	unlock := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("project="+strconv.FormatInt(projectID, 10)+"&unlocked=true"))
+	unlock := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+strconv.FormatInt(projectID, 10)+"&history_open=true"))
 	unlock.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unlock.Header.Set("HX-Request", "true")
 	unlockResponse := httptest.NewRecorder()
 	mux.ServeHTTP(unlockResponse, unlock)
 	cookieHeader := unlockResponse.Header().Get("Set-Cookie")
-	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") {
+	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") {
 		t.Fatalf("unlock response: %d %s", unlockResponse.Code, unlockResponse.Body.String())
 	}
-	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, monthlock.UnlockCookieName+"="), ";", 2)[0]
-	if rr := post(&http.Cookie{Name: monthlock.UnlockCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "history is locked") {
+	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"="), ";", 2)[0]
+	if rr := post(&http.Cookie{Name: historylock.HistoricalEditingCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "history is locked") {
 		t.Fatalf("historical edit with cookie: %d %s", rr.Code, rr.Body.String())
 	}
 	weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
@@ -398,13 +398,13 @@ func TestJSONUnlockAppliesToOneWeeklyRequest(t *testing.T) {
 	}
 }
 
-func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
+func TestHistoryAccessHTMLFragmentPreservesFilters(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 	projectID := createProject(t, mux, "Lock filter", nextMonday(time.Now()))
 	project := strconv.FormatInt(projectID, 10)
-	r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString("project="+project+"&unlocked=true"))
+	r := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+project+"&history_open=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
 	rr := httptest.NewRecorder()
@@ -418,7 +418,7 @@ func TestMonthLockHTMLFragmentPreservesFilters(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
 		t.Fatalf("grid did not reflect browser unlock: %s", rr.Body.String())
 	}
-	if !strings.HasPrefix(rr.Header().Get("Set-Cookie"), monthlock.UnlockCookieName+"=") {
+	if !strings.HasPrefix(rr.Header().Get("Set-Cookie"), historylock.HistoricalEditingCookieName+"=") {
 		t.Fatalf("HTML unlock did not set a cookie: %s", rr.Header().Get("Set-Cookie"))
 	}
 	rr = httptest.NewRecorder()
@@ -461,13 +461,13 @@ func TestHTMXGridReturnsFragment(t *testing.T) {
 	}
 }
 
-func TestHTMLMonthLockRequiresBooleanState(t *testing.T) {
+func TestHTMLHistoryAccessRequiresBooleanState(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	for _, body := range []string{"project=ideas", "project=ideas&unlocked=maybe"} {
-		rr := postForm(t, mux, "/month-locks/set", body)
+	for _, body := range []string{"project=ideas", "project=ideas&history_open=maybe"} {
+		rr := postForm(t, mux, "/history-access/set", body)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
 		}
@@ -761,19 +761,19 @@ func TestHTMLWeekEditRejectsInvalidDisplayContextBeforeSaving(t *testing.T) {
 	}
 }
 
-func TestHTMLMonthLockSetIsIdempotentAndValidatesView(t *testing.T) {
+func TestHTMLHistoryAccessSetIsIdempotentAndValidatesView(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 	post := func(body string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(http.MethodPost, "/month-locks/set", bytes.NewBufferString(body))
+		r := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("HX-Request", "true")
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, r)
 		return rr
 	}
-	for _, body := range []string{"unlocked=true&project=bad", "unlocked=true&project=999999"} {
+	for _, body := range []string{"history_open=true&project=bad", "history_open=true&project=999999"} {
 		rr := post(body)
 		if rr.Code != http.StatusBadRequest && rr.Code != http.StatusNotFound {
 			t.Fatalf("invalid view %q: %d %s", body, rr.Code, rr.Body.String())
@@ -783,15 +783,15 @@ func TestHTMLMonthLockSetIsIdempotentAndValidatesView(t *testing.T) {
 		}
 	}
 	for _, value := range []string{"true", "true", "false", "false"} {
-		rr := post("unlocked=" + value + "&project=ideas")
+		rr := post("history_open=" + value + "&project=ideas")
 		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `<section id="grid"`) || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") {
 			t.Fatalf("set %s: %d %s", value, rr.Code, rr.Body.String())
 		}
 		cookieHeader := rr.Header().Get("Set-Cookie")
-		if value == "true" && !strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") {
+		if value == "true" && !strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") {
 			t.Fatalf("set %s did not set unlock cookie: %s", value, cookieHeader)
 		}
-		if value == "false" && (!strings.HasPrefix(cookieHeader, monthlock.UnlockCookieName+"=") || !strings.Contains(cookieHeader, "Max-Age=0")) {
+		if value == "false" && (!strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") || !strings.Contains(cookieHeader, "Max-Age=0")) {
 			t.Fatalf("set %s did not clear unlock cookie: %s", value, cookieHeader)
 		}
 	}

@@ -101,12 +101,12 @@ body.modal-open { overflow: hidden; }
 .locks button { margin: 0; padding: 0.35rem 0.55rem; font-size: 0.75rem; }
 .lock-status { color: var(--pico-muted-color); font-size: 0.75rem; }
 .lock-status strong { color: var(--pico-color); }
-.history-unlocked .project-header,
-.history-unlocked .workboard-toolbar { border-color: var(--pico-del-color); }
-.history-unlocked .project-header { border-top: 3px solid var(--pico-del-color); }
-.history-unlocked .workboard-toolbar { background: color-mix(in srgb, var(--pico-del-color) 8%, transparent); }
-.history-unlocked .lock-status { color: var(--pico-del-color); font-weight: 700; }
-.history-unlocked .week-table thead th { border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-muted-border-color)); }
+.historical-editing-allowed .project-header,
+.historical-editing-allowed .workboard-toolbar { border-color: var(--pico-del-color); }
+.historical-editing-allowed .project-header { border-top: 3px solid var(--pico-del-color); }
+.historical-editing-allowed .workboard-toolbar { background: color-mix(in srgb, var(--pico-del-color) 8%, transparent); }
+.historical-editing-allowed .lock-status { color: var(--pico-del-color); font-weight: 700; }
+.historical-editing-allowed .week-table thead th { border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-muted-border-color)); }
 
 .totals {
 	display: grid;

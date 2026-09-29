@@ -9,16 +9,17 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/monthlock"
+	"cad-development/internal/historylock"
 	"cad-development/internal/nullable"
 )
 
 type Patch struct {
-	PlannedHours  *float64 `json:"planned_hours"`
-	SpentHours    *float64 `json:"spent_hours"`
-	Progress      *float64 `json:"progress"`
-	ClearProgress bool     `json:"clear_progress,omitempty"`
-	Unlock        bool     `json:"unlock,omitempty"`
+	PlannedHours           *float64 `json:"planned_hours"`
+	SpentHours             *float64 `json:"spent_hours"`
+	Progress               *float64 `json:"progress"`
+	ClearProgress          bool     `json:"clear_progress,omitempty"`
+	Unlock                 bool     `json:"unlock,omitempty"`
+	AllowHistoricalEditing bool     `json:"-"`
 }
 
 type Cell struct {
@@ -56,7 +57,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if !patch.Unlock && monthlock.WeekLocked(string(weekStart), now) {
+		if !patch.Unlock && !patch.AllowHistoricalEditing && historylock.IsWeekLocked(string(weekStart), now) {
 			return app.Locked("history is locked")
 		}
 		var err error

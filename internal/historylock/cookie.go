@@ -1,0 +1,46 @@
+package historylock
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+)
+
+const (
+	HistoricalEditingCookieName = "historical_editing_until"
+	historicalEditingDuration   = 2 * time.Hour
+)
+
+func HistoricalEditingCookieValid(r *http.Request, now time.Time) bool {
+	cookie, err := r.Cookie(HistoricalEditingCookieName)
+	if err != nil {
+		return false
+	}
+	expires, err := strconv.ParseInt(cookie.Value, 10, 64)
+	return err == nil && expires > now.Unix()
+}
+
+func SetHistoricalEditingCookie(w http.ResponseWriter, now time.Time) {
+	expires := now.Add(historicalEditingDuration)
+	http.SetCookie(w, &http.Cookie{
+		Name:     HistoricalEditingCookieName,
+		Value:    strconv.FormatInt(expires.Unix(), 10),
+		Path:     "/",
+		Expires:  expires,
+		MaxAge:   int(historicalEditingDuration / time.Second),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func ClearHistoricalEditingCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     HistoricalEditingCookieName,
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(1, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}

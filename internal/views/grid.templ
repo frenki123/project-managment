@@ -72,19 +72,19 @@ templ GridPage(data task.Grid) {
 			if !data.Ideas && !data.SummaryOnly {
 				<div class="lock-controls">
 					<span class="lock-status">
-						if data.HistoryUnlocked {
+					if data.HistoricalEditingAllowed {
 							History unlocked
 						} else {
 							Past months locked
 						}
 					</span>
 					<div class="locks">
-						<form hx-post="/month-locks/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
-							if data.HistoryUnlocked {
-								<input type="hidden" name="unlocked" value="false"/>
+						<form hx-post="/history-access/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+							if data.HistoricalEditingAllowed {
+								<input type="hidden" name="history_open" value="false"/>
 								<button type="submit" class="secondary outline">Lock history</button>
 							} else {
-								<input type="hidden" name="unlocked" value="true"/>
+								<input type="hidden" name="history_open" value="true"/>
 								<button type="submit" class="secondary outline">Unlock history</button>
 						}
 					</form>
@@ -195,8 +195,8 @@ func gridClass(data task.Grid) string {
 	if data.Ideas {
 		class += " ideas"
 	}
-	if data.HistoryUnlocked {
-		class += " history-unlocked"
+	if data.HistoricalEditingAllowed {
+		class += " historical-editing-allowed"
 	}
 	return class
 }
