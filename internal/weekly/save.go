@@ -28,7 +28,7 @@ type Cell struct {
 	Progress     *float64  `json:"progress"`
 }
 
-func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time, historicalEditingAllowed bool) (Cell, error) {
+func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
 	if _, err := ParseWeekStart(weekStart); err != nil {
 		return Cell{}, err
 	}
@@ -55,7 +55,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if !patch.Unlock && !historicalEditingAllowed && IsWeekLocked(string(weekStart), now) {
+		if !patch.Unlock && IsWeekLocked(string(weekStart), now) {
 			return app.Locked("historical editing is not enabled")
 		}
 		var err error

@@ -7,9 +7,5 @@ func IsWeekLocked(weekStart string, now time.Time) bool {
 	if err != nil || week.Weekday() != time.Monday {
 		return true
 	}
-	return isPreviousCalendarMonth(week, now)
-}
-
-func isPreviousCalendarMonth(date time.Time, now time.Time) bool {
-	return date.Year() < now.Year() || date.Year() == now.Year() && date.Month() < now.Month()
+	return week.Year() < now.Year() || week.Year() == now.Year() && week.Month() < now.Month()
 }

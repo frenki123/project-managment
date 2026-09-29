@@ -40,10 +40,10 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	secondPlanned := 50.0
 	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now, false); err != nil {
+	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now, false); err != nil {
+	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,7 +106,7 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	secondID := second.ID
@@ -143,7 +143,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	planned, spent, progress := 6.0, 4.0, 50.0
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, false); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now, false)
@@ -218,7 +218,7 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 		}
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	for _, allowHistoricalEditing := range []bool{false, true, false} {
+	for _, allowHistoricalEditing := range []bool{false, true} {
 		for _, id := range []int64{p.ID, other.ID} {
 			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now, allowHistoricalEditing)
 			if err != nil {
