@@ -73,7 +73,7 @@ func TestSaveRequestUnlockDoesNotPersist(t *testing.T) {
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	hours := 1.0
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{PlannedHours: &hours, Unlock: true}, now); err != nil {
-		t.Fatalf("unlocked historical week was rejected: %v", err)
+		t.Fatalf("historical edit with request access was rejected: %v", err)
 	}
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{PlannedHours: &hours}, now); err == nil {
 		t.Fatal("historical unlock should not persist")

@@ -7,7 +7,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/monthlock"
+	"cad-development/internal/historylock"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 	"cad-development/internal/weekly"
@@ -48,7 +48,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
-		patch.Unlock = monthlock.CookieValid(r, currentTime)
+		patch.AllowHistoricalEditing = historylock.HistoricalEditingCookieValid(r, currentTime)
 		grid, rowIndex, err := weekGrid(r, q, id, currentTime)
 		if err != nil {
 			app.WriteError(w, r, err)
@@ -112,7 +112,7 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time) (task
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, monthlock.CookieValid(r, now))
+	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, historylock.HistoricalEditingCookieValid(r, now))
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}

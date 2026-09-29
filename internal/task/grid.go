@@ -8,33 +8,33 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/monthlock"
+	"cad-development/internal/historylock"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/weekly"
 )
 
 type Grid struct {
-	Projects         []Option
-	Subprojects      []Option
-	FilterProject    string
-	FilterSubproject string
-	Ideas            bool
-	SummaryOnly      bool
-	ProjectName      string
-	SubprojectName   string
-	StartDate        string
-	EndDate          string
-	Weeks            []weekly.WeekInfo
-	WeekTotals       []GridWeekTotal
-	Rows             []GridRow
-	POName           string
-	BudgetHours      float64
-	PlannedHours     float64
-	SpentHours       float64
-	ProgressPct      *float64
-	Overrun          bool
-	HistoryUnlocked  bool
+	Projects                 []Option
+	Subprojects              []Option
+	FilterProject            string
+	FilterSubproject         string
+	Ideas                    bool
+	SummaryOnly              bool
+	ProjectName              string
+	SubprojectName           string
+	StartDate                string
+	EndDate                  string
+	Weeks                    []weekly.WeekInfo
+	WeekTotals               []GridWeekTotal
+	Rows                     []GridRow
+	POName                   string
+	BudgetHours              float64
+	PlannedHours             float64
+	SpentHours               float64
+	ProgressPct              *float64
+	Overrun                  bool
+	HistoricalEditingAllowed bool
 }
 
 type Option struct {
@@ -79,7 +79,7 @@ type projectFilter struct {
 	Ideas bool
 }
 
-func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time, allowHistorical bool) (Grid, error) {
+func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time, allowHistoricalEditing bool) (Grid, error) {
 	projects, err := project.List(ctx, q)
 	if err != nil {
 		return Grid{}, err
@@ -96,7 +96,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		ProjectName:      "All tasks",
 		Projects:         projectOptions(projects, filter.Value),
 	}
-	data.HistoryUnlocked = allowHistorical
+	data.HistoricalEditingAllowed = allowHistoricalEditing
 	if filter.All {
 		data.SummaryOnly = true
 		tasks, err := List(ctx, q)
@@ -288,7 +288,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 				Spent:     cw.SpentHours,
 				Progress:  effective[string(ws)],
 				Stored:    cw.Progress.Valid,
-				Locked:    !allowHistorical && monthlock.WeekLocked(string(ws), now),
+				Locked:    !allowHistoricalEditing && historylock.IsWeekLocked(string(ws), now),
 				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),
 			})
 		}

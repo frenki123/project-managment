@@ -124,7 +124,7 @@ pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ## Layout
 
 Code is organized by domain, not by layer: `internal/task`, `internal/project`,
-`internal/subproject`, `internal/weekly`, `internal/monthlock`. `internal/app` is the small web
+`internal/subproject`, `internal/weekly`, `internal/historylock`. `internal/app` is the small web
 and database framework; `internal/handlers` holds HTTP wiring; `internal/views` holds `templ`
 components. SQL lives in `sql/queries` and `sql/migrations`, generated code in `internal/db`.
 

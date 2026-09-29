@@ -197,7 +197,7 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	}
 }
 
-func TestGridUsesRequestHistoryUnlock(t *testing.T) {
+func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{
@@ -218,17 +218,17 @@ func TestGridUsesRequestHistoryUnlock(t *testing.T) {
 		}
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	for _, unlocked := range []bool{false, true, false} {
+	for _, allowHistoricalEditing := range []bool{false, true, false} {
 		for _, id := range []int64{p.ID, other.ID} {
-			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now, unlocked)
+			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now, allowHistoricalEditing)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if grid.HistoryUnlocked != unlocked {
-				t.Fatalf("project %d: history unlock = %v, want %v", id, grid.HistoryUnlocked, unlocked)
+			if grid.HistoricalEditingAllowed != allowHistoricalEditing {
+				t.Fatalf("project %d: historical editing = %v, want %v", id, grid.HistoricalEditingAllowed, allowHistoricalEditing)
 			}
 			for _, cell := range grid.Rows[0].Cells {
-				wantLocked := !unlocked && string(cell.WeekStart) < "2026-05-01"
+				wantLocked := !allowHistoricalEditing && string(cell.WeekStart) < "2026-05-01"
 				if cell.Locked != wantLocked {
 					t.Fatalf("project %d: unexpected lock for %s: %#v", id, cell.WeekStart, cell)
 				}
