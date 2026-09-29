@@ -26,6 +26,16 @@ build: generate
     go build -ldflags "-X main.version=$(git describe --tags --always)" -o ./tmp/server ./cmd/server
     go build -ldflags "-X main.version=$(git describe --tags --always)" -o ./tmp/pmctl ./cmd/pmctl
 
+# Cross-compile release binaries and checksums into dist/.
+dist VERSION="dev": generate
+    mkdir -p dist
+    rm -f dist/*
+    CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version={{VERSION}}" -o dist/server-linux-amd64 ./cmd/server
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version={{VERSION}}" -o dist/server-windows-amd64.exe ./cmd/server
+    CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version={{VERSION}}" -o dist/pmctl-linux-amd64 ./cmd/pmctl
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version={{VERSION}}" -o dist/pmctl-windows-amd64.exe ./cmd/pmctl
+    cd dist && sha256sum * > SHA256SUMS
+
 # Generate code and run all Go tests.
 test: generate
     go test ./...

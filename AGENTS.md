@@ -31,7 +31,8 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Merging to `main` never publishes a release. Only pushing a `v*` tag does, and that path runs `just check` before it builds.
 - Merging to `main` runs CI only: `just check` plus a cross-compile canary. No binary is published from that path.
 - The rolling `dev` pre-release is a separate workflow, rebuilt nightly at 01:20 Europe/Zagreb for Linux and Windows. It skips tests, because `main` is already tested by CI. It is a convenience build, never a substitute for a tagged release.
-- `dev` is a single fixed tag. Its release body records the commit that was built; the tag itself never moves and old builds are overwritten, not accumulated.
+- `dev` is a single fixed tag. When a new commit exists, it is force-moved to that commit so GitHub's generated source archives match the binaries; assets are replaced in place and old assets are pruned. A night with no new commit on `main` is skipped. Workflow dispatch publishes the dispatched commit intentionally.
+- All release workflows build through `just dist <version>`; do not duplicate the cross-compile block in workflow files.
 - `releases/latest` skips pre-releases, so every build is a pre-release and `releases/latest/download/<file>` returns 404. Always name the tag in download URLs.
 
 # Domain model
