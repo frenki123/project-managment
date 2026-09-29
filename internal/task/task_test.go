@@ -10,6 +10,7 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -58,6 +59,35 @@ func TestCreateSubprojectAdoptsItsProject(t *testing.T) {
 	}
 	if item.ProjectID == nil || *item.ProjectID != p.ID {
 		t.Fatalf("expected project %d, got %v", p.ID, item.ProjectID)
+	}
+}
+
+func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Subproject", TotalHours: new(1.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskInput := task.Input{Name: "Task", ProjectID: &p.ID, SubprojectID: &sp.ID}
+	item, err := task.Create(ctx, q, taskInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: *nullable.Clear[*int64]()})
+	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
+		t.Fatalf("got %v", err)
+	}
+	updated, err := task.Get(ctx, q, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ProjectID == nil || *updated.ProjectID != p.ID || updated.SubprojectID == nil || *updated.SubprojectID != sp.ID {
+		t.Fatalf("assignment changed after rejected update: project=%v subproject=%v", updated.ProjectID, updated.SubprojectID)
 	}
 }
 

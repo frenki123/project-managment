@@ -244,6 +244,10 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		if err != nil {
 			return err
 		}
+		if patch.ProjectID.Set && patch.ProjectID.Value == nil && current.SubprojectID.Valid &&
+			(!patch.SubprojectID.Set || patch.SubprojectID.Value != nil) {
+			return app.Invalid("project cannot be cleared while subproject is assigned")
+		}
 		currentInput := Input{
 			Name: current.Name, Description: current.Description,
 			ImplementationNotes: current.ImplementationNotes, Department: current.Department,

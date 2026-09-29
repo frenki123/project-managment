@@ -163,7 +163,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 		return data, nil
 	}
 	data.HistoricalEditingAllowed = allowHistoricalEditing
-	pid := resolved.ProjectID
+	pid := resolved.Project.ID
 	proj := project.FromDB(*resolved.Project)
 	subs, err := subproject.ListByProject(ctx, q, pid)
 	if err != nil {
