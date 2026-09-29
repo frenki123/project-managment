@@ -65,6 +65,23 @@ type Patch struct {
 	SubprojectID        nullable.Optional[*int64] `json:"subproject_id"`
 }
 
+func (in Input) Patch() Patch {
+	return Patch{
+		Name:                *nullable.Set(in.Name),
+		Description:         *nullable.Set(in.Description),
+		ImplementationNotes: *nullable.Set(in.ImplementationNotes),
+		Department:          *nullable.Set(in.Department),
+		Developers:          *nullable.Set(in.Developers),
+		Priority:            *nullable.Set(in.Priority),
+		ProjectID:           optionalID(in.ProjectID),
+		SubprojectID:        optionalID(in.SubprojectID),
+	}
+}
+
+func optionalID(value *int64) nullable.Optional[*int64] {
+	return nullable.Optional[*int64]{Value: &value, Set: true}
+}
+
 type TasksResponse struct {
 	Tasks []Task `json:"tasks"`
 }

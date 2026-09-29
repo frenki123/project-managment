@@ -42,6 +42,17 @@ type Patch struct {
 	EndDate           nullable.Optional[string]  `json:"end_date"`
 }
 
+func (in Input) Patch() Patch {
+	patch := Patch{
+		Name: *nullable.Set(in.Name), PurchaseOrderName: *nullable.Set(in.PurchaseOrderName),
+		StartDate: *nullable.Set(in.StartDate), EndDate: *nullable.Set(in.EndDate),
+	}
+	if in.TotalHours != nil {
+		patch.TotalHours = *nullable.Set(*in.TotalHours)
+	}
+	return patch
+}
+
 type ProjectsResponse struct {
 	Projects []Project `json:"projects"`
 }
@@ -170,12 +181,10 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Project, error) {
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project, error) {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("project not found")
-		} else if err != nil {
-			return err
-		}
 		current, err := txq.GetProject(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return app.Missing("project not found")
+		}
 		if err != nil {
 			return err
 		}
