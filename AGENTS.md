@@ -17,6 +17,7 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Prefer small, stable Go mock tests for important calculations and HTTP handlers.
 - Organize by domain (task, project, subproject, etc.), not by technical layer. only exception is `internal\app` that will be used as small web&db framework.
 - Do not commit. Run `just` checks and report results; I will confirm when a commit should be made.
+- Keep the shared UI, REST, and CLI contract documented in the README API Contract section when behavior changes.
 
 # Go 1.27
 - Prefer `errors.AsType`, `new(expr)`, `t.Context()`, and `slices` helpers when they improve clarity.

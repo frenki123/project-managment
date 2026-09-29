@@ -8,6 +8,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -32,7 +33,9 @@ func TestHoursCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(5.0)}); err == nil {
+	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{
+		ProjectID: *nullable.Set(p.ID), Name: *nullable.Set("B"), TotalHours: *nullable.Set(5.0),
+	}); err == nil {
 		t.Fatal("expected update cap")
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
@@ -83,7 +86,9 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 	if _, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: new(first.ID), SubprojectID: new(sp.ID)}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = subproject.Update(ctx, q, sp.ID, subproject.Input{ProjectID: second.ID, Name: sp.Name, TotalHours: new(sp.TotalHours)})
+	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{
+		ProjectID: *nullable.Set(second.ID), Name: *nullable.Set(sp.Name), TotalHours: *nullable.Set(sp.TotalHours),
+	})
 	var httpErr app.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)

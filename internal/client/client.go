@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"cad-development/internal/nullable"
 )
 
 const DefaultURL = "http://127.0.0.1:8080"
@@ -136,6 +138,34 @@ type ProjectInput struct {
 	StartDate         string   `json:"start_date"`
 	EndDate           string   `json:"end_date"`
 }
+type ProjectPatch struct {
+	Name              *nullable.Optional[string]  `json:"name,omitempty"`
+	PurchaseOrderName *nullable.Optional[string]  `json:"purchase_order_name,omitempty"`
+	TotalHours        *nullable.Optional[float64] `json:"total_hours,omitempty"`
+	StartDate         *nullable.Optional[string]  `json:"start_date,omitempty"`
+	EndDate           *nullable.Optional[string]  `json:"end_date,omitempty"`
+}
+
+func (p ProjectPatch) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if p.Name != nil {
+		fields["name"] = p.Name
+	}
+	if p.PurchaseOrderName != nil {
+		fields["purchase_order_name"] = p.PurchaseOrderName
+	}
+	if p.TotalHours != nil {
+		fields["total_hours"] = p.TotalHours
+	}
+	if p.StartDate != nil {
+		fields["start_date"] = p.StartDate
+	}
+	if p.EndDate != nil {
+		fields["end_date"] = p.EndDate
+	}
+	return json.Marshal(fields)
+}
+
 type ProjectsResponse struct {
 	Projects []Project `json:"projects"`
 }
@@ -153,6 +183,26 @@ type SubprojectInput struct {
 	Name       string   `json:"name"`
 	TotalHours *float64 `json:"total_hours"`
 }
+type SubprojectPatch struct {
+	ProjectID  *nullable.Optional[int64]   `json:"project_id,omitempty"`
+	Name       *nullable.Optional[string]  `json:"name,omitempty"`
+	TotalHours *nullable.Optional[float64] `json:"total_hours,omitempty"`
+}
+
+func (p SubprojectPatch) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if p.ProjectID != nil {
+		fields["project_id"] = p.ProjectID
+	}
+	if p.Name != nil {
+		fields["name"] = p.Name
+	}
+	if p.TotalHours != nil {
+		fields["total_hours"] = p.TotalHours
+	}
+	return json.Marshal(fields)
+}
+
 type SubprojectsResponse struct {
 	Subprojects []Subproject `json:"subprojects"`
 }
@@ -183,6 +233,46 @@ type TaskInput struct {
 	ProjectID           *int64 `json:"project_id"`
 	SubprojectID        *int64 `json:"subproject_id"`
 }
+type TaskPatch struct {
+	Name                *nullable.Optional[string] `json:"name,omitempty"`
+	Description         *nullable.Optional[string] `json:"description,omitempty"`
+	ImplementationNotes *nullable.Optional[string] `json:"implementation_notes,omitempty"`
+	Department          *nullable.Optional[string] `json:"department,omitempty"`
+	Developers          *nullable.Optional[string] `json:"developers,omitempty"`
+	Priority            *nullable.Optional[string] `json:"priority,omitempty"`
+	ProjectID           *nullable.Optional[*int64] `json:"project_id,omitempty"`
+	SubprojectID        *nullable.Optional[*int64] `json:"subproject_id,omitempty"`
+}
+
+func (p TaskPatch) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{}
+	if p.Name != nil {
+		fields["name"] = p.Name
+	}
+	if p.Description != nil {
+		fields["description"] = p.Description
+	}
+	if p.ImplementationNotes != nil {
+		fields["implementation_notes"] = p.ImplementationNotes
+	}
+	if p.Department != nil {
+		fields["department"] = p.Department
+	}
+	if p.Developers != nil {
+		fields["developers"] = p.Developers
+	}
+	if p.Priority != nil {
+		fields["priority"] = p.Priority
+	}
+	if p.ProjectID != nil {
+		fields["project_id"] = p.ProjectID
+	}
+	if p.SubprojectID != nil {
+		fields["subproject_id"] = p.SubprojectID
+	}
+	return json.Marshal(fields)
+}
+
 type TasksResponse struct {
 	Tasks []Task `json:"tasks"`
 }
@@ -223,7 +313,7 @@ func (c *Client) CreateProject(ctx context.Context, in ProjectInput) (Project, e
 	var v Project
 	return v, c.Do(ctx, http.MethodPost, "/api/v1/projects", in, &v)
 }
-func (c *Client) UpdateProject(ctx context.Context, id int64, in ProjectInput) (Project, error) {
+func (c *Client) UpdateProject(ctx context.Context, id int64, in ProjectPatch) (Project, error) {
 	var v Project
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/projects/%d", id), in, &v)
 }
@@ -247,7 +337,7 @@ func (c *Client) CreateSubproject(ctx context.Context, in SubprojectInput) (Subp
 	var v Subproject
 	return v, c.Do(ctx, http.MethodPost, "/api/v1/subprojects", in, &v)
 }
-func (c *Client) UpdateSubproject(ctx context.Context, id int64, in SubprojectInput) (Subproject, error) {
+func (c *Client) UpdateSubproject(ctx context.Context, id int64, in SubprojectPatch) (Subproject, error) {
 	var v Subproject
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/subprojects/%d", id), in, &v)
 }
@@ -281,7 +371,7 @@ func (c *Client) CreateTask(ctx context.Context, in TaskInput) (Task, error) {
 	var v Task
 	return v, c.Do(ctx, http.MethodPost, "/api/v1/tasks", in, &v)
 }
-func (c *Client) UpdateTask(ctx context.Context, id int64, in TaskInput) (Task, error) {
+func (c *Client) UpdateTask(ctx context.Context, id int64, in TaskPatch) (Task, error) {
 	var v Task
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d", id), in, &v)
 }

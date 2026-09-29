@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"cad-development/internal/client"
+	"cad-development/internal/nullable"
 	"github.com/spf13/cobra"
 )
 
@@ -83,19 +84,61 @@ func taskInput(cmd *cobra.Command, f taskFlags) client.TaskInput {
 	return in
 }
 
+func taskPatch(cmd *cobra.Command, f taskFlags) client.TaskPatch {
+	in := client.TaskPatch{}
+	setText := func(name, value string) *nullable.Optional[string] {
+		if value == "null" {
+			return nullable.Clear[string]()
+		}
+		return nullable.Set(value)
+	}
+	if cmd.Flags().Changed("name") {
+		in.Name = setText("name", f.name)
+	}
+	if cmd.Flags().Changed("description") {
+		in.Description = setText("description", f.description)
+	}
+	if cmd.Flags().Changed("implementation-notes") {
+		in.ImplementationNotes = setText("implementation-notes", f.notes)
+	}
+	if cmd.Flags().Changed("department") {
+		in.Department = setText("department", f.department)
+	}
+	if cmd.Flags().Changed("developers") {
+		in.Developers = setText("developers", f.developers)
+	}
+	if cmd.Flags().Changed("priority") {
+		in.Priority = setText("priority", f.priority)
+	}
+	if cmd.Flags().Changed("project-id") {
+		id := f.projectID
+		in.ProjectID = nullable.Set(&id)
+	}
+	if cmd.Flags().Changed("subproject-id") {
+		id := f.subprojectID
+		in.SubprojectID = nullable.Set(&id)
+	}
+	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
+		in.ProjectID = nullable.Clear[*int64]()
+		in.SubprojectID = nullable.Clear[*int64]()
+	}
+	return in
+}
+
 func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f taskFlags
 	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
-		in := taskInput(cmd, f)
 		var v client.Task
 		var err error
 		if update {
+			in := taskPatch(cmd, f)
 			id, err := idArg(args)
 			if err != nil {
 				return err
 			}
 			v, err = s.client.UpdateTask(cmd.Context(), id, in)
 		} else {
+			in := taskInput(cmd, f)
 			v, err = s.client.CreateTask(cmd.Context(), in)
 		}
 		if err != nil {

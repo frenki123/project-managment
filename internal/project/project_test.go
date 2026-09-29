@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -58,7 +59,10 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.EndDate = "2026-09-30"
-	if _, err := project.Update(ctx, q, p.ID, project.Input{Name: p.Name, TotalHours: new(p.TotalHours), StartDate: p.StartDate, EndDate: p.EndDate}); err == nil {
+	if _, err := project.Update(ctx, q, p.ID, project.Patch{
+		Name: *nullable.Set(p.Name), TotalHours: *nullable.Set(p.TotalHours),
+		StartDate: *nullable.Set(p.StartDate), EndDate: *nullable.Set(p.EndDate),
+	}); err == nil {
 		t.Fatal("expected date change to be rejected")
 	}
 	got, err := project.Get(ctx, q, p.ID)
@@ -108,7 +112,10 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "SP", TotalHours: new(6.0)}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = project.Update(ctx, q, p.ID, project.Input{Name: p.Name, TotalHours: new(5.0), StartDate: p.StartDate, EndDate: p.EndDate})
+	_, err = project.Update(ctx, q, p.ID, project.Patch{
+		Name: *nullable.Set(p.Name), TotalHours: *nullable.Set(5.0),
+		StartDate: *nullable.Set(p.StartDate), EndDate: *nullable.Set(p.EndDate),
+	})
 	if err == nil {
 		t.Fatal("expected project total below subprojects to be rejected")
 	}

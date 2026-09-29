@@ -46,7 +46,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 		historicalEditingAllowed := historyaccess.CookieValid(r, currentTime)
 		patch, err := formWeekPatch(r)
 		if err != nil {
-			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime, historicalEditingAllowed)
+			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, app.HTTPErrorFrom(err).Status, currentTime, historicalEditingAllowed)
 			return
 		}
 		patch.Unlock = historicalEditingAllowed
@@ -62,10 +62,11 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 		_, err = saveWeek(r, q, id, patch, currentTime)
 		if err != nil {
 			grid.Rows[rowIndex].Cells[weekIndex(grid, rowIndex, r.PathValue("weekStart"))].Error = app.HTTPErrorFrom(err).Message
-			app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, rowIndex))
+			w.Header().Set("HX-Reswap", "outerHTML")
+			app.RenderFragment(w, r, app.HTTPErrorFrom(err).Status, views.WeekRowResponse(grid, rowIndex))
 			return
 		}
-		renderWeekRow(w, r, q, id, "", currentTime, historicalEditingAllowed)
+		renderWeekRow(w, r, q, id, "", http.StatusOK, currentTime, historicalEditingAllowed)
 	}
 }
 
@@ -109,11 +110,14 @@ func weekIndex(grid taskdomain.Grid, rowIndex int, weekStart string) int {
 }
 
 func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, historicalEditingAllowed bool) (taskdomain.Grid, int, error) {
-	projectKey, subprojectID, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
+	filter, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, historicalEditingAllowed)
+	if err := filter.Validate(r.Context(), q); err != nil {
+		return taskdomain.Grid{}, -1, err
+	}
+	grid, err := taskdomain.LoadGrid(r.Context(), q, filter, now, historicalEditingAllowed)
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
@@ -125,7 +129,7 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, histo
 	return grid, -1, nil
 }
 
-func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID int64, errMsg string, now time.Time, historicalEditingAllowed bool) {
+func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID int64, errMsg string, status int, now time.Time, historicalEditingAllowed bool) {
 	grid, rowIndex, err := weekGrid(r, q, taskID, now, historicalEditingAllowed)
 	if err != nil {
 		app.WriteError(w, r, err)
@@ -133,7 +137,8 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 	}
 	if rowIndex >= 0 {
 		grid.Rows[rowIndex].Cells[weekIndex(grid, rowIndex, r.PathValue("weekStart"))].Error = errMsg
-		app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, rowIndex))
+		w.Header().Set("HX-Reswap", "outerHTML")
+		app.RenderFragment(w, r, status, views.WeekRowResponse(grid, rowIndex))
 		return
 	}
 	app.WriteError(w, r, app.Invalid("task or week is outside the selected view"))

@@ -15,7 +15,7 @@ templ Layout(title string) {
 			<script src="/static/js/app.js" defer></script>
 			<title>{ title }</title>
 		</head>
-		<body hx-status:4xx:inherited="swap:none" hx-status:5xx:inherited="swap:none">
+		<body hx-status:4xx:inherited="swap:innerHTML" hx-status:5xx:inherited="swap:innerHTML">
 			<div id="toast" class="toast" role="alert" hidden></div>
 			<div id="modal-backdrop" class="modal-backdrop" hidden></div>
 			<aside id="modal-root" class="side-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true" tabindex="-1"></aside>

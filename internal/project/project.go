@@ -9,6 +9,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/weekly"
 )
 
@@ -31,6 +32,14 @@ type Input struct {
 	TotalHours        *float64 `json:"total_hours"`
 	StartDate         string   `json:"start_date"`
 	EndDate           string   `json:"end_date"`
+}
+
+type Patch struct {
+	Name              nullable.Optional[string]  `json:"name"`
+	PurchaseOrderName nullable.Optional[string]  `json:"purchase_order_name"`
+	TotalHours        nullable.Optional[float64] `json:"total_hours"`
+	StartDate         nullable.Optional[string]  `json:"start_date"`
+	EndDate           nullable.Optional[string]  `json:"end_date"`
 }
 
 type ProjectsResponse struct {
@@ -159,14 +168,26 @@ func ListWithTotals(ctx context.Context, q *db.Queries) ([]Project, error) {
 	return out, nil
 }
 
-func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Project, error) {
+func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project, error) {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		if _, err := txq.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("project not found")
 		} else if err != nil {
 			return err
 		}
-		in, err := validate(ctx, txq, in, id)
+		current, err := txq.GetProject(ctx, id)
+		if err != nil {
+			return err
+		}
+		currentHours := current.TotalHours
+		in := Input{
+			Name:              patch.Name.Apply(current.Name),
+			PurchaseOrderName: patch.PurchaseOrderName.Apply(current.PurchaseOrderName),
+			TotalHours:        new(patch.TotalHours.Apply(currentHours)),
+			StartDate:         patch.StartDate.Apply(current.StartDate),
+			EndDate:           patch.EndDate.Apply(current.EndDate),
+		}
+		in, err = validate(ctx, txq, in, id)
 		if err != nil {
 			return err
 		}

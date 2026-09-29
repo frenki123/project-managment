@@ -65,7 +65,7 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 		r.Header.Set("HX-Request", "true")
 		r.Header.Set("HX-Target", "#panel")
 		app.WriteError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "missing"})
-		if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || rr.Header().Get("Content-Type") != "text/plain; charset=utf-8" || rr.Body.String() != "missing" {
+		if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || !strings.Contains(rr.Body.String(), "missing") {
 			t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 		}
 	})
@@ -77,7 +77,18 @@ func TestWriteFragmentErrorRendersExplicitFragment(t *testing.T) {
 	r.Header.Set("HX-Request", "true")
 	r.Header.Set("HX-Target", "#panel")
 	app.WriteFragmentError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
-	if rr.Code != http.StatusOK || rr.Header().Get("HX-Retarget") != "#panel" || !strings.Contains(rr.Body.String(), "&lt;missing&gt;") {
+	if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || !strings.Contains(rr.Body.String(), "&lt;missing&gt;") {
+		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
+	}
+}
+
+func TestAPIPathsIgnoreHTMXHeaders(t *testing.T) {
+	rr := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/projects/999", nil)
+	r.Header.Set("HX-Request", "true")
+	r.Header.Set("HX-Target", "#panel")
+	app.WriteError(rr, r, app.Missing("project not found"))
+	if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || !strings.Contains(rr.Body.String(), `"error":"project not found"`) {
 		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 	}
 }
@@ -132,16 +143,6 @@ func TestFormParsingDistinguishesEmptyAndMalformedValues(t *testing.T) {
 	malformed.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if _, err := app.FormInt64Checked(malformed, "project_id"); err == nil {
 		t.Fatal("expected malformed form error")
-	}
-}
-
-func TestRedirectWithFormFilter(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("project=7&subproject=3"))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	app.RedirectWithFormFilter(rr, r, "/", "project", "subproject")
-	if got := rr.Header().Get("Location"); got != "/?project=7&subproject=3" {
-		t.Fatalf("got redirect %q", got)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 )
 
 type Subproject struct {
@@ -23,6 +24,12 @@ type Input struct {
 	ProjectID  int64    `json:"project_id"`
 	Name       string   `json:"name"`
 	TotalHours *float64 `json:"total_hours"`
+}
+
+type Patch struct {
+	ProjectID  nullable.Optional[int64]   `json:"project_id"`
+	Name       nullable.Optional[string]  `json:"name"`
+	TotalHours nullable.Optional[float64] `json:"total_hours"`
 }
 
 type SubprojectsResponse struct {
@@ -178,7 +185,7 @@ func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64
 	return out, nil
 }
 
-func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject, error) {
+func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproject, error) {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -187,11 +194,16 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Subproject,
 		if err != nil {
 			return err
 		}
+		in := Input{
+			ProjectID:  patch.ProjectID.Apply(current.ProjectID),
+			Name:       patch.Name.Apply(current.Name),
+			TotalHours: new(patch.TotalHours.Apply(current.TotalHours)),
+		}
 		validated, err := validate(ctx, txq, in, id)
 		if err != nil {
 			return err
 		}
-		if current.ProjectID != validated.ProjectID {
+		if patch.ProjectID.Set && current.ProjectID != validated.ProjectID {
 			taskCount, err := txq.CountTasksBySubproject(ctx, id)
 			if err != nil {
 				return err

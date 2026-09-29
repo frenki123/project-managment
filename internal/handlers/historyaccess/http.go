@@ -23,9 +23,9 @@ func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 			return
 		}
 		now := time.Now()
-		pk, sid, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
+		filter, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 		if err == nil {
-			err = taskdomain.ValidateFilter(r.Context(), q, pk, sid)
+			err = filter.Validate(r.Context(), q)
 		}
 		if err != nil {
 			app.WriteError(w, r, err)
@@ -41,6 +41,6 @@ func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 			taskhandler.RenderGrid(w, r, q, now, historicalEditingAllowed)
 			return
 		}
-		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")
+		app.Redirect(w, r, "/?"+filter.Key())
 	}
 }

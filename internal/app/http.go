@@ -85,20 +85,6 @@ func SetToast(w http.ResponseWriter, message string) {
 	}
 }
 
-func RedirectWithFormFilter(w http.ResponseWriter, r *http.Request, path string, names ...string) {
-	query := r.URL.Query()
-	for _, name := range names {
-		if value := r.FormValue(name); value != "" {
-			query.Set(name, value)
-		}
-	}
-	url := path
-	if encoded := query.Encode(); encoded != "" {
-		url += "?" + encoded
-	}
-	Redirect(w, r, url)
-}
-
 func FormInt64Checked(r *http.Request, name string) (*int64, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
@@ -179,9 +165,6 @@ func RenderPage(w http.ResponseWriter, r *http.Request, status int, component Co
 
 // RenderFragment renders an HTMX fragment, turning render failures into an error fragment.
 func RenderFragment(w http.ResponseWriter, r *http.Request, status int, component Component) {
-	if IsHTMX(r) && status >= http.StatusBadRequest {
-		status = http.StatusOK
-	}
 	if err := Render(w, r, status, component); err != nil {
 		writeRenderError(w, r, err, true)
 	}

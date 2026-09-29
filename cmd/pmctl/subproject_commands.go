@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"cad-development/internal/client"
+	"cad-development/internal/nullable"
 	"github.com/spf13/cobra"
 )
 
@@ -54,20 +55,30 @@ func (f *subprojectFlags) addFlags(c *cobra.Command) {
 func subprojectCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f subprojectFlags
 	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
-		totalHours := (*float64)(nil)
-		if cmd.Flags().Changed("total-hours") {
-			totalHours = &f.totalHours
-		}
-		in := client.SubprojectInput{ProjectID: f.projectID, Name: f.name, TotalHours: totalHours}
 		var err error
 		var v client.Subproject
 		if update {
+			in := client.SubprojectPatch{}
+			if cmd.Flags().Changed("project-id") {
+				in.ProjectID = nullable.Set(f.projectID)
+			}
+			if cmd.Flags().Changed("name") {
+				in.Name = textPatch(f.name)
+			}
+			if cmd.Flags().Changed("total-hours") {
+				in.TotalHours = nullable.Set(f.totalHours)
+			}
 			id, e := idArg(args)
 			if e != nil {
 				return e
 			}
 			v, err = s.client.UpdateSubproject(cmd.Context(), id, in)
 		} else {
+			totalHours := (*float64)(nil)
+			if cmd.Flags().Changed("total-hours") {
+				totalHours = &f.totalHours
+			}
+			in := client.SubprojectInput{ProjectID: f.projectID, Name: f.name, TotalHours: totalHours}
 			v, err = s.client.CreateSubproject(cmd.Context(), in)
 		}
 		if err != nil {

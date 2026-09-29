@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
@@ -71,31 +70,23 @@ type GridWeekTotal struct {
 	Spent   float64
 }
 
-type projectFilter struct {
-	Value string
-	ID    int64
-	All   bool
-	Ideas bool
-}
-
-func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectID *int64, now time.Time, allowHistoricalEditing bool) (Grid, error) {
+func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, allowHistoricalEditing bool) (Grid, error) {
 	projects, err := project.List(ctx, q)
 	if err != nil {
 		return Grid{}, err
 	}
-	filter, err := parseProjectFilter(projectKey)
-	if err != nil {
+	if err := filter.Validate(ctx, q); err != nil {
 		return Grid{}, err
 	}
 
 	data := Grid{
-		FilterProject:    filter.Value,
+		FilterProject:    filterProjectKey(filter),
 		FilterSubproject: "",
 		Ideas:            filter.Ideas,
 		ProjectName:      "All tasks",
-		Projects:         projectOptions(projects, filter.Value),
+		Projects:         projectOptions(projects, filterProjectKey(filter)),
 	}
-	if filter.All {
+	if filter.All && filter.Subproject == nil {
 		data.SummaryOnly = true
 		tasks, err := List(ctx, q)
 		if err != nil {
@@ -129,7 +120,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 		return data, nil
 	}
-	if filter.Ideas {
+	if filter.Ideas && filter.Subproject == nil {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
 			return Grid{}, err
@@ -147,6 +138,13 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 	data.HistoricalEditingAllowed = allowHistoricalEditing
 	pid := filter.ID
+	if filter.Subproject != nil && pid == 0 {
+		sp, err := subproject.Get(ctx, q, *filter.Subproject)
+		if err != nil {
+			return Grid{}, err
+		}
+		pid = sp.ProjectID
+	}
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {
 		return Grid{}, err
@@ -155,23 +153,19 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	if err != nil {
 		return Grid{}, err
 	}
-	data.Subprojects = subprojectOptions(subs, subprojectID)
+	data.Subprojects = subprojectOptions(subs, filter.Subproject)
 	data.ProjectName = proj.Name
 	data.StartDate = proj.StartDate
 	data.EndDate = proj.EndDate
 	var sp subproject.Subproject
-	if subprojectID != nil {
-		sp, err = subproject.Get(ctx, q, *subprojectID)
+	if filter.Subproject != nil {
+		sp, err = subproject.Get(ctx, q, *filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
-		if sp.ProjectID != pid {
-			subprojectID = nil
-			data.Subprojects = subprojectOptions(subs, nil)
-		}
 	}
-	if subprojectID != nil {
-		data.FilterSubproject = strconv.FormatInt(*subprojectID, 10)
+	if filter.Subproject != nil {
+		data.FilterSubproject = strconv.FormatInt(*filter.Subproject, 10)
 		data.SubprojectName = sp.Name
 	}
 
@@ -209,19 +203,19 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 	}
 
 	var tasks []Task
-	if subprojectID != nil {
+	if filter.Subproject != nil {
 		data.BudgetHours = sp.TotalHours
-		tasks, err = ListBySubproject(ctx, q, *subprojectID)
+		tasks, err = ListBySubproject(ctx, q, *filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
-		summary, err := q.GetSubprojectTotals(ctx, *subprojectID)
+		summary, err := q.GetSubprojectTotals(ctx, *filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
 		data.PlannedHours = summary.PlannedHours
 		data.SpentHours = summary.SpentHours
-		rows, err := q.ListSubprojectWeekTotals(ctx, *subprojectID)
+		rows, err := q.ListSubprojectWeekTotals(ctx, *filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
@@ -307,18 +301,14 @@ func projectOptions(projects []project.Project, selected string) []Option {
 	return out
 }
 
-func parseProjectFilter(value string) (projectFilter, error) {
-	if value == "" || value == "all" {
-		return projectFilter{Value: "all", All: true}, nil
+func filterProjectKey(filter Filter) string {
+	if filter.Ideas {
+		return "ideas"
 	}
-	if value == "ideas" {
-		return projectFilter{Value: "ideas", Ideas: true}, nil
+	if filter.All {
+		return "all"
 	}
-	id, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || id < 1 {
-		return projectFilter{}, app.Invalid("invalid project")
-	}
-	return projectFilter{Value: value, ID: id}, nil
+	return strconv.FormatInt(filter.ID, 10)
 }
 
 func subprojectOptions(subs []subproject.Subproject, selected *int64) []Option {

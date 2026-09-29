@@ -154,7 +154,11 @@ func TestCascadeProtectsLockedCarriedProgress(t *testing.T) {
 	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: &p20, Unlock: true}, now); err != nil {
 		t.Fatalf("unchanged carried progress should be allowed: %v", err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, now, false)
+	filter, err := task.ParseFilter(strconv.FormatInt(p.ID, 10), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, filter, now, false)
 	if err != nil {
 		t.Fatal(err)
 	}

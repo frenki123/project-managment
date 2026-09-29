@@ -9,6 +9,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -47,7 +48,7 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), nil, now, false)
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,9 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	secondID := second.ID
-	_, err = task.Update(ctx, q, item.ID, task.Input{Name: item.Name, ProjectID: &secondID})
+	_, err = task.Update(ctx, q, item.ID, task.Patch{
+		Name: *nullable.Set(item.Name), ProjectID: *nullable.Set(&secondID),
+	})
 	httpErr, ok := errors.AsType[app.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)
@@ -146,7 +149,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(p.ID, 10), &subprojectID, now, false)
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), strconv.FormatInt(subprojectID, 10)), now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +167,7 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	if _, err := task.Create(ctx, q, task.Input{Name: "Idea"}); err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, "ideas", nil, time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC), false)
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, "ideas", ""), time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +176,7 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	}
 }
 
-func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
+func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	first, err := project.Create(ctx, q, project.Input{Name: "First", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
@@ -188,12 +191,10 @@ func TestGridResetsSubprojectFromAnotherProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(first.ID, 10), &sp.ID, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if grid.FilterSubproject != "" || grid.Subprojects[0].Selected == false {
-		t.Fatalf("expected subproject filter reset: %#v", grid)
+	_, err = task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(first.ID, 10), strconv.FormatInt(sp.ID, 10)), time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
+	httpErr, ok := errors.AsType[app.HTTPError](err)
+	if !ok || httpErr.Status != http.StatusBadRequest {
+		t.Fatalf("got %v", err)
 	}
 }
 
@@ -220,7 +221,7 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	for _, allowHistoricalEditing := range []bool{false, true} {
 		for _, id := range []int64{p.ID, other.ID} {
-			grid, err := task.LoadGrid(ctx, q, strconv.FormatInt(id, 10), nil, now, allowHistoricalEditing)
+			grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(id, 10), ""), now, allowHistoricalEditing)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -235,4 +236,13 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 			}
 		}
 	}
+}
+
+func mustFilter(t *testing.T, projectKey, subprojectKey string) task.Filter {
+	t.Helper()
+	filter, err := task.ParseFilter(projectKey, subprojectKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filter
 }
