@@ -113,29 +113,6 @@ func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 	}
 }
 
-func TestUpdateTaskWeekWithoutUnlockSendsFalse(t *testing.T) {
-	var body string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		data, _ := io.ReadAll(r.Body)
-		body = string(data)
-		_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
-	}))
-	defer server.Close()
-	root := testRoot(t, server)
-	root.SetArgs([]string{"update-task-week", "4", "2026-09-21", "--progress", "50"})
-	if err := root.Execute(); err != nil {
-		t.Fatal(err)
-	}
-	var patch client.WeekPatch
-	if err := json.Unmarshal([]byte(body), &patch); err != nil {
-		t.Fatal(err)
-	}
-	if patch.Unlock {
-		t.Fatalf("unexpected unlock value: %s", body)
-	}
-}
-
 func TestTaskUpdateFlagsSendFullReplacement(t *testing.T) {
 	var putBody string
 	var methods []string

@@ -218,12 +218,18 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 	unlock.Header.Set("HX-Request", "true")
 	unlockResponse := httptest.NewRecorder()
 	mux.ServeHTTP(unlockResponse, unlock)
-	cookieHeader := unlockResponse.Header().Get("Set-Cookie")
-	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"=") {
-		t.Fatalf("unlock response: %d %s", unlockResponse.Code, unlockResponse.Body.String())
+	cookies := unlockResponse.Result().Cookies()
+	var historicalCookie *http.Cookie
+	for _, cookie := range cookies {
+		if cookie.Name == historyaccess.HistoricalEditingCookieName {
+			historicalCookie = cookie
+			break
+		}
 	}
-	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"="), ";", 2)[0]
-	if rr := post(&http.Cookie{Name: historyaccess.HistoricalEditingCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "historical editing is not enabled") {
+	if unlockResponse.Code != http.StatusOK || historicalCookie == nil {
+		t.Fatalf("unlock response: %d cookies=%#v %s", unlockResponse.Code, cookies, unlockResponse.Body.String())
+	}
+	if rr := post(historicalCookie); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "historical editing is not enabled") {
 		t.Fatalf("historical edit with cookie: %d %s", rr.Code, rr.Body.String())
 	}
 	weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
