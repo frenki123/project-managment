@@ -9,17 +9,15 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/historylock"
 	"cad-development/internal/nullable"
 )
 
 type Patch struct {
-	PlannedHours           *float64 `json:"planned_hours"`
-	SpentHours             *float64 `json:"spent_hours"`
-	Progress               *float64 `json:"progress"`
-	ClearProgress          bool     `json:"clear_progress,omitempty"`
-	Unlock                 bool     `json:"unlock,omitempty"`
-	AllowHistoricalEditing bool     `json:"-"`
+	PlannedHours  *float64 `json:"planned_hours"`
+	SpentHours    *float64 `json:"spent_hours"`
+	Progress      *float64 `json:"progress"`
+	ClearProgress bool     `json:"clear_progress,omitempty"`
+	Unlock        bool     `json:"unlock,omitempty"`
 }
 
 type Cell struct {
@@ -30,7 +28,7 @@ type Cell struct {
 	Progress     *float64  `json:"progress"`
 }
 
-func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
+func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time, historicalEditingAllowed bool) (Cell, error) {
 	if _, err := ParseWeekStart(weekStart); err != nil {
 		return Cell{}, err
 	}
@@ -57,8 +55,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if !patch.Unlock && !patch.AllowHistoricalEditing && historylock.IsWeekLocked(string(weekStart), now) {
-			return app.Locked("history is locked")
+		if !patch.Unlock && !historicalEditingAllowed && IsWeekLocked(string(weekStart), now) {
+			return app.Locked("historical editing is not enabled")
 		}
 		var err error
 		task, err := txq.GetTask(ctx, taskID)
@@ -113,10 +111,6 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			}
 			progress = nullable.Float64(patch.Progress)
 		} else if patch.ClearProgress {
-			previous, err = lastProgressBefore(ctx, txq, taskID, weekStart)
-			if err != nil {
-				return err
-			}
 			progress = sql.NullFloat64{}
 		}
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{

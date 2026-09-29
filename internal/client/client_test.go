@@ -42,11 +42,11 @@ func TestTasksEncodesFilters(t *testing.T) {
 func TestAPIErrorPreservesStatusAndMessage(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(`{"error":"history is locked"}`))
+		_, _ = w.Write([]byte(`{"error":"historical editing is not enabled"}`))
 	}))
 	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, nil)
 	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "history is locked" {
+	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "historical editing is not enabled" {
 		t.Fatalf("error = %#v", err)
 	}
 }

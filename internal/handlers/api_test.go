@@ -14,7 +14,7 @@ import (
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/handlers"
-	"cad-development/internal/historylock"
+	"cad-development/internal/historyaccess"
 	"cad-development/internal/weekly"
 )
 
@@ -209,21 +209,21 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 		mux.ServeHTTP(rr, r)
 		return rr
 	}
-	if rr := post(nil); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "history is locked") {
+	if rr := post(nil); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "historical editing is not enabled") {
 		t.Fatalf("historical edit without cookie: %d %s", rr.Code, rr.Body.String())
 	}
 
-	unlock := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+strconv.FormatInt(projectID, 10)+"&history_open=true"))
+	unlock := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+strconv.FormatInt(projectID, 10)+"&historical_editing=true"))
 	unlock.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unlock.Header.Set("HX-Request", "true")
 	unlockResponse := httptest.NewRecorder()
 	mux.ServeHTTP(unlockResponse, unlock)
 	cookieHeader := unlockResponse.Header().Get("Set-Cookie")
-	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") {
+	if unlockResponse.Code != http.StatusOK || !strings.HasPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"=") {
 		t.Fatalf("unlock response: %d %s", unlockResponse.Code, unlockResponse.Body.String())
 	}
-	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"="), ";", 2)[0]
-	if rr := post(&http.Cookie{Name: historylock.HistoricalEditingCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "history is locked") {
+	cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"="), ";", 2)[0]
+	if rr := post(&http.Cookie{Name: historyaccess.HistoricalEditingCookieName, Value: cookieValue}); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "historical editing is not enabled") {
 		t.Fatalf("historical edit with cookie: %d %s", rr.Code, rr.Body.String())
 	}
 	weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
@@ -404,7 +404,7 @@ func TestHistoryAccessHTMLFragmentPreservesFilters(t *testing.T) {
 	handlers.Register(mux, q)
 	projectID := createProject(t, mux, "Lock filter", nextMonday(time.Now()))
 	project := strconv.FormatInt(projectID, 10)
-	r := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+project+"&history_open=true"))
+	r := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+project+"&historical_editing=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
 	rr := httptest.NewRecorder()
@@ -415,15 +415,15 @@ func TestHistoryAccessHTMLFragmentPreservesFilters(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), `value="`+project+`" selected`) {
 		t.Fatalf("project filter not preserved: %s", rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
+	if !strings.Contains(rr.Body.String(), "Stop historical editing") || strings.Contains(rr.Body.String(), "Allow historical editing") {
 		t.Fatalf("grid did not reflect browser unlock: %s", rr.Body.String())
 	}
-	if !strings.HasPrefix(rr.Header().Get("Set-Cookie"), historylock.HistoricalEditingCookieName+"=") {
+	if !strings.HasPrefix(rr.Header().Get("Set-Cookie"), historyaccess.HistoricalEditingCookieName+"=") {
 		t.Fatalf("HTML unlock did not set a cookie: %s", rr.Header().Get("Set-Cookie"))
 	}
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/?project=ideas", nil))
-	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "Lock history") || strings.Contains(rr.Body.String(), "Unlock history") {
+	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "Stop historical editing") || strings.Contains(rr.Body.String(), "Allow historical editing") {
 		t.Fatalf("history controls should not render in ideas view: %d %s", rr.Code, rr.Body.String())
 	}
 }
@@ -466,7 +466,7 @@ func TestHTMLHistoryAccessRequiresBooleanState(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	for _, body := range []string{"project=ideas", "project=ideas&history_open=maybe"} {
+	for _, body := range []string{"project=ideas", "project=ideas&historical_editing=maybe"} {
 		rr := postForm(t, mux, "/history-access/set", body)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
@@ -773,7 +773,7 @@ func TestHTMLHistoryAccessSetIsIdempotentAndValidatesView(t *testing.T) {
 		mux.ServeHTTP(rr, r)
 		return rr
 	}
-	for _, body := range []string{"history_open=true&project=bad", "history_open=true&project=999999"} {
+	for _, body := range []string{"historical_editing=true&project=bad", "historical_editing=true&project=999999"} {
 		rr := post(body)
 		if rr.Code != http.StatusBadRequest && rr.Code != http.StatusNotFound {
 			t.Fatalf("invalid view %q: %d %s", body, rr.Code, rr.Body.String())
@@ -783,15 +783,15 @@ func TestHTMLHistoryAccessSetIsIdempotentAndValidatesView(t *testing.T) {
 		}
 	}
 	for _, value := range []string{"true", "true", "false", "false"} {
-		rr := post("history_open=" + value + "&project=ideas")
+		rr := post("historical_editing=" + value + "&project=ideas")
 		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `<section id="grid"`) || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") {
 			t.Fatalf("set %s: %d %s", value, rr.Code, rr.Body.String())
 		}
 		cookieHeader := rr.Header().Get("Set-Cookie")
-		if value == "true" && !strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") {
+		if value == "true" && !strings.HasPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"=") {
 			t.Fatalf("set %s did not set unlock cookie: %s", value, cookieHeader)
 		}
-		if value == "false" && (!strings.HasPrefix(cookieHeader, historylock.HistoricalEditingCookieName+"=") || !strings.Contains(cookieHeader, "Max-Age=0")) {
+		if value == "false" && (!strings.HasPrefix(cookieHeader, historyaccess.HistoricalEditingCookieName+"=") || !strings.Contains(cookieHeader, "Max-Age=0")) {
 			t.Fatalf("set %s did not clear unlock cookie: %s", value, cookieHeader)
 		}
 	}

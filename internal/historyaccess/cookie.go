@@ -1,4 +1,4 @@
-package historylock
+package historyaccess
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ const (
 	historicalEditingDuration   = 2 * time.Hour
 )
 
-func HistoricalEditingCookieValid(r *http.Request, now time.Time) bool {
+func CookieValid(r *http.Request, now time.Time) bool {
 	cookie, err := r.Cookie(HistoricalEditingCookieName)
 	if err != nil {
 		return false
@@ -20,7 +20,7 @@ func HistoricalEditingCookieValid(r *http.Request, now time.Time) bool {
 	return err == nil && expires > now.Unix()
 }
 
-func SetHistoricalEditingCookie(w http.ResponseWriter, now time.Time) {
+func SetCookie(w http.ResponseWriter, now time.Time) {
 	expires := now.Add(historicalEditingDuration)
 	http.SetCookie(w, &http.Cookie{
 		Name:     HistoricalEditingCookieName,
@@ -33,7 +33,7 @@ func SetHistoricalEditingCookie(w http.ResponseWriter, now time.Time) {
 	})
 }
 
-func ClearHistoricalEditingCookie(w http.ResponseWriter) {
+func ClearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     HistoricalEditingCookieName,
 		Value:    "",

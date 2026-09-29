@@ -8,7 +8,6 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/historylock"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/weekly"
@@ -288,7 +287,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 				Spent:     cw.SpentHours,
 				Progress:  effective[string(ws)],
 				Stored:    cw.Progress.Valid,
-				Locked:    !allowHistoricalEditing && historylock.IsWeekLocked(string(ws), now),
+				Locked:    !allowHistoricalEditing && weekly.IsWeekLocked(string(ws), now),
 				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),
 			})
 		}

@@ -29,15 +29,15 @@ func TestLoadSCurve(t *testing.T) {
 	}
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	planned, spent, progress := 10.0, 4.0, 25.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-05", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-05", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now, false); err != nil {
 		t.Fatal(err)
 	}
 	planned, spent = 20, 6
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-12", weekly.Patch{PlannedHours: &planned, SpentHours: &spent}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-12", weekly.Patch{PlannedHours: &planned, SpentHours: &spent}, now, false); err != nil {
 		t.Fatal(err)
 	}
 	progress = 50
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-19", weekly.Patch{Progress: &progress}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-19", weekly.Patch{Progress: &progress}, now, false); err != nil {
 		t.Fatal(err)
 	}
 
