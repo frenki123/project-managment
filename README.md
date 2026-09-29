@@ -74,25 +74,27 @@ Run `just --list` to see every recipe. `just check` runs tests, vet, and a build
 
 ## Releases
 
-There are two release channels. Server binaries are published by both channels; `pmctl` is
-published by the nightly channel while it is under development.
+There are two release channels. Server and `pmctl` binaries are published by both channels.
 
 **Nightly `dev` build.** Every night at 01:20 Europe/Zagreb, the latest commit on `main` is built
 and published as the rolling [`dev`](https://github.com/frenki123/project-managment/releases/tag/dev)
-pre-release. One server binary and one `pmctl` binary per platform are always replaced in place, so
-there is never a list of stale builds to choose from:
+pre-release. The `dev` tag and its generated source archive track the commit used to build the
+assets. One server binary and one `pmctl` binary per platform, plus checksums, are replaced in
+place, so there is never a list of stale builds to choose from:
 
 ```sh
 gh release download dev -R frenki123/project-managment -p server-linux-amd64
 gh release download dev -R frenki123/project-managment -p server-windows-amd64.exe
 gh release download dev -R frenki123/project-managment -p pmctl-linux-amd64
 gh release download dev -R frenki123/project-managment -p pmctl-windows-amd64.exe
+gh release download dev -R frenki123/project-managment -p SHA256SUMS
+sha256sum -c SHA256SUMS
 ```
 
 **Tagged releases.** Tag `v<semver>` and the Release workflow tests that exact commit before
-building and publishing the server binaries. A tag with a `-` suffix, such as `v0.0.2-alpha`, is
-published as a pre-release. `pmctl` remains available from the nightly `dev` release while it is
-under development. None has shipped yet, so `dev` is the only downloadable build today.
+building and publishing the server and `pmctl` binaries plus checksums. A tag with a `-` suffix,
+such as `v0.0.2-alpha`, is published as a pre-release. None has shipped yet, so `dev` is the only
+downloadable build today.
 
 Download URLs must name the tag. GitHub's `releases/latest` skips pre-releases, and every build
 here is a pre-release, so `releases/latest/download/<file>` returns 404.

@@ -22,29 +22,82 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: ./.github/actions/setup
-
-      - name: Generate code
-        run: just generate
-
-      - name: Build Linux and Windows binaries
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/server-linux-amd64     ./cmd/server
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/server-windows-amd64.exe ./cmd/server
-          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/pmctl-linux-amd64     ./cmd/pmctl
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/pmctl-windows-amd64.exe ./cmd/pmctl
-
-      - name: Publish
+      - name: Check for a new commit
+        id: nightly
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          prev="$(gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" --jq '.object.sha' 2>/dev/null || true)"
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          if [[ -n "$prev" && "$prev" == "$GITHUB_SHA" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits, skipping."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        if: steps.nightly.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          prev="${{ steps.nightly.outputs.prev }}"
+          short_sha="${GITHUB_SHA:0:7}"
+          {
+            printf '# Nightly dev build\n\n'
+            printf 'Commit: [%s](https://github.com/%s/commit/%s)\n' "$short_sha" "$GITHUB_REPOSITORY" "$GITHUB_SHA"
+            printf 'Built: %s UTC\n' "$(date -u '+%Y-%m-%d %H:%M:%S')"
+            if [[ -z "$prev" ]]; then
+              printf '\nThis is the first published dev build.\n'
+            else
+              compare="$(gh api "repos/$GITHUB_REPOSITORY/compare/$prev...$GITHUB_SHA")"
+              status="$(jq -r '.status' <<< "$compare")"
+              if [[ "$status" == ahead ]]; then
+                printf '\n## Changes since [%s](https://github.com/%s/commit/%s)\n\n' "${prev:0:7}" "$GITHUB_REPOSITORY" "$prev"
+                jq -r --arg repo "$GITHUB_REPOSITORY" '.commits[] | "- [\(.sha[0:7])](https://github.com/\($repo)/commit/\(.sha)): \(.commit.message | split("\\n")[0])"' <<< "$compare"
+              else
+                printf '\nChanges could not be listed because this build is not a descendant of [%s](https://github.com/%s/commit/%s).\n' "${prev:0:7}" "$GITHUB_REPOSITORY" "$prev"
+                printf 'Compare all changes: https://github.com/%s/compare/%s...%s\n' "$GITHUB_REPOSITORY" "$prev" "$GITHUB_SHA"
+              fi
+            fi
+          } > "$notes_file"
+
+      - uses: ./.github/actions/setup
+        if: steps.nightly.outputs.publish == 'true'
+
+      - name: Build release binaries
+        if: steps.nightly.outputs.publish == 'true'
+        run: just dist "dev-$(git rev-parse --short HEAD)"
+
+      - name: Publish
+        if: steps.nightly.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref="repos/$GITHUB_REPOSITORY/git/refs/tags/dev"
           if ! gh release view dev >/dev/null 2>&1; then
             gh release create dev --prerelease --title "dev build (nightly)" \
-              --notes "Rolling dev build." --target "$GITHUB_SHA"
+              --notes-file "$RUNNER_TEMP/release-notes.md" --target "$GITHUB_SHA"
           fi
-          gh release upload dev dist/* --clobber
+
+          gh api --method PATCH "$ref" -f sha="$GITHUB_SHA" -F force=true
+          gh release upload dev \
+            dist/server-linux-amd64 \
+            dist/server-windows-amd64.exe \
+            dist/pmctl-linux-amd64 \
+            dist/pmctl-windows-amd64.exe \
+            dist/SHA256SUMS --clobber
+
+          while read -r name; do
+            case "$name" in
+              server-linux-amd64|server-windows-amd64.exe|pmctl-linux-amd64|pmctl-windows-amd64.exe|SHA256SUMS) ;;
+              *) gh release delete-asset dev "$name" --yes ;;
+            esac
+          done < <(gh release view dev --json assets --jq '.assets[].name')
+
           gh release edit dev --title "dev build (nightly)" \
-            --notes "Rolling dev build from main. Commit: $GITHUB_SHA. Rebuilt nightly at 01:20 Europe/Zagreb."
+            --notes-file "$RUNNER_TEMP/release-notes.md"
