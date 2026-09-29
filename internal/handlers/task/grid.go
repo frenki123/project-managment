@@ -7,7 +7,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/historylock"
+	"cad-development/internal/historyaccess"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 )
@@ -15,7 +15,7 @@ import (
 func gridPage(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
-		RenderGrid(w, r, q, now, historylock.HistoricalEditingCookieValid(r, now))
+		RenderGrid(w, r, q, now, historyaccess.CookieValid(r, now))
 	}
 }
 

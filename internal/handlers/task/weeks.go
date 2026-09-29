@@ -7,7 +7,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/historylock"
+	"cad-development/internal/historyaccess"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 	"cad-development/internal/weekly"
@@ -26,7 +26,7 @@ func weekJSON(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		cell, err := saveWeek(r, q, id, patch, currentTime)
+		cell, err := saveWeek(r, q, id, patch, currentTime, false)
 		if err != nil {
 			app.WriteError(w, r, err)
 			return
@@ -48,7 +48,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			renderWeekRow(w, r, q, id, app.HTTPErrorFrom(err).Message, currentTime)
 			return
 		}
-		patch.AllowHistoricalEditing = historylock.HistoricalEditingCookieValid(r, currentTime)
+		historicalEditingAllowed := historyaccess.CookieValid(r, currentTime)
 		grid, rowIndex, err := weekGrid(r, q, id, currentTime)
 		if err != nil {
 			app.WriteError(w, r, err)
@@ -58,7 +58,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, app.Invalid("task or week is outside the selected view"))
 			return
 		}
-		_, err = saveWeek(r, q, id, patch, currentTime)
+		_, err = saveWeek(r, q, id, patch, currentTime, historicalEditingAllowed)
 		if err != nil {
 			grid.Rows[rowIndex].Cells[weekIndex(grid, rowIndex, r.PathValue("weekStart"))].Error = app.HTTPErrorFrom(err).Message
 			app.RenderFragment(w, r, http.StatusOK, views.WeekRowResponse(grid, rowIndex))
@@ -112,7 +112,7 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time) (task
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, historylock.HistoricalEditingCookieValid(r, now))
+	grid, err := taskdomain.LoadGrid(r.Context(), q, projectKey, subprojectID, now, historyaccess.CookieValid(r, now))
 	if err != nil {
 		return taskdomain.Grid{}, -1, err
 	}
@@ -138,6 +138,6 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 	app.WriteError(w, r, app.Invalid("task or week is outside the selected view"))
 }
 
-func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time) (weekly.Cell, error) {
-	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now)
+func saveWeek(r *http.Request, q *db.Queries, taskID int64, patch weekly.Patch, now time.Time, historicalEditingAllowed bool) (weekly.Cell, error) {
+	return weekly.Save(r.Context(), q, taskID, weekly.WeekStart(r.PathValue("weekStart")), patch, now, historicalEditingAllowed)
 }

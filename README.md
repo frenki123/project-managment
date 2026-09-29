@@ -28,9 +28,9 @@ one S-curve per project.
   a project is assigned.
 - **Progress rules**: progress is cumulative, cannot decrease, an empty week keeps the last
   value, and lowering a week raises all later weeks to match.
-- **Month locks**: by default every week whose Monday falls in a past calendar month is locked.
-  The UI's "Unlock history" control opens history for that browser for two hours; API clients
-  can set `unlock: true` on an individual weekly update. No unlock state is stored in SQLite.
+- **Historical editing**: by default every week whose Monday falls in a past calendar month is
+  locked. The UI can allow historical editing in that browser for two hours; API clients can set
+  `unlock: true` on an individual weekly update. No access state is stored in SQLite.
 - **S-curve** (`/chart`): per-project Chart.js chart of cumulative planned, spent, and
   earned hours. Earned value is computed in SQL from the recursive week series.
 - **Task detail**: click a row to open a side panel with all entered and calculated totals,
@@ -124,7 +124,7 @@ pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ## Layout
 
 Code is organized by domain, not by layer: `internal/task`, `internal/project`,
-`internal/subproject`, `internal/weekly`, `internal/historylock`. `internal/app` is the small web
+`internal/subproject`, `internal/weekly`, `internal/historyaccess`. `internal/app` is the small web
 and database framework; `internal/handlers` holds HTTP wiring; `internal/views` holds `templ`
 components. SQL lives in `sql/queries` and `sql/migrations`, generated code in `internal/db`.
 

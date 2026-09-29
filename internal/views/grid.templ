@@ -70,23 +70,23 @@ templ GridPage(data task.Grid) {
 				}
 			</form>
 			if !data.Ideas && !data.SummaryOnly {
-				<div class="lock-controls">
-					<span class="lock-status">
+				<div class="historical-editing-controls">
+					<span class="historical-editing-status">
 					if data.HistoricalEditingAllowed {
-							History unlocked
+							Historical editing allowed
 						} else {
-							Past months locked
+							Historical weeks locked by default
 						}
 					</span>
-					<div class="locks">
+					<div class="historical-editing-actions">
 						<form hx-post="/history-access/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
 							if data.HistoricalEditingAllowed {
-								<input type="hidden" name="history_open" value="false"/>
-								<button type="submit" class="secondary outline">Lock history</button>
+								<input type="hidden" name="historical_editing" value="false"/>
+								<button type="submit" class="secondary outline">Stop historical editing</button>
 							} else {
-								<input type="hidden" name="history_open" value="true"/>
-								<button type="submit" class="secondary outline">Unlock history</button>
-						}
+								<input type="hidden" name="historical_editing" value="true"/>
+								<button type="submit" class="secondary outline">Allow historical editing</button>
+							}
 					</form>
 					</div>
 				</div>

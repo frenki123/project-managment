@@ -48,7 +48,7 @@ func progressTitle(stored bool) string {
 
 func inputTitle(locked bool, title string) string {
 	if locked {
-		return "Locked because history is locked for past months"
+		return "Locked because the week starts in a previous calendar month"
 	}
 	return title
 }

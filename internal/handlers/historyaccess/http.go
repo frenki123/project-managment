@@ -7,7 +7,7 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	taskhandler "cad-development/internal/handlers/task"
-	"cad-development/internal/historylock"
+	"cad-development/internal/historyaccess"
 	taskdomain "cad-development/internal/task"
 )
 
@@ -17,9 +17,9 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 
 func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		historyOpenValue := r.FormValue("history_open")
-		if historyOpenValue != "true" && historyOpenValue != "false" {
-			app.WriteError(w, r, app.Invalid("history_open must be true or false"))
+		historicalEditingValue := r.FormValue("historical_editing")
+		if historicalEditingValue != "true" && historicalEditingValue != "false" {
+			app.WriteError(w, r, app.Invalid("historical_editing must be true or false"))
 			return
 		}
 		now := time.Now()
@@ -31,14 +31,14 @@ func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 			app.WriteError(w, r, err)
 			return
 		}
-		historyOpen := historyOpenValue == "true"
-		if historyOpen {
-			historylock.SetHistoricalEditingCookie(w, now)
+		historicalEditingAllowed := historicalEditingValue == "true"
+		if historicalEditingAllowed {
+			historyaccess.SetCookie(w, now)
 		} else {
-			historylock.ClearHistoricalEditingCookie(w)
+			historyaccess.ClearCookie(w)
 		}
 		if app.IsHTMX(r) {
-			taskhandler.RenderGrid(w, r, q, now, historyOpen)
+			taskhandler.RenderGrid(w, r, q, now, historicalEditingAllowed)
 			return
 		}
 		app.RedirectWithFormFilter(w, r, "/", "project", "subproject")

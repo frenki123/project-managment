@@ -34,7 +34,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") {
 		t.Fatalf("unexpected ideas grid: %s", ideas)
 	}
-	if strings.Contains(ideas, "Weekly inputs") || strings.Contains(ideas, "Scroll horizontally") || strings.Contains(ideas, "History unlocked") || strings.Contains(ideas, "Unlock history") || strings.Contains(ideas, "Lock history") {
+	if strings.Contains(ideas, "Weekly inputs") || strings.Contains(ideas, "Scroll horizontally") || strings.Contains(ideas, "Historical editing allowed") || strings.Contains(ideas, "Allow historical editing") || strings.Contains(ideas, "Stop historical editing") {
 		t.Fatalf("removed grid guidance is still rendered: %s", ideas)
 	}
 	if strings.Count(ideas, `<col class="`) != 4 {
