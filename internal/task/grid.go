@@ -95,7 +95,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		ProjectName:      "All tasks",
 		Projects:         projectOptions(projects, filter.Value),
 	}
-	data.HistoricalEditingAllowed = allowHistoricalEditing
 	if filter.All {
 		data.SummaryOnly = true
 		tasks, err := List(ctx, q)
@@ -146,6 +145,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, projectKey string, subprojectI
 		}
 		return data, nil
 	}
+	data.HistoricalEditingAllowed = allowHistoricalEditing
 	pid := filter.ID
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {

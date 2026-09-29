@@ -16,7 +16,9 @@ func TestGridClass(t *testing.T) {
 	}{
 		{name: "project", want: "grid-main"},
 		{name: "ideas", data: task.Grid{Ideas: true}, want: "grid-main ideas"},
-		{name: "historical editing allowed ideas", data: task.Grid{Ideas: true, HistoricalEditingAllowed: true}, want: "grid-main ideas historical-editing-allowed"},
+		{name: "ideas ignore historical editing", data: task.Grid{Ideas: true, HistoricalEditingAllowed: true}, want: "grid-main ideas"},
+		{name: "summary ignore historical editing", data: task.Grid{SummaryOnly: true, HistoricalEditingAllowed: true}, want: "grid-main"},
+		{name: "historical editing allowed", data: task.Grid{HistoricalEditingAllowed: true}, want: "grid-main historical-editing-allowed"},
 	}
 
 	for _, tt := range tests {
