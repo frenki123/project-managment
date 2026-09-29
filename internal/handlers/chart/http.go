@@ -35,28 +35,17 @@ func page(q *db.Queries) http.HandlerFunc {
 				app.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
 				return
 			}
-			id, err := selectedProjectID(r, fallback)
+			id, err := selectedProjectID(r)
 			if err != nil {
 				app.WriteError(w, r, err)
 				return
 			}
-			found := false
-			for _, candidate := range ids {
-				if candidate == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				app.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
-				return
-			}
-			app.RememberProject(w, id)
 			curve, err := projectdomain.LoadSCurve(r.Context(), q, id)
 			if err != nil {
 				app.WriteError(w, r, err)
 				return
 			}
+			app.RememberProject(w, id)
 			data.SelectedProject = curve.Project
 			data.HasProject = true
 			data.Series = series(curve)
@@ -65,11 +54,8 @@ func page(q *db.Queries) http.HandlerFunc {
 	}
 }
 
-func selectedProjectID(r *http.Request, fallback int64) (int64, error) {
+func selectedProjectID(r *http.Request) (int64, error) {
 	value := r.URL.Query().Get("project")
-	if value == "" {
-		return fallback, nil
-	}
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id < 1 {
 		return 0, app.Invalid("invalid project")

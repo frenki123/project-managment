@@ -8,6 +8,7 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	domain "cad-development/internal/project"
+	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 )
 
@@ -129,7 +130,7 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 			renderProjectForm(w, r, vals, "/projects", "New project", "", err)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
+		app.Redirect(w, r, "/?"+taskdomain.Filter{ID: p.ID}.Key())
 	}
 }
 
@@ -150,7 +151,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			renderProjectForm(w, r, submittedFormValues(r), "/projects/"+strconv.FormatInt(id, 10), "Edit project", "/projects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(p.ID, 10))
+		app.Redirect(w, r, "/?"+taskdomain.Filter{ID: p.ID}.Key())
 	}
 }
 
