@@ -233,11 +233,6 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	return q.InTx(ctx, func(txq *db.Queries) error {
-		if _, err := txq.GetSubproject(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("subproject not found")
-		} else if err != nil {
-			return err
-		}
 		tasks, err := txq.CountTasksBySubproject(ctx, id)
 		if err != nil {
 			return err
@@ -246,6 +241,9 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 			return app.Conflict("cannot delete a subproject with tasks")
 		}
 		_, err = txq.DeleteSubproject(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return app.Missing("subproject not found")
+		}
 		return err
 	})
 }

@@ -23,6 +23,7 @@ type Filter struct {
 type ResolvedFilter struct {
 	Filter
 	ProjectID  int64
+	Project    *db.Project
 	Subproject *db.Subproject
 }
 
@@ -62,19 +63,16 @@ func (f Filter) Key() string {
 	return values.Encode()
 }
 
-func (f Filter) Validate(ctx context.Context, q *db.Queries) error {
-	_, err := f.Resolve(ctx, q)
-	return err
-}
-
 func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, error) {
 	resolved := ResolvedFilter{Filter: f, ProjectID: f.ID}
 	if !f.All && !f.Ideas {
-		if _, err := q.GetProject(ctx, f.ID); errors.Is(err, sql.ErrNoRows) {
+		project, err := q.GetProject(ctx, f.ID)
+		if errors.Is(err, sql.ErrNoRows) {
 			return ResolvedFilter{}, app.Missing("project not found")
 		} else if err != nil {
 			return ResolvedFilter{}, err
 		}
+		resolved.Project = &project
 	}
 	if f.Subproject == nil {
 		return resolved, nil
@@ -91,13 +89,31 @@ func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, err
 	}
 	resolved.ProjectID = sp.ProjectID
 	resolved.Subproject = &sp
+	if resolved.Project == nil {
+		project, err := q.GetProject(ctx, sp.ProjectID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ResolvedFilter{}, app.Missing("project not found")
+		}
+		if err != nil {
+			return ResolvedFilter{}, err
+		}
+		resolved.Project = &project
+	}
 	return resolved, nil
 }
 
 func (f Filter) List(ctx context.Context, q *db.Queries) ([]Task, error) {
+	resolved, err := f.Resolve(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return resolved.List(ctx, q)
+}
+
+func (f ResolvedFilter) List(ctx context.Context, q *db.Queries) ([]Task, error) {
 	switch {
 	case f.Subproject != nil:
-		return ListBySubproject(ctx, q, *f.Subproject)
+		return ListBySubproject(ctx, q, f.Subproject.ID)
 	case !f.All && !f.Ideas:
 		return ListByProject(ctx, q, f.ID)
 	case f.Ideas:

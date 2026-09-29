@@ -14,11 +14,11 @@ func TestGridClass(t *testing.T) {
 		data task.Grid
 		want string
 	}{
-		{name: "project", want: "grid-main"},
-		{name: "ideas", data: task.Grid{Ideas: true}, want: "grid-main ideas"},
-		{name: "ideas ignore historical editing", data: task.Grid{Ideas: true, HistoricalEditingAllowed: true}, want: "grid-main ideas"},
-		{name: "summary ignore historical editing", data: task.Grid{SummaryOnly: true, HistoricalEditingAllowed: true}, want: "grid-main"},
-		{name: "historical editing allowed", data: task.Grid{HistoricalEditingAllowed: true}, want: "grid-main historical-editing-allowed"},
+		{name: "project", data: task.Grid{Kind: task.ViewProject}, want: "grid-main"},
+		{name: "ideas", data: task.Grid{Kind: task.ViewIdeas}, want: "grid-main ideas"},
+		{name: "ideas ignore historical editing", data: task.Grid{Kind: task.ViewIdeas, HistoricalEditingAllowed: true}, want: "grid-main ideas"},
+		{name: "summary ignore historical editing", data: task.Grid{Kind: task.ViewAll, HistoricalEditingAllowed: true}, want: "grid-main"},
+		{name: "historical editing allowed", data: task.Grid{Kind: task.ViewProject, HistoricalEditingAllowed: true}, want: "grid-main historical-editing-allowed"},
 	}
 
 	for _, tt := range tests {
@@ -32,7 +32,7 @@ func TestGridClass(t *testing.T) {
 
 func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	row := task.GridRow{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development"}
-	ideas := renderGrid(t, task.Grid{Ideas: true, Rows: []task.GridRow{row}})
+	ideas := renderGrid(t, task.Grid{Kind: task.ViewIdeas, Rows: []task.GridRow{row}})
 	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") {
 		t.Fatalf("unexpected ideas grid: %s", ideas)
 	}
@@ -44,6 +44,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	}
 
 	project := renderGrid(t, task.Grid{
+		Kind: task.ViewProject,
 		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
 		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}},
 	})
@@ -73,7 +74,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 		t.Fatalf("cumulative footer values are still rendered: %s", project)
 	}
 
-	subproject := renderGrid(t, task.Grid{Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}}})
+	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}}})
 	if strings.Contains(subproject, ">Earned<") {
 		t.Fatalf("subproject footer should not render earned values: %s", subproject)
 	}

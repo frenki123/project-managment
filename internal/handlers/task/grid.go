@@ -24,7 +24,12 @@ func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTi
 		app.WriteError(w, r, err)
 		return
 	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, filter, currentTime, allowHistoricalEditing)
+	resolved, err := filter.Resolve(r.Context(), q)
+	if err != nil {
+		app.WriteError(w, r, err)
+		return
+	}
+	grid, err := taskdomain.LoadResolvedGrid(r.Context(), q, resolved, currentTime, allowHistoricalEditing)
 	if err != nil {
 		app.WriteError(w, r, err)
 		return

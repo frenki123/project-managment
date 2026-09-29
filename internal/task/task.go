@@ -117,6 +117,7 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
 		return in, app.Invalid("invalid subproject_id")
 	}
+	projectFromSubproject := false
 	if in.SubprojectID != nil {
 		sp, err := q.GetSubproject(ctx, *in.SubprojectID)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -129,8 +130,9 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 			return in, app.Invalid("subproject does not belong to project")
 		}
 		in.ProjectID = new(sp.ProjectID)
+		projectFromSubproject = true
 	}
-	if in.ProjectID != nil {
+	if in.ProjectID != nil && !projectFromSubproject {
 		if _, err := q.GetProject(ctx, *in.ProjectID); errors.Is(err, sql.ErrNoRows) {
 			return in, app.Missing("project not found")
 		} else if err != nil {
@@ -295,11 +297,6 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	return q.InTx(ctx, func(txq *db.Queries) error {
-		if _, err := txq.GetTask(ctx, id); errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("task not found")
-		} else if err != nil {
-			return err
-		}
 		weeks, err := txq.CountTaskWeeksByTask(ctx, id)
 		if err != nil {
 			return err
@@ -308,6 +305,9 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 			return app.Conflict("cannot delete a task with weekly history")
 		}
 		_, err = txq.DeleteTask(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return app.Missing("task not found")
+		}
 		return err
 	})
 }
