@@ -2,11 +2,14 @@ package client
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"cad-development/internal/nullable"
 )
 
 func newTestClient(t *testing.T, handler http.Handler) *Client {
@@ -18,6 +21,20 @@ func newTestClient(t *testing.T, handler http.Handler) *Client {
 		t.Fatal(err)
 	}
 	return c
+}
+
+func TestTaskPatchOmitsAbsentAndWritesExplicitNull(t *testing.T) {
+	data, err := json.Marshal(TaskPatch{
+		Priority:  nullable.Set("high"),
+		ProjectID: nullable.Clear[*int64](),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.Contains(got, `"priority":"high"`) || !strings.Contains(got, `"project_id":null`) || strings.Contains(got, `"name"`) {
+		t.Fatalf("patch JSON = %s", got)
+	}
 }
 
 func TestTasksEncodesFilters(t *testing.T) {

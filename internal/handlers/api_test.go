@@ -209,7 +209,7 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 		mux.ServeHTTP(rr, r)
 		return rr
 	}
-	if rr := post(nil); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "historical editing is not enabled") {
+	if rr := post(nil); rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "historical editing is not enabled") {
 		t.Fatalf("historical edit without cookie: %d %s", rr.Code, rr.Body.String())
 	}
 
@@ -283,7 +283,7 @@ func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 	r.Header.Set("HX-Request", "true")
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
-	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") || !strings.Contains(rr.Body.String(), "EDITING PROJECT") || !strings.Contains(rr.Body.String(), `hx-post="/projects/`) {
+	if rr.Code != http.StatusConflict || strings.Contains(rr.Body.String(), "<!DOCTYPE html>") || !strings.Contains(rr.Body.String(), "EDITING PROJECT") || !strings.Contains(rr.Body.String(), `hx-post="/projects/`) {
 		t.Fatalf("expected project edit fragment after delete conflict, got %d %s", rr.Code, rr.Body.String())
 	}
 }
@@ -633,8 +633,17 @@ func TestJSONContractConsistency(t *testing.T) {
 
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), bytes.NewReader([]byte(`{"name":"Tracked"}`))))
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("omitted project_id on tracked task: got %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("partial task update: got %d %s", rr.Code, rr.Body.String())
+	}
+	var preserved struct {
+		ProjectID *int64 `json:"project_id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &preserved); err != nil {
+		t.Fatal(err)
+	}
+	if preserved.ProjectID == nil || *preserved.ProjectID != pid {
+		t.Fatalf("partial update lost project assignment: %#v", preserved.ProjectID)
 	}
 }
 
@@ -720,12 +729,12 @@ func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
 	}
 
 	rr := postWeek("planned_hours=-5&project=" + strconv.FormatInt(pid, 10))
-	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
-		t.Fatalf("domain error should be 200 + inline cell error: %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
+		t.Fatalf("domain error should preserve status + inline cell error: %d %s", rr.Code, rr.Body.String())
 	}
 
 	rr = postWeek("planned_hours=abc&project=" + strconv.FormatInt(pid, 10))
-	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
+	if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("cell-error")) {
 		t.Fatalf("parse error should be inline: %d %s", rr.Code, rr.Body.String())
 	}
 	rr = postWeek("progress=50&project=" + strconv.FormatInt(pid, 10))

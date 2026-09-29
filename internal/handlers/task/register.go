@@ -2,9 +2,8 @@ package taskhandler
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
+	"strconv"
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
@@ -37,39 +36,25 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	if subprojectErr != nil {
 		return taskdomain.TasksResponse{}, subprojectErr
 	}
+	projectKey := ""
 	if projectID != nil {
-		if _, err := q.GetProject(ctx, *projectID); errors.Is(err, sql.ErrNoRows) {
-			return taskdomain.TasksResponse{}, app.Missing("project not found")
-		} else if err != nil {
-			return taskdomain.TasksResponse{}, err
-		}
+		projectKey = strconv.FormatInt(*projectID, 10)
 	}
+	if projectID == nil && r.URL.Query().Get("ideas") == "true" {
+		projectKey = "ideas"
+	}
+	subprojectKey := ""
 	if subprojectID != nil {
-		sp, err := q.GetSubproject(ctx, *subprojectID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return taskdomain.TasksResponse{}, app.Missing("subproject not found")
-		}
-		if err != nil {
-			return taskdomain.TasksResponse{}, err
-		}
-		if projectID != nil && *projectID != sp.ProjectID {
-			return taskdomain.TasksResponse{}, app.Invalid("subproject does not belong to project")
-		}
+		subprojectKey = strconv.FormatInt(*subprojectID, 10)
 	}
-	var (
-		list []taskdomain.Task
-		err  error
-	)
-	switch {
-	case subprojectID != nil:
-		list, err = taskdomain.ListBySubproject(ctx, q, *subprojectID)
-	case projectID != nil:
-		list, err = taskdomain.ListByProject(ctx, q, *projectID)
-	case r.URL.Query().Get("ideas") == "true":
-		list, err = taskdomain.ListIdeas(ctx, q)
-	default:
-		list, err = taskdomain.List(ctx, q)
+	filter, err := taskdomain.ParseFilter(projectKey, subprojectKey)
+	if err != nil {
+		return taskdomain.TasksResponse{}, err
 	}
+	if err := filter.Validate(ctx, q); err != nil {
+		return taskdomain.TasksResponse{}, err
+	}
+	list, err := filter.List(ctx, q)
 	if err != nil {
 		return taskdomain.TasksResponse{}, err
 	}

@@ -2,7 +2,6 @@ package taskhandler
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"cad-development/internal/app"
@@ -20,37 +19,25 @@ func gridPage(q *db.Queries) http.HandlerFunc {
 }
 
 func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTime time.Time, allowHistoricalEditing bool) {
-	pk, sid, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
+	filter, err := taskdomain.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		app.WriteError(w, r, err)
 		return
 	}
-	normalized, err := taskdomain.NormalizeSubprojectFilter(r.Context(), q, pk, sid)
-	if err != nil {
+	if err := filter.Validate(r.Context(), q); err != nil {
 		app.WriteError(w, r, err)
 		return
 	}
-	if sid != nil && normalized == nil {
-		app.Redirect(w, r, "/?project="+pk)
-		return
+	if !filter.All && !filter.Ideas {
+		app.RememberProject(w, filter.ID)
 	}
-	sid = normalized
-	if pk != "ideas" {
-		if id, parseErr := strconv.ParseInt(pk, 10, 64); parseErr == nil {
-			app.RememberProject(w, id)
-		}
-	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, pk, sid, currentTime, allowHistoricalEditing)
+	grid, err := taskdomain.LoadGrid(r.Context(), q, filter, currentTime, allowHistoricalEditing)
 	if err != nil {
 		app.WriteError(w, r, err)
 		return
 	}
 	if app.IsHTMX(r) {
-		url := "/?project=" + pk
-		if sid != nil {
-			url += "&subproject=" + strconv.FormatInt(*sid, 10)
-		}
-		w.Header().Set("HX-Push-Url", url)
+		w.Header().Set("HX-Push-Url", "/?"+filter.Key())
 		app.RenderFragment(w, r, http.StatusOK, views.Grid(grid))
 		return
 	}

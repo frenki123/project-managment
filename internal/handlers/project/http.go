@@ -7,6 +7,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	domain "cad-development/internal/project"
 	"cad-development/internal/views"
 )
@@ -41,6 +42,17 @@ func formInput(r *http.Request) (domain.Input, error) {
 	in := domain.Input{Name: vals.Name, PurchaseOrderName: vals.PurchaseOrderName, StartDate: vals.StartDate, EndDate: vals.EndDate}
 	in.TotalHours = &hours
 	return in, nil
+}
+
+func formPatch(r *http.Request) (domain.Patch, error) {
+	in, err := formInput(r)
+	if err != nil {
+		return domain.Patch{}, err
+	}
+	return domain.Patch{
+		Name: *nullable.Set(in.Name), PurchaseOrderName: *nullable.Set(in.PurchaseOrderName),
+		TotalHours: *nullable.Set(*in.TotalHours), StartDate: *nullable.Set(in.StartDate), EndDate: *nullable.Set(in.EndDate),
+	}, nil
 }
 
 func submittedFormValues(r *http.Request) views.ProjectFormValues {
@@ -132,7 +144,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteFragmentError(w, r, err)
 			return
 		}
-		in, err := formInput(r)
+		in, err := formPatch(r)
 		if err != nil {
 			renderProjectForm(w, r, submittedFormValues(r), "/projects/"+strconv.FormatInt(id, 10), "Edit project", "/projects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return

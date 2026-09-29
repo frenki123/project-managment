@@ -1,0 +1,13 @@
+package app
+
+templ ErrorPage(message string) {
+	<main class="container error-page">
+		<h1>Request failed</h1>
+		<p>{ message }</p>
+		<a href="/">Show all tasks</a>
+	</main>
+}
+
+templ ErrorFragment(message string) {
+	<p class="error">{ message }</p>
+}

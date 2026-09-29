@@ -174,7 +174,6 @@
 	document.body.addEventListener("htmx:response:error", (event) => {
 		const ctx = event.detail.ctx;
 		if (ctx.sourceElement?.matches(".week-cell input")) lastActive = null;
-		showToast(ctx.text || `Request failed (${ctx.response?.status})`);
 	});
 
 	document.addEventListener("DOMContentLoaded", () => {

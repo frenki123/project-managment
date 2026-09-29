@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"html"
 	"log"
 	"net/http"
 	"strings"
@@ -24,42 +23,44 @@ func Conflict(message string) error { return HTTPError{Status: http.StatusConfli
 func Locked(message string) error   { return HTTPError{Status: http.StatusForbidden, Message: message} }
 
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
-	WriteHTTPError(w, r, HTTPErrorFrom(err))
+	httpErr := HTTPErrorFrom(err)
+	if IsAPI(r) {
+		writeHTTPError(w, httpErr)
+		return
+	}
+	if IsHTMX(r) {
+		WriteFragmentError(w, r, httpErr)
+		return
+	}
+	writeComponentError(w, r, httpErr, ErrorPage(httpErr.Message))
 }
 
 // WriteFragmentError renders an error into an HTMX fragment target.
 func WriteFragmentError(w http.ResponseWriter, r *http.Request, err error) {
-	WriteHTMXError(w, r, HTTPErrorFrom(err))
-}
-
-func WriteHTTPError(w http.ResponseWriter, r *http.Request, httpErr HTTPError) {
-	httpErr = normalizeHTTPError(httpErr)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	httpErr := HTTPErrorFrom(err)
 	if IsAPI(r) {
-		JSON(w, httpErr.Status, map[string]string{"error": httpErr.Message})
+		writeHTTPError(w, httpErr)
 		return
 	}
-	if IsHTMX(r) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(httpErr.Status)
-		_, _ = w.Write([]byte(httpErr.Message))
+	if !IsHTMX(r) {
+		writeComponentError(w, r, httpErr, ErrorPage(httpErr.Message))
 		return
 	}
-	http.Error(w, httpErr.Message, httpErr.Status)
+	writeComponentError(w, r, httpErr, ErrorFragment(httpErr.Message))
 }
 
-func WriteHTMXError(w http.ResponseWriter, r *http.Request, httpErr HTTPError) {
+func writeHTTPError(w http.ResponseWriter, httpErr HTTPError) {
 	httpErr = normalizeHTTPError(httpErr)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if !IsHTMX(r) {
-		WriteHTTPError(w, r, httpErr)
-		return
+	JSON(w, httpErr.Status, map[string]string{"error": httpErr.Message})
+}
+
+func writeComponentError(w http.ResponseWriter, r *http.Request, httpErr HTTPError, component Component) {
+	httpErr = normalizeHTTPError(httpErr)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if err := Render(w, r, httpErr.Status, component); err != nil {
+		log.Printf("render error response: %v", err)
 	}
-	w.Header().Set("HX-Retarget", r.Header.Get("HX-Target"))
-	w.Header().Set("HX-Reswap", "innerHTML")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`<p class="error">` + html.EscapeString(httpErr.Message) + `</p>`))
 }
 
 func normalizeHTTPError(httpErr HTTPError) HTTPError {

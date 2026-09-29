@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"cad-development/internal/client"
+	"cad-development/internal/nullable"
 	"github.com/spf13/cobra"
 )
 
@@ -62,6 +63,13 @@ func newRoot(s *commandState) *cobra.Command {
 	root.PersistentFlags().BoolVar(&s.table, "table", false, "print compact human-readable tables")
 	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), updateWeekCommand(s), curveCommand(s))
 	return root
+}
+
+func textPatch(value string) *nullable.Optional[string] {
+	if value == "null" {
+		return nullable.Clear[string]()
+	}
+	return nullable.Set(value)
 }
 
 func (s *commandState) printer() printer {

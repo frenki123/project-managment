@@ -9,6 +9,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	domain "cad-development/internal/subproject"
 	task "cad-development/internal/task"
@@ -64,6 +65,16 @@ func formInput(r *http.Request) (domain.Input, error) {
 	}
 	in.TotalHours = &hours
 	return in, nil
+}
+
+func formPatch(r *http.Request) (domain.Patch, error) {
+	in, err := formInput(r)
+	if err != nil {
+		return domain.Patch{}, err
+	}
+	return domain.Patch{
+		ProjectID: *nullable.Set(in.ProjectID), Name: *nullable.Set(in.Name), TotalHours: *nullable.Set(*in.TotalHours),
+	}, nil
 }
 
 func projectOpts(ctxq *db.Queries, r *http.Request, selected int64) ([]task.Option, error) {
@@ -186,7 +197,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteFragmentError(w, r, err)
 			return
 		}
-		in, err := formInput(r)
+		in, err := formPatch(r)
 		if err != nil {
 			renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return

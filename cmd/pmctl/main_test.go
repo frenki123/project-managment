@@ -113,7 +113,7 @@ func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 	}
 }
 
-func TestTaskUpdateFlagsSendFullReplacement(t *testing.T) {
+func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	var putBody string
 	var methods []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +135,9 @@ func TestTaskUpdateFlagsSendFullReplacement(t *testing.T) {
 	}
 	if strings.Join(methods, "\n") != "PUT /api/v1/tasks/4" {
 		t.Fatalf("requests = %v", methods)
+	}
+	if !strings.Contains(putBody, `"priority":"high"`) || strings.Contains(putBody, `"name"`) || strings.Contains(putBody, `"project_id"`) {
+		t.Fatalf("unexpected partial patch JSON: %s", putBody)
 	}
 	var input client.TaskInput
 	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
@@ -158,6 +161,22 @@ func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
 	in := taskInput(command, flags)
 	if in.ProjectID == nil || *in.ProjectID != 5 || in.SubprojectID != nil {
 		t.Fatalf("unexpected assignment: %+v", in)
+	}
+}
+
+func TestTaskPatchSupportsNullAndIdeas(t *testing.T) {
+	var flags taskFlags
+	command := &cobra.Command{}
+	flags.addFlags(command)
+	if err := command.ParseFlags([]string{"--description", "null", "--ideas"}); err != nil {
+		t.Fatal(err)
+	}
+	patch := taskPatch(command, flags)
+	if patch.Description == nil || patch.Description.Value != nil || !patch.Description.Set {
+		t.Fatalf("description was not cleared: %#v", patch.Description)
+	}
+	if patch.ProjectID == nil || patch.ProjectID.Value != nil || patch.SubprojectID == nil || patch.SubprojectID.Value != nil {
+		t.Fatalf("ideas did not clear assignments: project=%#v subproject=%#v", patch.ProjectID, patch.SubprojectID)
 	}
 }
 

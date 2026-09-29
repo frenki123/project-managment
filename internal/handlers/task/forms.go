@@ -6,6 +6,7 @@ import (
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	taskdomain "cad-development/internal/task"
@@ -32,6 +33,23 @@ func formInput(r *http.Request) (taskdomain.Input, error) {
 		ProjectID:           projectID,
 		SubprojectID:        subprojectID,
 	}, nil
+}
+
+func formPatch(r *http.Request) (taskdomain.Patch, error) {
+	in, err := formInput(r)
+	if err != nil {
+		return taskdomain.Patch{}, err
+	}
+	return taskdomain.Patch{
+		Name: *nullable.Set(in.Name), Description: *nullable.Set(in.Description),
+		ImplementationNotes: *nullable.Set(in.ImplementationNotes), Department: *nullable.Set(in.Department),
+		Developers: *nullable.Set(in.Developers), Priority: *nullable.Set(in.Priority),
+		ProjectID: optionalID(in.ProjectID), SubprojectID: optionalID(in.SubprojectID),
+	}, nil
+}
+
+func optionalID(value *int64) nullable.Optional[*int64] {
+	return nullable.Optional[*int64]{Value: &value, Set: true}
 }
 
 func formValues(r *http.Request) views.TaskFormValues {
@@ -210,7 +228,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			app.WriteFragmentError(w, r, err)
 			return
 		}
-		in, err := formInput(r)
+		in, err := formPatch(r)
 		if err != nil {
 			renderTaskUpdateError(w, r, q, id, err)
 			return

@@ -40,12 +40,31 @@ one S-curve per project.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
   add `--table` for compact terminal output. `pmctl tasks list` returns all tasks by default and
-  supports name- or ID-based project filters. All create/update commands use flags and full
-  replacement semantics. Weekly historical edits requiring `--unlock` send `unlock: true` on
+  supports name- or ID-based project filters. POST creates use empty values for omitted fields;
+  PUT updates are presence-driven: omitted fields are preserved, `null` clears nullable fields,
+  and numeric zero sets numeric fields to zero. Weekly historical edits requiring `--unlock` send `unlock: true` on
   that one update request. When both name and ID filters are supplied, names win;
-  project/subproject filters take precedence over `--ideas`. Project and subproject updates are
-  full replacements: provide the complete replacement through flags; omitted required fields are
-  rejected by the REST API.
+  project/subproject filters take precedence over `--ideas`. Use `--field null` to clear text or
+  nullable assignments; `--ideas` clears both task assignments. A task reassignment with weekly
+  data returns `409` only when the assignment field was explicitly changed.
+
+## API Contract
+
+Task lists accept `project_id`, `subproject_id`, and `ideas=true`. A subproject filter takes
+precedence over project, ideas, and all-task selection. Missing filters select the default view;
+present but unknown filters return `404`, and a subproject from another selected project returns
+`400`.
+
+All API errors use the same envelope and preserve the true HTTP status:
+
+```json
+{"error":"task not found"}
+```
+
+API requests always receive JSON, even when HTMX headers are present. Browser and HTMX requests
+receive HTML error views or fragments with the same status. Weekly updates retain
+`clear_progress` because clearing stored progress and setting progress to zero are different
+operations.
 
 ## Stack
 

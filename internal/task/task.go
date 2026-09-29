@@ -54,6 +54,17 @@ type Input struct {
 	SubprojectID        *int64 `json:"subproject_id"`
 }
 
+type Patch struct {
+	Name                nullable.Optional[string] `json:"name"`
+	Description         nullable.Optional[string] `json:"description"`
+	ImplementationNotes nullable.Optional[string] `json:"implementation_notes"`
+	Department          nullable.Optional[string] `json:"department"`
+	Developers          nullable.Optional[string] `json:"developers"`
+	Priority            nullable.Optional[string] `json:"priority"`
+	ProjectID           nullable.Optional[*int64] `json:"project_id"`
+	SubprojectID        nullable.Optional[*int64] `json:"subproject_id"`
+}
+
 type TasksResponse struct {
 	Tasks []Task `json:"tasks"`
 }
@@ -205,10 +216,7 @@ func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([
 	return mapTasks(ctx, q, rows, "subproject", subprojectID)
 }
 
-// Update replaces the full task state; omitted fields become zero values.
-// For a task with weekly data, omitting project_id/subproject_id is treated as
-// a reassignment and fails with Conflict. Send the complete entity.
-func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error) {
+func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, error) {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetTask(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -217,12 +225,29 @@ func Update(ctx context.Context, q *db.Queries, id int64, in Input) (Task, error
 		if err != nil {
 			return err
 		}
+		currentInput := Input{
+			Name: current.Name, Description: current.Description,
+			ImplementationNotes: current.ImplementationNotes, Department: current.Department,
+			Developers: current.Developers, Priority: current.Priority,
+			ProjectID:    nullable.Int64Pointer(current.ProjectID),
+			SubprojectID: nullable.Int64Pointer(current.SubprojectID),
+		}
+		in := Input{
+			Name:                patch.Name.Apply(currentInput.Name),
+			Description:         patch.Description.Apply(currentInput.Description),
+			ImplementationNotes: patch.ImplementationNotes.Apply(currentInput.ImplementationNotes),
+			Department:          patch.Department.Apply(currentInput.Department),
+			Developers:          patch.Developers.Apply(currentInput.Developers),
+			Priority:            patch.Priority.Apply(currentInput.Priority),
+			ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
+			SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
+		}
 		in, err = validate(ctx, txq, in)
 		if err != nil {
 			return err
 		}
-		projectChanged := current.ProjectID != nullable.Int64(in.ProjectID)
-		subprojectChanged := current.SubprojectID != nullable.Int64(in.SubprojectID)
+		projectChanged := patch.ProjectID.Set && current.ProjectID != nullable.Int64(in.ProjectID)
+		subprojectChanged := patch.SubprojectID.Set && current.SubprojectID != nullable.Int64(in.SubprojectID)
 		if projectChanged || subprojectChanged {
 			weekCount, err := txq.CountTaskWeeksByTask(ctx, id)
 			if err != nil {
