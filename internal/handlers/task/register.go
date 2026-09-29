@@ -51,11 +51,7 @@ func listTasks(ctx context.Context, q *db.Queries, r *http.Request) (taskdomain.
 	if err != nil {
 		return taskdomain.TasksResponse{}, err
 	}
-	resolved, err := filter.Resolve(ctx, q)
-	if err != nil {
-		return taskdomain.TasksResponse{}, err
-	}
-	list, err := resolved.List(ctx, q)
+	list, err := filter.List(ctx, q)
 	if err != nil {
 		return taskdomain.TasksResponse{}, err
 	}
