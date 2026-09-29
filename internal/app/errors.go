@@ -43,20 +43,18 @@ func WriteFragmentError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	if !IsHTMX(r) {
-		WriteError(w, r, httpErr)
+		writeComponentError(w, r, httpErr, ErrorPage(httpErr.Message))
 		return
 	}
 	writeComponentError(w, r, httpErr, ErrorFragment(httpErr.Message))
 }
 
 func writeHTTPError(w http.ResponseWriter, httpErr HTTPError) {
-	httpErr = normalizeHTTPError(httpErr)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	JSON(w, httpErr.Status, map[string]string{"error": httpErr.Message})
 }
 
 func writeComponentError(w http.ResponseWriter, r *http.Request, httpErr HTTPError, component Component) {
-	httpErr = normalizeHTTPError(httpErr)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := Render(w, r, httpErr.Status, component); err != nil {
 		log.Printf("render error response: %v", err)

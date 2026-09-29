@@ -15,10 +15,9 @@ import (
 type Grid struct {
 	Projects                 []Option
 	Subprojects              []Option
+	Kind                     ViewKind
 	FilterProject            string
 	FilterSubproject         string
-	Ideas                    bool
-	SummaryOnly              bool
 	ProjectName              string
 	SubprojectName           string
 	StartDate                string
@@ -33,6 +32,19 @@ type Grid struct {
 	ProgressPct              *float64
 	Overrun                  bool
 	HistoricalEditingAllowed bool
+}
+
+type ViewKind uint8
+
+const (
+	ViewAll ViewKind = iota
+	ViewIdeas
+	ViewProject
+	ViewSubproject
+)
+
+func (kind ViewKind) IsWeekly() bool {
+	return kind == ViewProject || kind == ViewSubproject
 }
 
 type Option struct {
@@ -75,20 +87,33 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 	if err != nil {
 		return Grid{}, err
 	}
+	return LoadResolvedGrid(ctx, q, resolved, now, allowHistoricalEditing)
+}
+
+func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, now time.Time, allowHistoricalEditing bool) (Grid, error) {
+	filter := resolved.Filter
 	projects, err := project.List(ctx, q)
 	if err != nil {
 		return Grid{}, err
 	}
 
+	kind := ViewProject
+	switch {
+	case filter.All && filter.Subproject == nil:
+		kind = ViewAll
+	case filter.Ideas && filter.Subproject == nil:
+		kind = ViewIdeas
+	case filter.Subproject != nil:
+		kind = ViewSubproject
+	}
 	data := Grid{
 		FilterProject:    filterProjectKey(filter),
 		FilterSubproject: "",
-		Ideas:            filter.Ideas,
+		Kind:             kind,
 		ProjectName:      "All tasks",
 		Projects:         projectOptions(projects, filterProjectKey(filter)),
 	}
-	if filter.All && filter.Subproject == nil {
-		data.SummaryOnly = true
+	if kind == ViewAll {
 		tasks, err := List(ctx, q)
 		if err != nil {
 			return Grid{}, err
@@ -121,7 +146,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 		}
 		return data, nil
 	}
-	if filter.Ideas && filter.Subproject == nil {
+	if kind == ViewIdeas {
 		tasks, err := ListIdeas(ctx, q)
 		if err != nil {
 			return Grid{}, err
@@ -139,10 +164,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 	}
 	data.HistoricalEditingAllowed = allowHistoricalEditing
 	pid := resolved.ProjectID
-	proj, err := project.Get(ctx, q, pid)
-	if err != nil {
-		return Grid{}, err
-	}
+	proj := project.FromDB(*resolved.Project)
 	subs, err := subproject.ListByProject(ctx, q, pid)
 	if err != nil {
 		return Grid{}, err
@@ -173,8 +195,6 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
-	addWeekTotal := func(total GridWeekTotal) { data.WeekTotals = append(data.WeekTotals, total) }
-
 	weeks, err := q.ListTaskWeeksByProject(ctx, sql.NullInt64{Int64: pid, Valid: true})
 	if err != nil {
 		return Grid{}, err
@@ -207,7 +227,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(GridWeekTotal{
+			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
 				Planned: row.PlannedHours, Spent: row.SpentHours,
 			})
 		}
@@ -229,7 +249,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			addWeekTotal(GridWeekTotal{
+			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
 				Planned: row.PlannedHours, Spent: row.SpentHours,
 			})
 		}

@@ -243,13 +243,8 @@ func renderTaskUpdateError(w http.ResponseWriter, r *http.Request, q *db.Queries
 		}
 		canReassign = len(current.Weeks) == 0
 		if !canReassign {
-			vals.ProjectID, vals.SubprojectID = "", ""
-			if current.ProjectID != nil {
-				vals.ProjectID = strconv.FormatInt(*current.ProjectID, 10)
-			}
-			if current.SubprojectID != nil {
-				vals.SubprojectID = strconv.FormatInt(*current.SubprojectID, 10)
-			}
+			currentVals := taskFormValues(current)
+			vals.ProjectID, vals.SubprojectID = currentVals.ProjectID, currentVals.SubprojectID
 		}
 	}
 	idStr := strconv.FormatInt(id, 10)

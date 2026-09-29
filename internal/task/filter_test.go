@@ -31,7 +31,7 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := valid.Validate(ctx, q); err != nil {
+	if _, err := valid.Resolve(ctx, q); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,7 +48,7 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, err := ParseFilter(tc.project, tc.subproject)
 			if err == nil {
-				err = f.Validate(ctx, q)
+				_, err = f.Resolve(ctx, q)
 			}
 			httpErr, ok := app.HTTPErrorFrom(err), true
 			if !ok || httpErr.Status != tc.status {

@@ -52,6 +52,9 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if grid.Kind != task.ViewProject {
+		t.Fatalf("unexpected project view kind: %v", grid.Kind)
+	}
 	if grid.PlannedHours != 200 || grid.SpentHours != 200 {
 		t.Fatalf("unexpected hour totals: planned=%v spent=%v", grid.PlannedHours, grid.SpentHours)
 	}
@@ -153,6 +156,9 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if grid.Kind != task.ViewSubproject {
+		t.Fatalf("unexpected subproject view kind: %v", grid.Kind)
+	}
 	if grid.PlannedHours != planned || grid.SpentHours != spent {
 		t.Fatalf("unexpected subproject totals: planned=%v spent=%v", grid.PlannedHours, grid.SpentHours)
 	}
@@ -171,7 +177,7 @@ func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !grid.Ideas || len(grid.Weeks) != 0 || len(grid.Rows) != 1 || grid.Rows[0].ProjectName != "" {
+	if grid.Kind != task.ViewIdeas || len(grid.Weeks) != 0 || len(grid.Rows) != 1 || grid.Rows[0].ProjectName != "" {
 		t.Fatalf("unexpected ideas grid: %#v", grid)
 	}
 }
