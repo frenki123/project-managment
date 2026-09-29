@@ -195,7 +195,7 @@ func gridClass(data task.Grid) string {
 	if data.Ideas {
 		class += " ideas"
 	}
-	if data.HistoricalEditingAllowed {
+	if data.HistoricalEditingAllowed && !data.Ideas && !data.SummaryOnly {
 		class += " historical-editing-allowed"
 	}
 	return class
