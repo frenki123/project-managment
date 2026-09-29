@@ -43,7 +43,7 @@ func WriteFragmentError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	if !IsHTMX(r) {
-		writeComponentError(w, r, httpErr, ErrorPage(httpErr.Message))
+		WriteError(w, r, httpErr)
 		return
 	}
 	writeComponentError(w, r, httpErr, ErrorFragment(httpErr.Message))

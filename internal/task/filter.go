@@ -20,6 +20,12 @@ type Filter struct {
 	Subproject *int64
 }
 
+type ResolvedFilter struct {
+	Filter
+	ProjectID  int64
+	Subproject *db.Subproject
+}
+
 func ParseFilter(projectKey, subprojectValue string) (Filter, error) {
 	f := Filter{All: projectKey == "" || projectKey == "all"}
 	if projectKey == "ideas" {
@@ -57,27 +63,35 @@ func (f Filter) Key() string {
 }
 
 func (f Filter) Validate(ctx context.Context, q *db.Queries) error {
+	_, err := f.Resolve(ctx, q)
+	return err
+}
+
+func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, error) {
+	resolved := ResolvedFilter{Filter: f, ProjectID: f.ID}
 	if !f.All && !f.Ideas {
 		if _, err := q.GetProject(ctx, f.ID); errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("project not found")
+			return ResolvedFilter{}, app.Missing("project not found")
 		} else if err != nil {
-			return err
+			return ResolvedFilter{}, err
 		}
 	}
 	if f.Subproject == nil {
-		return nil
+		return resolved, nil
 	}
 	sp, err := q.GetSubproject(ctx, *f.Subproject)
 	if errors.Is(err, sql.ErrNoRows) {
-		return app.Missing("subproject not found")
+		return ResolvedFilter{}, app.Missing("subproject not found")
 	}
 	if err != nil {
-		return err
+		return ResolvedFilter{}, err
 	}
 	if !f.All && !f.Ideas && f.ID != sp.ProjectID {
-		return app.Invalid("subproject does not belong to project")
+		return ResolvedFilter{}, app.Invalid("subproject does not belong to project")
 	}
-	return nil
+	resolved.ProjectID = sp.ProjectID
+	resolved.Subproject = &sp
+	return resolved, nil
 }
 
 func (f Filter) List(ctx context.Context, q *db.Queries) ([]Task, error) {

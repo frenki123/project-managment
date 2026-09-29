@@ -71,11 +71,12 @@ type GridWeekTotal struct {
 }
 
 func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, allowHistoricalEditing bool) (Grid, error) {
-	projects, err := project.List(ctx, q)
+	resolved, err := filter.Resolve(ctx, q)
 	if err != nil {
 		return Grid{}, err
 	}
-	if err := filter.Validate(ctx, q); err != nil {
+	projects, err := project.List(ctx, q)
+	if err != nil {
 		return Grid{}, err
 	}
 
@@ -137,14 +138,7 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 		return data, nil
 	}
 	data.HistoricalEditingAllowed = allowHistoricalEditing
-	pid := filter.ID
-	if filter.Subproject != nil && pid == 0 {
-		sp, err := subproject.Get(ctx, q, *filter.Subproject)
-		if err != nil {
-			return Grid{}, err
-		}
-		pid = sp.ProjectID
-	}
+	pid := resolved.ProjectID
 	proj, err := project.Get(ctx, q, pid)
 	if err != nil {
 		return Grid{}, err
@@ -157,16 +151,9 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 	data.ProjectName = proj.Name
 	data.StartDate = proj.StartDate
 	data.EndDate = proj.EndDate
-	var sp subproject.Subproject
-	if filter.Subproject != nil {
-		sp, err = subproject.Get(ctx, q, *filter.Subproject)
-		if err != nil {
-			return Grid{}, err
-		}
-	}
-	if filter.Subproject != nil {
+	if resolved.Subproject != nil {
 		data.FilterSubproject = strconv.FormatInt(*filter.Subproject, 10)
-		data.SubprojectName = sp.Name
+		data.SubprojectName = resolved.Subproject.Name
 	}
 
 	start, err := weekly.ParseDate(proj.StartDate)
@@ -203,8 +190,8 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 	}
 
 	var tasks []Task
-	if filter.Subproject != nil {
-		data.BudgetHours = sp.TotalHours
+	if resolved.Subproject != nil {
+		data.BudgetHours = resolved.Subproject.TotalHours
 		tasks, err = ListBySubproject(ctx, q, *filter.Subproject)
 		if err != nil {
 			return Grid{}, err

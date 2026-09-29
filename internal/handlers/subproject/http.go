@@ -183,7 +183,7 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 			renderSubprojectForm(w, r, q, vals, "/subprojects", "New subproject", "", err)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10)+"&subproject="+strconv.FormatInt(s.ID, 10))
+		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID, Subproject: &s.ID}.Key())
 	}
 }
 
@@ -204,7 +204,7 @@ func updateHTML(q *db.Queries) http.HandlerFunc {
 			renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10)+"&subproject="+strconv.FormatInt(s.ID, 10))
+		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID, Subproject: &s.ID}.Key())
 	}
 }
 
@@ -231,6 +231,6 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 			}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", httpErr)
 			return
 		}
-		app.Redirect(w, r, "/?project="+strconv.FormatInt(s.ProjectID, 10))
+		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID}.Key())
 	}
 }

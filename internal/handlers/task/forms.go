@@ -286,11 +286,7 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 
 func afterTask(t taskdomain.Task) string {
 	if t.ProjectID == nil {
-		return "/?project=ideas"
+		return "/?" + (taskdomain.Filter{Ideas: true}).Key()
 	}
-	u := "/?project=" + strconv.FormatInt(*t.ProjectID, 10)
-	if t.SubprojectID != nil {
-		u += "&subproject=" + strconv.FormatInt(*t.SubprojectID, 10)
-	}
-	return u
+	return "/?" + (taskdomain.Filter{ID: *t.ProjectID, Subproject: t.SubprojectID}).Key()
 }

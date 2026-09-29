@@ -24,17 +24,13 @@ func RenderGrid(w http.ResponseWriter, r *http.Request, q *db.Queries, currentTi
 		app.WriteError(w, r, err)
 		return
 	}
-	if err := filter.Validate(r.Context(), q); err != nil {
+	grid, err := taskdomain.LoadGrid(r.Context(), q, filter, currentTime, allowHistoricalEditing)
+	if err != nil {
 		app.WriteError(w, r, err)
 		return
 	}
 	if !filter.All && !filter.Ideas {
 		app.RememberProject(w, filter.ID)
-	}
-	grid, err := taskdomain.LoadGrid(r.Context(), q, filter, currentTime, allowHistoricalEditing)
-	if err != nil {
-		app.WriteError(w, r, err)
-		return
 	}
 	if app.IsHTMX(r) {
 		w.Header().Set("HX-Push-Url", "/?"+filter.Key())
