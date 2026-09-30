@@ -10,7 +10,6 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
-	"cad-development/internal/weekly"
 )
 
 type Project struct {
@@ -68,12 +67,12 @@ func FromDB(p db.Project) Project {
 	}
 }
 
-func fromTotals(row db.VProjectTotal) Project {
+func fromTotals(row db.ListProjectsWithTotalsRow) Project {
 	return Project{
 		ID: row.ID, Name: row.Name, PurchaseOrderName: row.PurchaseOrderName,
 		TotalHours: row.TotalHours, StartDate: row.StartDate, EndDate: row.EndDate,
 		PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
-		ProgressPct: row.Progress, EarnedHours: row.Progress * row.TotalHours / 100,
+		ProgressPct: row.Progress, EarnedHours: row.EarnedHours,
 	}
 }
 
@@ -85,6 +84,14 @@ func validateName(name string) (string, error) {
 	return name, nil
 }
 
+func parseDate(s string) (time.Time, error) {
+	t, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return time.Time{}, app.Invalid("invalid date")
+	}
+	return t, nil
+}
+
 func validateFields(in Input) (Input, error) {
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.TotalHours == nil {
@@ -93,11 +100,11 @@ func validateFields(in Input) (Input, error) {
 	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
 	}
-	start, err := weekly.ParseDate(in.StartDate)
+	start, err := parseDate(in.StartDate)
 	if err != nil {
 		return in, app.Invalid("invalid start_date")
 	}
-	end, err := weekly.ParseDate(in.EndDate)
+	end, err := parseDate(in.EndDate)
 	if err != nil {
 		return in, app.Invalid("invalid end_date")
 	}
@@ -172,7 +179,7 @@ func populateTotals(ctx context.Context, q *db.Queries, p *Project) error {
 	p.PlannedHours = totals.PlannedHours
 	p.SpentHours = totals.SpentHours
 	p.ProgressPct = totals.Progress
-	p.EarnedHours = totals.Progress * p.TotalHours / 100
+	p.EarnedHours = totals.EarnedHours
 	return nil
 }
 

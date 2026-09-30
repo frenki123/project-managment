@@ -271,7 +271,7 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 				t.Fatalf("project %d: historical editing = %v, want %v", id, grid.HistoricalEditingAllowed, allowHistoricalEditing)
 			}
 			for _, cell := range grid.Rows[0].Cells {
-				wantLocked := !allowHistoricalEditing && string(cell.WeekStart) < "2026-05-01"
+				wantLocked := !allowHistoricalEditing && cell.WeekStart.String() < "2026-05-01"
 				if cell.Locked != wantLocked {
 					t.Fatalf("project %d: unexpected lock for %s: %#v", id, cell.WeekStart, cell)
 				}

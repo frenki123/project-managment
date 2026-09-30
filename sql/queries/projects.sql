@@ -10,7 +10,7 @@ FROM projects WHERE id = ?;
 
 -- name: GetProjectTotals :one
 SELECT
-planned_hours, spent_hours, progress
+planned_hours, spent_hours, progress, CAST(earned_hours AS REAL) AS earned_hours
 FROM v_project_totals
 WHERE id = CAST(sqlc.arg(project_id) AS INTEGER);
 
@@ -21,7 +21,7 @@ FROM projects ORDER BY name COLLATE NOCASE, id;
 -- name: ListProjectsWithTotals :many
 SELECT
 id, name, purchase_order_name, total_hours, start_date, end_date,
-planned_hours, spent_hours, progress
+planned_hours, spent_hours, progress, CAST(earned_hours AS REAL) AS earned_hours
 FROM v_project_totals
 ORDER BY name COLLATE NOCASE, id;
 

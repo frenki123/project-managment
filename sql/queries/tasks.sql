@@ -9,10 +9,10 @@ INSERT INTO tasks (
     project_id,
     subproject_id
 ) VALUES (?, ?, ?, ?, ?, ?,
-    COALESCE(sqlc.narg(project_id), (
-        SELECT project_id FROM subprojects WHERE id = sqlc.narg(subproject_id)
+    COALESCE(CAST(sqlc.narg(project_id) AS INTEGER), (
+        SELECT project_id FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)
     )),
-    sqlc.narg(subproject_id))
+    CAST(sqlc.narg(subproject_id) AS INTEGER))
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 
 -- name: GetTask :one
@@ -43,10 +43,10 @@ UPDATE tasks SET
     department = ?,
     developers = ?,
     priority = ?,
-    project_id = COALESCE(sqlc.narg(project_id), (
-        SELECT project_id FROM subprojects WHERE id = sqlc.narg(subproject_id)
+    project_id = COALESCE(CAST(sqlc.narg(project_id) AS INTEGER), (
+        SELECT project_id FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)
     )),
-    subproject_id = sqlc.narg(subproject_id)
+    subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER)
 WHERE tasks.id = sqlc.arg(id)
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 

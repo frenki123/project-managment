@@ -194,7 +194,7 @@ func expand(tp taskPlan, weeks []weekly.WeekStart) ([]week, error) {
 	cells := make([]week, 0, tp.span)
 	for i := range tp.span {
 		cells = append(cells, week{
-			weekStart: string(weeks[i]),
+			weekStart: weeks[i].String(),
 			planned:   planned[i],
 			spent:     spent[i],
 			progress:  progressAt(tp.style, i, tp.span, tp.final),

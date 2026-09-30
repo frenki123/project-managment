@@ -69,8 +69,8 @@ func series(curve projectdomain.SCurve) views.ChartSeries {
 	spent := make([]float64, 0, len(curve.Weeks))
 	earned := make([]float64, 0, len(curve.Weeks))
 	for _, week := range curve.Weeks {
-		parsed, err := weekly.ParseWeekStart(weekly.WeekStart(week.WeekStart))
-		if err != nil {
+		parsed := weekly.WeekStart(week.WeekStart).Time()
+		if parsed.IsZero() {
 			labels = append(labels, week.WeekStart)
 		} else {
 			year, number := parsed.ISOWeek()

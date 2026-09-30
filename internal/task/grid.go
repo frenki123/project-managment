@@ -212,7 +212,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			info, err := weekly.Info(weekly.WeekStart(row.WeekStart))
+			info, err := weekly.WeekStart(row.WeekStart).Info()
 			if err != nil {
 				return Grid{}, err
 			}
@@ -239,7 +239,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			info, err := weekly.Info(weekly.WeekStart(row.WeekStart))
+			info, err := weekly.WeekStart(row.WeekStart).Info()
 			if err != nil {
 				return Grid{}, err
 			}
@@ -272,7 +272,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 		progress := 0.0
 		for _, info := range data.Weeks {
 			ws := info.Start
-			cw := cellByWeek[string(ws)]
+			cw := cellByWeek[ws.String()]
 			if cw.WeekStart != "" {
 				progress = cw.EffectiveProgress
 			}
@@ -282,8 +282,8 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 				Spent:     cw.SpentHours,
 				Progress:  progress,
 				Stored:    cw.Progress.Valid,
-				Locked:    !allowHistoricalEditing && weekly.IsWeekLocked(string(ws), now),
-				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),
+				Locked:    !allowHistoricalEditing && ws.IsLocked(now),
+				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + ws.String(),
 			})
 		}
 		data.Rows = append(data.Rows, row)
