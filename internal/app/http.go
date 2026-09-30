@@ -92,7 +92,7 @@ func Int64Checked(s string, name string) (*int64, error) {
 	}
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil || n < 1 {
-		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + name}
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + fieldName(name)}
 	}
 	return new(n), nil
 }
@@ -128,9 +128,22 @@ func FormFloatRequired(r *http.Request, name string) (float64, error) {
 		return 0, err
 	}
 	if !present || strings.TrimSpace(r.FormValue(name)) == "" {
-		return 0, HTTPError{Status: http.StatusBadRequest, Message: name + " is required"}
+		return 0, HTTPError{Status: http.StatusBadRequest, Message: fieldName(name) + " is required"}
 	}
 	return value, nil
+}
+
+// fieldName converts a form field name into the display text used in error messages.
+func fieldName(name string) string {
+	switch name {
+	case "project_id":
+		return "project"
+	case "subproject_id":
+		return "subproject"
+	case "total_hours":
+		return "total hours"
+	}
+	return name
 }
 
 func Render(w http.ResponseWriter, r *http.Request, status int, component Component) error {

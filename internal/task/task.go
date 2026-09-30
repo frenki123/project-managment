@@ -108,10 +108,10 @@ func validate(in Input) (Input, error) {
 		return in, app.Invalid("name is required")
 	}
 	if in.ProjectID != nil && *in.ProjectID < 1 {
-		return in, app.Invalid("invalid project_id")
+		return in, app.Invalid("invalid project")
 	}
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
-		return in, app.Invalid("invalid subproject_id")
+		return in, app.Invalid("invalid subproject")
 	}
 	return in, nil
 }
@@ -129,7 +129,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
@@ -260,18 +260,18 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		projectChanged := patch.ProjectID.Present && current.ProjectID != nullable.Int64(in.ProjectID)
 		subprojectChanged := patch.SubprojectID.Present && current.SubprojectID != nullable.Int64(in.SubprojectID)
 		if projectChanged || subprojectChanged {
-			hasWeeks, err := txq.HasTaskWeeks(ctx, id)
+			reassign, err := txq.TaskReassignConflict(ctx, id)
 			if err != nil {
 				return err
 			}
-			if hasWeeks {
-				return app.Conflict("cannot reassign task with weekly data")
+			if err := app.HTTPErrorFromReason(int(reassign.Status), reassign.Reason); err != nil {
+				return err
 			}
 		}
 		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{

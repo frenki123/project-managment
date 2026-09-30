@@ -60,8 +60,8 @@ SELECT
         ELSE 0
     END AS status,
     CAST(CASE
-        WHEN budget IS NULL THEN 'project not found'
-        WHEN used_plus_new > budget THEN 'subproject hours exceed project hours'
+        WHEN budget IS NULL THEN 'project-not-found'
+        WHEN used_plus_new > budget THEN 'subproject-hours-exceed-project'
         ELSE ''
     END AS TEXT) AS reason
 FROM cap;

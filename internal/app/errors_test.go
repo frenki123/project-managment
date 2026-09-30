@@ -8,27 +8,23 @@ import (
 	"cad-development/internal/app"
 )
 
-func TestFromStatus(t *testing.T) {
-	for _, test := range []struct {
-		status int
-		want   int
+func TestHTTPErrorFromReason(t *testing.T) {
+	cases := []struct {
+		status  int
+		reason  string
+		message string
 	}{
-		{0, 0},
-		{http.StatusBadRequest, http.StatusBadRequest},
-		{http.StatusForbidden, http.StatusForbidden},
-		{http.StatusNotFound, http.StatusNotFound},
-		{http.StatusConflict, http.StatusConflict},
-	} {
-		err := app.FromStatus(test.status, "message")
-		if test.status == 0 {
-			if err != nil {
-				t.Fatalf("zero status returned %v", err)
-			}
-			continue
+		{http.StatusBadRequest, "idea-task-not-assignable", "ideas cannot be planned"},
+		{http.StatusConflict, "project-name-taken", "project name already exists"},
+		{http.StatusConflict, "task-has-weekly-data", "cannot reassign task with weekly data"},
+	}
+	for _, tc := range cases {
+		httpErr, ok := errors.AsType[app.HTTPError](app.HTTPErrorFromReason(tc.status, tc.reason))
+		if !ok || httpErr.Status != tc.status || httpErr.Reason != tc.reason || httpErr.Message != tc.message {
+			t.Fatalf("HTTPErrorFromReason(%d, %q) = %#v", tc.status, tc.reason, httpErr)
 		}
-		var httpErr app.HTTPError
-		if !errors.As(err, &httpErr) || httpErr.Status != test.want || httpErr.Message != "message" {
-			t.Fatalf("FromStatus(%d) = %v", test.status, err)
-		}
+	}
+	if err := app.HTTPErrorFromReason(0, ""); err != nil {
+		t.Fatalf("zero status should return nil, got %v", err)
 	}
 }

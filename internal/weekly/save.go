@@ -64,7 +64,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(contextRow.Status), contextRow.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(contextRow.Status), contextRow.Reason); err != nil {
 			return err
 		}
 

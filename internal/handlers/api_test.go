@@ -74,9 +74,7 @@ func TestJSONDuplicateProjectNameConflict(t *testing.T) {
 	} {
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, httptest.NewRequest(request.method, request.path, bytes.NewReader(body)))
-		if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), `"error":"project name already exists"`) {
-			t.Fatalf("%s %s: %d %s", request.method, request.path, rr.Code, rr.Body.String())
-		}
+		assertAPIError(t, rr, http.StatusConflict, "project name already exists", "project-name-taken")
 	}
 }
 
@@ -332,6 +330,25 @@ func TestJSONTaskErrors(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"orphan","project_id":999}`))))
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("missing project status: got %d", rr.Code)
+	}
+}
+
+func TestJSONProjectValidationErrorMessage(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	body := []byte(`{"name":"P","start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(body)))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("project without total_hours: got %d %s", rr.Code, rr.Body.String())
+	}
+	var apiError struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiError); err != nil || apiError.Error != "total hours is required" {
+		t.Fatalf("expected JSON error response, got %q", rr.Body.String())
 	}
 }
 
@@ -733,6 +750,61 @@ func postForm(t *testing.T, mux *http.ServeMux, path, form string) *httptest.Res
 	return rr
 }
 
+func assertAPIError(t *testing.T, rr *httptest.ResponseRecorder, wantStatus int, wantMessage, wantReason string) {
+	t.Helper()
+	if rr.Code != wantStatus {
+		t.Fatalf("expected %d, got %d %s", wantStatus, rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Error  string `json:"error"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode API error %q: %v", rr.Body.String(), err)
+	}
+	if payload.Error != wantMessage || payload.Reason != wantReason {
+		t.Fatalf("got message %q reason %q", payload.Error, payload.Reason)
+	}
+}
+
+func TestJSONConflictReasonCodes(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	weekPath := func(id int64, week time.Time) string {
+		return "/api/v1/tasks/" + strconv.FormatInt(id, 10) + "/weeks/" + week.Format("2006-01-02")
+	}
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(method, path, bytes.NewReader([]byte(body))))
+		return rr
+	}
+
+	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
+	assertAPIError(t, request(http.MethodPut, weekPath(ideaID, start), `{"planned_hours":1}`),
+		http.StatusBadRequest, "ideas cannot be planned", "idea-task-not-assignable")
+
+	projID := createProject(t, mux, "Alpha", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`}`))
+	assertAPIError(t, request(http.MethodPut, weekPath(taskID, start.AddDate(0, 0, 35)), `{"planned_hours":1}`),
+		http.StatusBadRequest, "week is outside the project date range", "week-outside-project-bounds")
+
+	if rr := request(http.MethodPost, "/api/v1/subprojects", `{"project_id":`+strconv.FormatInt(projID, 10)+`,"name":"SP","total_hours":60}`); rr.Code != http.StatusCreated {
+		t.Fatalf("create subproject: %d %s", rr.Code, rr.Body.String())
+	}
+	assertAPIError(t, request(http.MethodPost, "/api/v1/subprojects", `{"project_id":`+strconv.FormatInt(projID, 10)+`,"name":"SP","total_hours":50}`),
+		http.StatusConflict, "subproject hours exceed project hours", "subproject-hours-exceed-project")
+
+	if rr := request(http.MethodPut, weekPath(taskID, start), `{"planned_hours":1}`); rr.Code != http.StatusOK {
+		t.Fatalf("save week: %d %s", rr.Code, rr.Body.String())
+	}
+	otherID := createProject(t, mux, "Beta", start)
+	reassign := `{"name":"T","project_id":` + strconv.FormatInt(otherID, 10) + `}`
+	assertAPIError(t, request(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), reassign),
+		http.StatusConflict, "cannot reassign task with weekly data", "task-has-weekly-data")
+}
+
 func TestUIFormMutationRedirects(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
@@ -939,9 +1011,7 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	}
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid1, 10)+"&subproject_id="+strconv.FormatInt(sp2.ID, 10), nil))
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("mismatched subproject should be rejected by the API: %d %s", rr.Code, rr.Body.String())
-	}
+	assertAPIError(t, rr, http.StatusBadRequest, "subproject does not belong to project", "")
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?subproject_id=999", nil))
 	if rr.Code != http.StatusNotFound {

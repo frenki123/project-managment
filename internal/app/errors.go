@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 
 	"cad-development/internal/db"
 )
@@ -12,6 +11,7 @@ import (
 // HTTPError is the single error type used across the app and its HTTP adapters.
 type HTTPError struct {
 	Status  int
+	Reason  string
 	Message string
 }
 
@@ -24,21 +24,30 @@ func Missing(message string) error  { return HTTPError{Status: http.StatusNotFou
 func Conflict(message string) error { return HTTPError{Status: http.StatusConflict, Message: message} }
 func Locked(message string) error   { return HTTPError{Status: http.StatusForbidden, Message: message} }
 
-func FromStatus(status int, message string) error {
-	switch status {
-	case 0:
+// reasonErrors maps the stable machine reason codes from the SQL conflict queries to their human-readable messages.
+var reasonErrors = map[string]string{
+	"idea-task-not-assignable":          "ideas cannot be planned",
+	"week-outside-project-bounds":       "week is outside the project date range",
+	"subproject-not-found":              "subproject not found",
+	"project-not-found":                 "project not found",
+	"subproject-project-mismatch":       "subproject does not belong to project",
+	"project-hours-below-subprojects":   "project hours cannot be less than subproject hours",
+	"project-dates-exclude-weekly-data": "project dates cannot exclude existing weekly data",
+	"subproject-hours-exceed-project":   "subproject hours exceed project hours",
+	"project-name-taken":                "project name already exists",
+	"task-has-weekly-data":              "cannot reassign task with weekly data",
+}
+
+// HTTPErrorFromReason converts a conflict row's status and machine reason code into an HTTPError.
+func HTTPErrorFromReason(status int, reason string) error {
+	if status == 0 {
 		return nil
-	case http.StatusBadRequest:
-		return Invalid(message)
-	case http.StatusForbidden:
-		return Locked(message)
-	case http.StatusNotFound:
-		return Missing(message)
-	case http.StatusConflict:
-		return Conflict(message)
-	default:
-		return HTTPError{Status: status, Message: message}
 	}
+	message, ok := reasonErrors[reason]
+	if !ok {
+		message = reason
+	}
+	return HTTPError{Status: status, Reason: reason, Message: message}
 }
 
 func ReferencedConflict(err error) error {
@@ -77,7 +86,11 @@ func WriteFragmentError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeHTTPError(w http.ResponseWriter, httpErr HTTPError) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	JSON(w, httpErr.Status, map[string]string{"error": httpErr.Message})
+	payload := map[string]string{"error": httpErr.Message}
+	if httpErr.Reason != "" {
+		payload["reason"] = httpErr.Reason
+	}
+	JSON(w, httpErr.Status, payload)
 }
 
 func writeComponentError(w http.ResponseWriter, r *http.Request, httpErr HTTPError, component Component) {
@@ -100,13 +113,4 @@ func HTTPErrorFrom(err error) HTTPError {
 	}
 	log.Println(err)
 	return HTTPError{Status: http.StatusInternalServerError, Message: "internal error"}
-}
-
-func FriendlyFormMessage(message string) string {
-	message = strings.ReplaceAll(message, "end_date", "End date")
-	message = strings.ReplaceAll(message, "start_date", "start date")
-	message = strings.ReplaceAll(message, "total_hours", "total hours")
-	message = strings.ReplaceAll(message, "subproject_id", "subproject")
-	message = strings.ReplaceAll(message, "project_id", "project")
-	return message
 }

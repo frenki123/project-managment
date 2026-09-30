@@ -41,12 +41,13 @@ WHERE id = ?
 RETURNING id;
 
 -- name: ProjectNameConflict :one
--- true when another project already has this name (case-insensitive)
-SELECT EXISTS (
-    SELECT 1 FROM projects
-    WHERE name = CAST(sqlc.arg(name) AS TEXT) COLLATE NOCASE
-      AND id != CAST(sqlc.arg(except_id) AS INTEGER)
-);
+-- 409 when another project already has this name (case-insensitive)
+SELECT
+    CASE WHEN COUNT(*) > 0 THEN 409 ELSE 0 END AS status,
+    CAST(CASE WHEN COUNT(*) > 0 THEN 'project-name-taken' ELSE '' END AS TEXT) AS reason
+FROM projects
+WHERE name = CAST(sqlc.arg(name) AS TEXT) COLLATE NOCASE
+  AND id != CAST(sqlc.arg(except_id) AS INTEGER);
 
 -- name: ProjectUpdateConflict :one
 WITH bounds AS (
@@ -72,8 +73,8 @@ WITH bounds AS (
 SELECT
     CASE WHEN hours_below OR weeks_outside THEN 409 ELSE 0 END AS status,
     CAST(CASE
-        WHEN hours_below THEN 'project hours cannot be less than subproject hours'
-        WHEN weeks_outside THEN 'project dates cannot exclude existing weekly data'
+        WHEN hours_below THEN 'project-hours-below-subprojects'
+        WHEN weeks_outside THEN 'project-dates-exclude-weekly-data'
         ELSE ''
     END AS TEXT) AS reason
 FROM checks;

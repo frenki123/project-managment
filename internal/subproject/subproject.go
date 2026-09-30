@@ -69,7 +69,7 @@ func validate(in Input) (Input, error) {
 		return in, app.Invalid("project is required")
 	}
 	if in.TotalHours == nil {
-		return in, app.Invalid("total_hours is required")
+		return in, app.Invalid("total hours is required")
 	}
 	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
@@ -90,7 +90,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		row, err := txq.CreateSubproject(ctx, db.CreateSubprojectParams{
@@ -204,7 +204,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
