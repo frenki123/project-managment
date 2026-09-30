@@ -102,15 +102,6 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 	return patch, nil
 }
 
-func weekIndex(grid task.Grid, rowIndex int, weekStart string) int {
-	for i, cell := range grid.Rows[rowIndex].Cells {
-		if cell.WeekStart.String() == weekStart {
-			return i
-		}
-	}
-	return -1
-}
-
 func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, historicalEditingAllowed bool) (task.Grid, int, int, error) {
 	filter, err := task.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
@@ -120,14 +111,14 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, histo
 	if err != nil {
 		return task.Grid{}, -1, -1, err
 	}
-	grid, err := task.LoadResolvedGrid(r.Context(), q, resolved, now, historicalEditingAllowed)
+	grid, err := task.LoadWeekRow(r.Context(), q, resolved, taskID, now, historicalEditingAllowed)
 	if err != nil {
 		return task.Grid{}, -1, -1, err
 	}
-	for i, row := range grid.Rows {
-		if row.ID == taskID {
-			if cell := weekIndex(grid, i, r.PathValue("weekStart")); cell >= 0 {
-				return grid, i, cell, nil
+	if len(grid.Rows) == 1 && grid.Rows[0].ID == taskID {
+		for i, cell := range grid.Rows[0].Cells {
+			if cell.WeekStart.String() == r.PathValue("weekStart") {
+				return grid, 0, i, nil
 			}
 		}
 	}

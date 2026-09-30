@@ -188,8 +188,8 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("week edit %d %s", rr.Code, rr.Body.String())
 	}
-	if !bytes.Contains(rr.Body.Bytes(), []byte("task-row-"+strconv.FormatInt(tk.ID, 10))) || bytes.Contains(rr.Body.Bytes(), []byte("<!DOCTYPE html>")) {
-		t.Fatalf("expected row fragment, got %q", rr.Body.String())
+	if !bytes.Contains(rr.Body.Bytes(), []byte("task-row-"+strconv.FormatInt(tk.ID, 10))) || !bytes.Contains(rr.Body.Bytes(), []byte("week-total-")) || !bytes.Contains(rr.Body.Bytes(), []byte("hx-swap-oob")) || bytes.Contains(rr.Body.Bytes(), []byte("<!DOCTYPE html>")) {
+		t.Fatalf("expected row fragment with OOB totals, got %q", rr.Body.String())
 	}
 
 	rr = httptest.NewRecorder()

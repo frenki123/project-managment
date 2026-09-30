@@ -19,23 +19,26 @@ SELECT
     CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 409 ELSE 0 END AS status,
     CAST(CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 'task-has-weekly-data' ELSE '' END AS TEXT) AS reason;
 
--- name: ListTaskTotals :many
-SELECT task_id,
-       CAST(planned_hours AS REAL) AS planned_hours,
-       CAST(spent_hours AS REAL) AS spent_hours,
-       CAST(progress AS REAL) AS progress
-FROM v_task_totals
-WHERE CAST(sqlc.arg(scope) AS TEXT) = 'all'
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'ideas' AND project_id IS NULL)
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'project' AND project_id = CAST(sqlc.arg(owner_id) AS INTEGER))
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'subproject' AND subproject_id = CAST(sqlc.arg(owner_id) AS INTEGER));
+-- name: ListTaskTotalsAll :many
+SELECT tt.* FROM v_task_totals tt;
 
--- name: ListTaskWeeksByProject :many
-SELECT tw.*
-FROM v_task_week_effective tw
-JOIN tasks t ON t.id = tw.task_id
-WHERE t.project_id = ?
-ORDER BY tw.task_id, tw.week_start;
+-- name: ListTaskTotalsIdeas :many
+SELECT tt.* FROM v_task_totals tt WHERE tt.project_id IS NULL;
+
+-- name: ListTaskTotalsByProject :many
+SELECT tt.* FROM v_task_totals tt WHERE tt.project_id = CAST(sqlc.arg(project_id) AS INTEGER);
+
+-- name: ListTaskTotalsBySubproject :many
+SELECT tt.* FROM v_task_totals tt WHERE tt.subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER);
+
+-- name: ListTaskWeekSeriesByProject :many
+SELECT ts.* FROM v_task_week_series ts WHERE ts.task_id IN (SELECT id FROM tasks WHERE project_id = CAST(sqlc.arg(project_id) AS INTEGER)) ORDER BY ts.task_id, ts.week_start;
+
+-- name: ListTaskWeekSeriesBySubproject :many
+SELECT ts.* FROM v_task_week_series ts WHERE ts.task_id IN (SELECT id FROM tasks WHERE subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER)) ORDER BY ts.task_id, ts.week_start;
+
+-- name: ListTaskWeekSeriesByTask :many
+SELECT ts.* FROM v_task_week_series ts WHERE ts.task_id = ? ORDER BY ts.week_start;
 
 -- name: TaskAssignmentConflict :one
 WITH refs AS (
