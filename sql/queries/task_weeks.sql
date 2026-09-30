@@ -36,32 +36,30 @@ WHERE t.project_id = ?
 ORDER BY tw.task_id, tw.week_start;
 
 -- name: TaskAssignmentConflict :one
+WITH refs AS (
+    SELECT
+        CAST(sqlc.narg(subproject_id) AS INTEGER) AS subproject_id,
+        CAST(sqlc.narg(project_id) AS INTEGER) AS project_id,
+        EXISTS (SELECT 1 FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)) AS subproject_exists,
+        EXISTS (SELECT 1 FROM projects WHERE id = CAST(sqlc.narg(project_id) AS INTEGER)) AS project_exists,
+        (SELECT s.project_id FROM subprojects s WHERE s.id = CAST(sqlc.narg(subproject_id) AS INTEGER)) AS subproject_project_id
+)
 SELECT
     CASE
-        WHEN sqlc.narg(subproject_id) IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM subprojects WHERE id = sqlc.narg(subproject_id)) THEN 404
-        WHEN sqlc.narg(project_id) IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM projects WHERE id = sqlc.narg(project_id)) THEN 404
-        WHEN sqlc.narg(subproject_id) IS NOT NULL
-             AND sqlc.narg(project_id) IS NOT NULL
-             AND (SELECT s.project_id FROM subprojects s WHERE s.id = sqlc.narg(subproject_id))
-                 IS NOT sqlc.narg(project_id) THEN 400
+        WHEN refs.subproject_id IS NOT NULL AND NOT refs.subproject_exists THEN 404
+        WHEN refs.project_id IS NOT NULL AND NOT refs.project_exists THEN 404
+        WHEN refs.subproject_id IS NOT NULL AND refs.project_id IS NOT NULL
+             AND refs.subproject_project_id IS NOT refs.project_id THEN 400
         ELSE 0
     END AS status,
     CAST(CASE
-        WHEN sqlc.narg(subproject_id) IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM subprojects WHERE id = sqlc.narg(subproject_id))
-            THEN 'subproject not found'
-        WHEN sqlc.narg(project_id) IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM projects WHERE id = sqlc.narg(project_id))
-            THEN 'project not found'
-        WHEN sqlc.narg(subproject_id) IS NOT NULL
-             AND sqlc.narg(project_id) IS NOT NULL
-             AND (SELECT s.project_id FROM subprojects s WHERE s.id = sqlc.narg(subproject_id))
-                 IS NOT sqlc.narg(project_id)
-            THEN 'subproject does not belong to project'
+        WHEN refs.subproject_id IS NOT NULL AND NOT refs.subproject_exists THEN 'subproject not found'
+        WHEN refs.project_id IS NOT NULL AND NOT refs.project_exists THEN 'project not found'
+        WHEN refs.subproject_id IS NOT NULL AND refs.project_id IS NOT NULL
+             AND refs.subproject_project_id IS NOT refs.project_id THEN 'subproject does not belong to project'
         ELSE ''
-    END AS TEXT) AS reason;
+    END AS TEXT) AS reason
+FROM refs;
 
 -- name: WeekWriteContext :one
 WITH input AS (
@@ -91,13 +89,13 @@ SELECT
     CASE
         WHEN is_idea THEN 400
         WHEN in_range = 0 THEN 400
-        WHEN sqlc.narg(progress) IS NOT NULL AND sqlc.narg(progress) < previous_progress THEN 400
+        WHEN CAST(sqlc.narg(progress) AS REAL) IS NOT NULL AND CAST(sqlc.narg(progress) AS REAL) < previous_progress THEN 400
         ELSE 0
     END AS status,
     CASE
         WHEN is_idea THEN 'ideas cannot be planned'
         WHEN in_range = 0 THEN 'week is outside the project date range'
-        WHEN sqlc.narg(progress) IS NOT NULL AND sqlc.narg(progress) < previous_progress
+        WHEN CAST(sqlc.narg(progress) AS REAL) IS NOT NULL AND CAST(sqlc.narg(progress) AS REAL) < previous_progress
             THEN 'progress cannot be less than the week before'
         ELSE ''
     END AS reason,

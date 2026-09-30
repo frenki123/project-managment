@@ -110,6 +110,91 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 	}
 }
 
+func TestCreateReportsNameConflictBeforeInvalidHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	var httpErr app.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
+		t.Fatalf("expected name conflict before invalid hours, got %v", err)
+	}
+	projects, err := project.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("rejected create persisted a project: %#v", projects)
+	}
+}
+
+func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	first, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Beta", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = project.Update(ctx, q, second.ID, project.Patch{
+		Name: *nullable.Set(first.Name), TotalHours: *nullable.Set(-1.0),
+		StartDate: *nullable.Set(second.StartDate), EndDate: *nullable.Set(second.EndDate),
+	})
+	var httpErr app.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
+		t.Fatalf("expected name conflict before invalid hours, got %v", err)
+	}
+	got, err := project.Get(ctx, q, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Beta" || got.TotalHours != 10 {
+		t.Fatalf("rejected update changed the project: %#v", got)
+	}
+}
+
+func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := project.Create(ctx, q, project.Input{Name: "Beta", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = project.Update(ctx, q, second.ID, project.Patch{
+		Name: *nullable.Set("  Alpha  "), TotalHours: *nullable.Set(second.TotalHours),
+		StartDate: *nullable.Set(second.StartDate), EndDate: *nullable.Set(second.EndDate),
+	})
+	var httpErr app.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
+		t.Fatalf("expected trimmed name conflict, got %v", err)
+	}
+}
+
+func TestCreateEmptyNameReturnsBadRequest(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	_, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	var httpErr app.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != "name is required" {
+		t.Fatalf("expected name required, got %v", err)
+	}
+	projects, err := project.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 0 {
+		t.Fatalf("empty name create persisted a project: %#v", projects)
+	}
+}
+
 func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
