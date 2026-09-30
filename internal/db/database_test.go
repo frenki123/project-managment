@@ -1,11 +1,11 @@
-package app_test
+package db_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"cad-development/internal/app"
+	"cad-development/internal/db"
 )
 
 func TestOpenDatabaseRunsMigrations(t *testing.T) {
@@ -19,7 +19,7 @@ DROP TABLE app_test;
 		t.Fatal(err)
 	}
 
-	database, err := app.OpenDatabase(app.DatabaseConfig{
+	database, err := db.OpenDatabase(db.DatabaseConfig{
 		DSN:          "file:test-app?mode=memory&cache=shared",
 		Migrations:   os.DirFS(migrations),
 		MaxOpenConns: 1,

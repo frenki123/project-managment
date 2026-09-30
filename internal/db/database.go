@@ -1,4 +1,4 @@
-package app
+package db
 
 import (
 	"context"
@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 
-	"cad-development/internal/db"
-
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
 type Database struct {
 	Conn *sql.DB
-	Q    *db.Queries
+	Q    *Queries
 }
 
 type DatabaseConfig struct {
@@ -50,7 +48,7 @@ func OpenDatabase(config DatabaseConfig) (*Database, error) {
 		_ = conn.Close()
 		return nil, err
 	}
-	return &Database{Conn: conn, Q: db.New(conn)}, nil
+	return &Database{Conn: conn, Q: New(conn)}, nil
 }
 
 func (d *Database) Close() error {

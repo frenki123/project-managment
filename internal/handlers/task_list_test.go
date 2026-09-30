@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/handlers"
 )
 

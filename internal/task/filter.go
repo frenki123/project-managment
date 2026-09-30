@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/web"
 )
 
 // Filter selects all tasks, idea tasks, or a project and optional subproject.
@@ -34,21 +34,21 @@ func ParseFilter(projectKey, subprojectValue string) (Filter, error) {
 	if !f.All && !f.Ideas {
 		id, err := strconv.ParseInt(projectKey, 10, 64)
 		if err != nil || id < 1 {
-			return Filter{}, app.Invalid("invalid project")
+			return Filter{}, web.Invalid("invalid project")
 		}
 		f.ID = id
 	}
 	if subprojectValue != "" {
 		id, err := strconv.ParseInt(subprojectValue, 10, 64)
 		if err != nil || id < 1 {
-			return Filter{}, app.Invalid("invalid subproject")
+			return Filter{}, web.Invalid("invalid subproject")
 		}
 		f.Subproject = &id
 	}
 	return f, nil
 }
 
-func (f Filter) Key() string {
+func FilterKey(f Filter) string {
 	project := "all"
 	if f.Ideas {
 		project = "ideas"
@@ -62,12 +62,12 @@ func (f Filter) Key() string {
 	return values.Encode()
 }
 
-func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, error) {
+func ResolveFilter(ctx context.Context, q *db.Queries, f Filter) (ResolvedFilter, error) {
 	resolved := ResolvedFilter{Filter: f}
 	if !f.All && !f.Ideas {
 		project, err := q.GetProject(ctx, f.ID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return ResolvedFilter{}, app.Missing("project not found")
+			return ResolvedFilter{}, web.Missing("project not found")
 		} else if err != nil {
 			return ResolvedFilter{}, err
 		}
@@ -78,19 +78,19 @@ func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, err
 	}
 	sp, err := q.GetSubproject(ctx, *f.Subproject)
 	if errors.Is(err, sql.ErrNoRows) {
-		return ResolvedFilter{}, app.Missing("subproject not found")
+		return ResolvedFilter{}, web.Missing("subproject not found")
 	}
 	if err != nil {
 		return ResolvedFilter{}, err
 	}
 	if !f.All && !f.Ideas && f.ID != sp.ProjectID {
-		return ResolvedFilter{}, app.Invalid("subproject does not belong to project")
+		return ResolvedFilter{}, web.Invalid("subproject does not belong to project")
 	}
 	resolved.Subproject = &sp
 	if resolved.Project == nil {
 		project, err := q.GetProject(ctx, sp.ProjectID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return ResolvedFilter{}, app.Missing("project not found")
+			return ResolvedFilter{}, web.Missing("project not found")
 		}
 		if err != nil {
 			return ResolvedFilter{}, err
@@ -100,8 +100,8 @@ func (f Filter) Resolve(ctx context.Context, q *db.Queries) (ResolvedFilter, err
 	return resolved, nil
 }
 
-func (f Filter) List(ctx context.Context, q *db.Queries) ([]Task, error) {
-	if _, err := f.Resolve(ctx, q); err != nil {
+func ListByFilter(ctx context.Context, q *db.Queries, f Filter) ([]Task, error) {
+	if _, err := ResolveFilter(ctx, q, f); err != nil {
 		return nil, err
 	}
 	switch {

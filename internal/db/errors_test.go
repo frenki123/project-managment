@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
+	"cad-development/internal/db/testkit"
 )
 
 type codeError struct {

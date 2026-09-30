@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/web"
 )
 
 type Project struct {
@@ -41,7 +41,7 @@ type Patch struct {
 	EndDate           nullable.Optional[string]  `json:"end_date,omitzero"`
 }
 
-func (in Input) Patch() Patch {
+func PatchFromInput(in Input) Patch {
 	patch := Patch{
 		Name: nullable.Present(in.Name), PurchaseOrderName: nullable.Present(in.PurchaseOrderName),
 		StartDate: nullable.Present(in.StartDate), EndDate: nullable.Present(in.EndDate),
@@ -79,7 +79,7 @@ func fromTotals(row db.ListProjectsWithTotalsRow) Project {
 func validateName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return name, app.Invalid("name is required")
+		return name, web.Invalid("name is required")
 	}
 	return name, nil
 }
@@ -87,7 +87,7 @@ func validateName(name string) (string, error) {
 func parseDate(s string) (time.Time, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil {
-		return time.Time{}, app.Invalid("invalid date")
+		return time.Time{}, web.Invalid("invalid date")
 	}
 	return t, nil
 }
@@ -95,21 +95,21 @@ func parseDate(s string) (time.Time, error) {
 func validateFields(in Input) (Input, error) {
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.TotalHours == nil {
-		return in, app.Invalid("total hours is required")
+		return in, web.Invalid("total hours is required")
 	}
-	if !app.NonNegativeFinite(*in.TotalHours) {
-		return in, app.Invalid("hours cannot be negative")
+	if !web.NonNegativeFinite(*in.TotalHours) {
+		return in, web.Invalid("hours cannot be negative")
 	}
 	start, err := parseDate(in.StartDate)
 	if err != nil {
-		return in, app.Invalid("invalid start date")
+		return in, web.Invalid("invalid start date")
 	}
 	end, err := parseDate(in.EndDate)
 	if err != nil {
-		return in, app.Invalid("invalid end date")
+		return in, web.Invalid("invalid end date")
 	}
 	if end.Before(start) {
-		return in, app.Invalid("end date must be on or after start date")
+		return in, web.Invalid("end date must be on or after start date")
 	}
 	in.StartDate = start.Format(time.DateOnly)
 	in.EndDate = end.Format(time.DateOnly)
@@ -128,7 +128,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		validated, err := validateFields(in)
@@ -149,7 +149,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 	})
 	if err != nil {
 		if db.UniqueViolation(err, "projects.name") {
-			return Project{}, app.Conflict("project name already exists")
+			return Project{}, web.Conflict("project name already exists")
 		}
 		return Project{}, err
 	}
@@ -159,7 +159,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
 	row, err := q.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Project{}, app.Missing("project not found")
+		return Project{}, web.Missing("project not found")
 	}
 	if err != nil {
 		return Project{}, err
@@ -211,7 +211,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetProject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("project not found")
+			return web.Missing("project not found")
 		}
 		if err != nil {
 			return err
@@ -232,7 +232,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		validated, err := validateFields(in)
@@ -248,7 +248,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
 			return err
 		}
 		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{
@@ -256,10 +256,10 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 			StartDate: validated.StartDate, EndDate: validated.EndDate, ID: id,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("project not found")
+			return web.Missing("project not found")
 		}
 		if db.UniqueViolation(err, "projects.name") {
-			return app.Conflict("project name already exists")
+			return web.Conflict("project name already exists")
 		}
 		return err
 	})
@@ -273,9 +273,9 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		_, err := txq.DeleteProject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("project not found")
+			return web.Missing("project not found")
 		}
 		return err
 	})
-	return app.ReferencedConflict(err)
+	return web.ReferencedConflict(err)
 }

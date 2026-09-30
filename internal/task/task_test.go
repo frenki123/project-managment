@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
@@ -37,7 +37,7 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 		t.Fatal("expected blank task name to be rejected")
 	}
 	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
-	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -79,7 +79,7 @@ func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
-	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
 	updated, err := task.Get(ctx, q, item.ID)
@@ -108,7 +108,7 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	}
 	if err := task.Delete(ctx, q, tk.ID); err == nil {
 		t.Fatal("expected delete with weekly history to be rejected")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("unexpected delete error: %v", err)
 	}
 	if _, err := task.Get(ctx, q, tk.ID); err != nil {

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
@@ -68,7 +68,7 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected date change to be rejected")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Reason != "project-dates-exclude-weekly-data" || httpErr.Message != "project dates cannot exclude existing weekly data" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Reason != "project-dates-exclude-weekly-data" || httpErr.Message != "project dates cannot exclude existing weekly data" {
 		t.Fatalf("unexpected conflict error: %v", err)
 	}
 	got, err := project.Get(ctx, q, p.ID)
@@ -106,7 +106,7 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 		t.Fatal("expected duplicate project name to be rejected")
 	} else {
-		var httpErr app.HTTPError
+		var httpErr web.HTTPError
 		if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 			t.Fatalf("unexpected duplicate error: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestCreateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	var httpErr app.HTTPError
+	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
 	}
@@ -148,7 +148,7 @@ func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 		Name: nullable.Present(first.Name), TotalHours: nullable.Present(-1.0),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
-	var httpErr app.HTTPError
+	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
 	}
@@ -175,7 +175,7 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 		Name: nullable.Present("  Alpha  "), TotalHours: nullable.Present(second.TotalHours),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
-	var httpErr app.HTTPError
+	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected trimmed name conflict, got %v", err)
 	}
@@ -185,7 +185,7 @@ func TestCreateEmptyNameReturnsBadRequest(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	_, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	var httpErr app.HTTPError
+	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != "name is required" {
 		t.Fatalf("expected name required, got %v", err)
 	}
@@ -214,7 +214,7 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected project total below subprojects to be rejected")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "project hours cannot be less than subproject hours" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "project hours cannot be less than subproject hours" {
 		t.Fatalf("unexpected conflict error: %v", err)
 	}
 	got, err := project.Get(ctx, q, p.ID)
