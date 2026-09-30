@@ -199,7 +199,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 	if err != nil {
 		return Grid{}, err
 	}
-	byTask := map[int64][]db.TaskWeek{}
+	byTask := map[int64][]db.VTaskWeekEffective{}
 	for _, w := range weeks {
 		byTask[w.TaskID] = append(byTask[w.TaskID], w)
 	}
@@ -257,12 +257,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 
 	for _, t := range tasks {
 		tweeks := byTask[t.ID]
-		requested := make([]string, 0, len(data.Weeks))
-		for _, info := range data.Weeks {
-			requested = append(requested, string(info.Start))
-		}
-		effective := weekly.EffectiveProgress(tweeks, requested)
-		cellByWeek := map[string]db.TaskWeek{}
+		cellByWeek := map[string]db.VTaskWeekEffective{}
 		for _, w := range tweeks {
 			cellByWeek[w.WeekStart] = w
 		}
@@ -279,14 +274,18 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}
+		progress := 0.0
 		for _, info := range data.Weeks {
 			ws := info.Start
 			cw := cellByWeek[string(ws)]
+			if cw.WeekStart != "" {
+				progress = effectiveProgress(cw.EffectiveProgress)
+			}
 			row.Cells = append(row.Cells, GridCell{
 				WeekStart: ws,
 				Planned:   cw.PlannedHours,
 				Spent:     cw.SpentHours,
-				Progress:  effective[string(ws)],
+				Progress:  progress,
 				Stored:    cw.Progress.Valid,
 				Locked:    !allowHistoricalEditing && weekly.IsWeekLocked(string(ws), now),
 				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + string(ws),

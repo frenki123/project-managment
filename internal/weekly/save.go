@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"slices"
 	"time"
 
 	"cad-development/internal/app"
@@ -58,42 +57,23 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		if !patch.Unlock && IsWeekLocked(string(weekStart), now) {
 			return app.Locked("historical editing is not enabled")
 		}
-		var err error
-		task, err := txq.GetTask(ctx, taskID)
+		contextRow, err := txq.WeekWriteContext(ctx, db.WeekWriteContextParams{
+			TaskID: taskID, WeekStart: string(weekStart),
+		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
 		}
 		if err != nil {
 			return err
 		}
-		if !task.ProjectID.Valid {
+		if contextRow.IsIdea {
 			return app.Invalid("ideas cannot be planned")
 		}
-		project, err := txq.GetProject(ctx, task.ProjectID.Int64)
-		if err != nil {
-			return err
-		}
-		start, err := ParseDate(project.StartDate)
-		if err != nil {
-			return err
-		}
-		end, err := ParseDate(project.EndDate)
-		if err != nil {
-			return err
-		}
-		validWeeks := WeekStarts(start, end)
-		inRange := slices.Contains(validWeeks, weekStart)
-		if !inRange {
+		if contextRow.InRange == 0 {
 			return app.Invalid("week is outside the project date range")
 		}
 
-		existing, err := txq.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: taskID, WeekStart: string(weekStart)})
-		if errors.Is(err, sql.ErrNoRows) {
-			existing = db.TaskWeek{TaskID: taskID, WeekStart: string(weekStart)}
-		} else if err != nil {
-			return err
-		}
-		planned, spent, progress := existing.PlannedHours, existing.SpentHours, existing.Progress
+		planned, spent, progress := contextRow.PlannedHours, contextRow.SpentHours, contextRow.Progress
 		if patch.PlannedHours != nil {
 			planned = *patch.PlannedHours
 		}
@@ -102,10 +82,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		}
 		var previous float64
 		if patch.Progress != nil {
-			previous, err = lastProgressBefore(ctx, txq, taskID, weekStart)
-			if err != nil {
-				return err
-			}
+			previous = contextRow.PreviousProgress
 			if *patch.Progress < previous {
 				return app.Invalid("progress cannot be less than the week before")
 			}
@@ -131,30 +108,12 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		}
 		effective := nullable.Float64Pointer(row.Progress)
 		if effective == nil {
-			prev, err := lastProgressBefore(ctx, txq, taskID, weekStart)
-			if err != nil {
-				return err
-			}
-			effective = new(prev)
+			effective = new(contextRow.PreviousProgress)
 		}
 		result = toCell(row, effective)
 		return nil
 	})
 	return result, err
-}
-
-func lastProgressBefore(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart) (float64, error) {
-	progress, err := q.GetLastProgressBefore(ctx, db.GetLastProgressBeforeParams{TaskID: taskID, WeekStart: string(weekStart)})
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	if !progress.Valid {
-		return 0, nil
-	}
-	return progress.Float64, nil
 }
 
 func validHours(value float64) error {

@@ -8,7 +8,11 @@ INSERT INTO tasks (
     priority,
     project_id,
     subproject_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?,
+    COALESCE(sqlc.narg(project_id), (
+        SELECT project_id FROM subprojects WHERE id = sqlc.narg(subproject_id)
+    )),
+    sqlc.narg(subproject_id))
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 
 -- name: GetTask :one
@@ -39,9 +43,11 @@ UPDATE tasks SET
     department = ?,
     developers = ?,
     priority = ?,
-    project_id = ?,
-    subproject_id = ?
-WHERE id = ?
+    project_id = COALESCE(sqlc.narg(project_id), (
+        SELECT project_id FROM subprojects WHERE id = sqlc.narg(subproject_id)
+    )),
+    subproject_id = sqlc.narg(subproject_id)
+WHERE tasks.id = sqlc.arg(id)
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 
 -- name: DeleteTask :one

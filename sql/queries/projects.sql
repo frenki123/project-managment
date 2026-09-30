@@ -8,10 +8,6 @@ RETURNING id, name, purchase_order_name, total_hours, start_date, end_date;
 SELECT id, name, purchase_order_name, total_hours, start_date, end_date
 FROM projects WHERE id = ?;
 
--- name: GetProjectByName :one
-SELECT id, name, purchase_order_name, total_hours, start_date, end_date
-FROM projects WHERE name = ? COLLATE NOCASE;
-
 -- name: GetProjectTotals :one
 WITH task_totals AS (
     SELECT project_id, planned_hours, spent_hours, progress
@@ -66,14 +62,28 @@ DELETE FROM projects
 WHERE id = ?
 RETURNING id;
 
--- name: CountTasksByProject :one
-SELECT COUNT(*) FROM tasks WHERE project_id = CAST(? AS INTEGER);
-
--- name: CountSubprojectsByProject :one
-SELECT COUNT(*) FROM subprojects WHERE project_id = CAST(? AS INTEGER);
-
--- name: CountTaskWeeksOutsideRange :one
-SELECT COUNT(*) FROM task_weeks tw
-JOIN tasks t ON t.id = tw.task_id
-WHERE t.project_id = CAST(sqlc.arg(project_id) AS INTEGER)
-  AND (tw.week_start < sqlc.arg(first_week) OR tw.week_start > sqlc.arg(last_week));
+-- name: ProjectUpdateConflict :one
+WITH checks AS (
+    SELECT
+        sqlc.arg(total_hours) < (
+            SELECT COALESCE(SUM(total_hours), 0)
+            FROM subprojects
+            WHERE subprojects.project_id = sqlc.arg(project_id)
+        ) AS hours_below,
+        EXISTS (
+            SELECT 1
+            FROM task_weeks tw
+            JOIN tasks t ON t.id = tw.task_id
+            WHERE t.project_id = sqlc.arg(project_id)
+              AND (tw.week_start < sqlc.arg(first_week)
+                   OR tw.week_start > sqlc.arg(last_week))
+        ) AS weeks_outside
+)
+SELECT
+    CASE WHEN hours_below OR weeks_outside THEN 409 ELSE 0 END AS status,
+    CAST(CASE
+        WHEN hours_below THEN 'project hours cannot be less than subproject hours'
+        WHEN weeks_outside THEN 'project dates cannot exclude existing weekly data'
+        ELSE ''
+    END AS TEXT) AS reason
+FROM checks;

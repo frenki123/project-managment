@@ -60,7 +60,7 @@ func fromTotals(id, projectID int64, name string, totalHours, plannedHours, spen
 	}
 }
 
-func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Input, error) {
+func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return in, app.Invalid("name is required")
@@ -74,36 +74,23 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (Inp
 	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
 	}
-	proj, err := q.GetProject(ctx, in.ProjectID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return in, app.Missing("project not found")
-	}
-	if err != nil {
-		return in, err
-	}
-	var used float64
-	if exceptID > 0 {
-		used, err = q.SumSubprojectHoursByProjectExcept(ctx, db.SumSubprojectHoursByProjectExceptParams{
-			ProjectID: in.ProjectID,
-			ID:        exceptID,
-		})
-	} else {
-		used, err = q.SumSubprojectHoursByProject(ctx, in.ProjectID)
-	}
-	if err != nil {
-		return in, err
-	}
-	if used+*in.TotalHours > proj.TotalHours {
-		return in, app.Conflict("subproject hours exceed project hours")
-	}
 	return in, nil
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 	var result Subproject
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		validated, err := validate(ctx, txq, in, 0)
+		validated, err := validate(in)
 		if err != nil {
+			return err
+		}
+		conflict, err := txq.SubprojectHoursConflict(ctx, db.SubprojectHoursConflictParams{
+			ProjectID: in.ProjectID, ExceptID: 0, NewHours: *in.TotalHours,
+		})
+		if err != nil {
+			return err
+		}
+		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		row, err := txq.CreateSubproject(ctx, db.CreateSubprojectParams{
@@ -207,43 +194,40 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 			Name:       patch.Name.Apply(current.Name),
 			TotalHours: new(patch.TotalHours.Apply(current.TotalHours)),
 		}
-		validated, err := validate(ctx, txq, in, id)
+		validated, err := validate(in)
 		if err != nil {
 			return err
 		}
-		if patch.ProjectID.Set && current.ProjectID != validated.ProjectID {
-			taskCount, err := txq.CountTasksBySubproject(ctx, id)
-			if err != nil {
-				return err
-			}
-			if taskCount > 0 {
-				return app.Conflict("cannot move subproject with tasks")
-			}
+		conflict, err := txq.SubprojectHoursConflict(ctx, db.SubprojectHoursConflictParams{
+			ProjectID: validated.ProjectID, ExceptID: id, NewHours: *validated.TotalHours,
+		})
+		if err != nil {
+			return err
+		}
+		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+			return err
 		}
 		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
 			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: *validated.TotalHours, ID: id,
 		})
-		return err
-	})
-	if err != nil {
-		return Subproject{}, err
-	}
-	return Get(ctx, q, id)
-}
-
-func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	return q.InTx(ctx, func(txq *db.Queries) error {
-		tasks, err := txq.CountTasksBySubproject(ctx, id)
-		if err != nil {
-			return err
-		}
-		if tasks > 0 {
-			return app.Conflict("cannot delete a subproject with tasks")
-		}
-		_, err = txq.DeleteSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("subproject not found")
 		}
 		return err
 	})
+	if err != nil {
+		return Subproject{}, app.ReferencedConflict(err)
+	}
+	return Get(ctx, q, id)
+}
+
+func Delete(ctx context.Context, q *db.Queries, id int64) error {
+	err := q.InTx(ctx, func(txq *db.Queries) error {
+		_, err := txq.DeleteSubproject(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return app.Missing("subproject not found")
+		}
+		return app.ReferencedConflict(err)
+	})
+	return app.ReferencedConflict(err)
 }

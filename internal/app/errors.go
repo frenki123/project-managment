@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"cad-development/internal/db"
 )
 
 // HTTPError is the single error type used across the app and its HTTP adapters.
@@ -21,6 +23,30 @@ func Invalid(message string) error  { return HTTPError{Status: http.StatusBadReq
 func Missing(message string) error  { return HTTPError{Status: http.StatusNotFound, Message: message} }
 func Conflict(message string) error { return HTTPError{Status: http.StatusConflict, Message: message} }
 func Locked(message string) error   { return HTTPError{Status: http.StatusForbidden, Message: message} }
+
+func FromStatus(status int, message string) error {
+	switch status {
+	case 0:
+		return nil
+	case http.StatusBadRequest:
+		return Invalid(message)
+	case http.StatusForbidden:
+		return Locked(message)
+	case http.StatusNotFound:
+		return Missing(message)
+	case http.StatusConflict:
+		return Conflict(message)
+	default:
+		return HTTPError{Status: status, Message: message}
+	}
+}
+
+func ReferencedConflict(err error) error {
+	if db.ForeignKeyViolation(err) {
+		return Conflict("record is still used by other data")
+	}
+	return err
+}
 
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	httpErr := HTTPErrorFrom(err)

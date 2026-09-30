@@ -42,14 +42,29 @@ WHERE s.project_id = ?
 GROUP BY s.id
 ORDER BY s.name COLLATE NOCASE, s.id;
 
--- name: SumSubprojectHoursByProject :one
-SELECT CAST(COALESCE(SUM(total_hours), 0) AS REAL) FROM subprojects WHERE project_id = ?;
-
--- name: SumSubprojectHoursByProjectExcept :one
-SELECT CAST(COALESCE(SUM(total_hours), 0) AS REAL) FROM subprojects WHERE project_id = ? AND id != ?;
-
--- name: CountTasksBySubproject :one
-SELECT COUNT(*) FROM tasks WHERE subproject_id = CAST(? AS INTEGER);
+-- name: SubprojectHoursConflict :one
+WITH cap AS (
+    SELECT
+        (
+            SELECT COALESCE(SUM(subprojects.total_hours), 0)
+            FROM subprojects
+            WHERE subprojects.project_id = sqlc.arg(project_id)
+              AND subprojects.id != sqlc.arg(except_id)
+        ) + sqlc.arg(new_hours) AS used_plus_new,
+        (SELECT total_hours FROM projects WHERE id = sqlc.arg(project_id)) AS budget
+)
+SELECT
+    CASE
+        WHEN budget IS NULL THEN 404
+        WHEN used_plus_new > budget THEN 409
+        ELSE 0
+    END AS status,
+    CAST(CASE
+        WHEN budget IS NULL THEN 'project not found'
+        WHEN used_plus_new > budget THEN 'subproject hours exceed project hours'
+        ELSE ''
+    END AS TEXT) AS reason
+FROM cap;
 
 -- name: UpdateSubproject :one
 UPDATE subprojects SET

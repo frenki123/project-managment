@@ -61,8 +61,31 @@ FROM tasks t
 LEFT JOIN task_weeks tw ON tw.task_id = t.id
 GROUP BY t.id;
 
+CREATE VIEW v_project_bounds AS
+SELECT
+    p.*,
+    date(p.start_date, '-' || ((strftime('%w', p.start_date) + 6) % 7) || ' days') AS first_week,
+    date(p.end_date, '-' || ((strftime('%w', p.end_date) + 6) % 7) || ' days') AS last_week
+FROM projects p;
+
+CREATE VIEW v_task_week_effective AS
+SELECT
+    tw.task_id,
+    tw.week_start,
+    tw.planned_hours,
+    tw.spent_hours,
+    tw.progress,
+    COALESCE(MAX(tw.progress) OVER (
+        PARTITION BY tw.task_id
+        ORDER BY tw.week_start
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ), 0) AS effective_progress
+FROM task_weeks tw;
+
 -- +goose Down
-DROP VIEW v_task_totals;
+DROP VIEW IF EXISTS v_task_week_effective;
+DROP VIEW IF EXISTS v_project_bounds;
+DROP VIEW IF EXISTS v_task_totals;
 DROP TABLE task_weeks;
 DROP TABLE tasks;
 DROP TABLE subprojects;
