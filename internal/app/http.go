@@ -85,11 +85,8 @@ func SetToast(w http.ResponseWriter, message string) {
 	}
 }
 
-func FormInt64Checked(r *http.Request, name string) (*int64, error) {
-	if err := r.ParseForm(); err != nil {
-		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
-	}
-	s := strings.TrimSpace(r.FormValue(name))
+func Int64Checked(s string, name string) (*int64, error) {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil
 	}
@@ -98,6 +95,13 @@ func FormInt64Checked(r *http.Request, name string) (*int64, error) {
 		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + name}
 	}
 	return new(n), nil
+}
+
+func FormInt64Checked(r *http.Request, name string) (*int64, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
+	}
+	return Int64Checked(r.FormValue(name), name)
 }
 
 func FormFloatValue(r *http.Request, name string) (float64, bool, error) {
