@@ -1,4 +1,4 @@
-package app_test
+package web_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	assets "cad-development"
-	"cad-development/internal/app"
+	"cad-development/internal/web"
 )
 
 type textComponent string
@@ -26,7 +26,7 @@ func (c textComponent) Render(_ context.Context, w io.Writer) error {
 
 func TestJSONWritesContentTypeAndStatus(t *testing.T) {
 	rr := httptest.NewRecorder()
-	app.JSON(rr, http.StatusCreated, map[string]string{"status": "created"})
+	web.JSON(rr, http.StatusCreated, map[string]string{"status": "created"})
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("got status %d", rr.Code)
 	}
@@ -42,7 +42,7 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 	t.Run("api", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
-		app.WriteError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "missing"})
+		web.WriteError(rr, r, web.HTTPError{Status: http.StatusNotFound, Message: "missing"})
 		if rr.Code != http.StatusNotFound {
 			t.Fatalf("got status %d", rr.Code)
 		}
@@ -54,7 +54,7 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 	t.Run("html", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/projects/1", nil)
-		app.WriteError(rr, r, app.HTTPError{Status: http.StatusBadRequest, Message: "invalid"})
+		web.WriteError(rr, r, web.HTTPError{Status: http.StatusBadRequest, Message: "invalid"})
 		if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid") {
 			t.Fatalf("got %d %q", rr.Code, rr.Body.String())
 		}
@@ -64,7 +64,7 @@ func TestWriteErrorUsesAPIAndHTMLResponses(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
 		r.Header.Set("HX-Request", "true")
 		r.Header.Set("HX-Target", "#panel")
-		app.WriteError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "missing"})
+		web.WriteError(rr, r, web.HTTPError{Status: http.StatusNotFound, Message: "missing"})
 		if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || !strings.Contains(rr.Body.String(), "missing") {
 			t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 		}
@@ -76,7 +76,7 @@ func TestWriteFragmentErrorRendersExplicitFragment(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
 	r.Header.Set("HX-Request", "true")
 	r.Header.Set("HX-Target", "#panel")
-	app.WriteFragmentError(rr, r, app.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
+	web.WriteFragmentError(rr, r, web.HTTPError{Status: http.StatusNotFound, Message: "<missing>"})
 	if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || !strings.Contains(rr.Body.String(), "&lt;missing&gt;") {
 		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 	}
@@ -87,7 +87,7 @@ func TestAPIPathsIgnoreHTMXHeaders(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/projects/999", nil)
 	r.Header.Set("HX-Request", "true")
 	r.Header.Set("HX-Target", "#panel")
-	app.WriteError(rr, r, app.Missing("project not found"))
+	web.WriteError(rr, r, web.Missing("project not found"))
 	if rr.Code != http.StatusNotFound || rr.Header().Get("HX-Retarget") != "" || !strings.Contains(rr.Body.String(), `"error":"project not found"`) {
 		t.Fatalf("got %d %q with headers %v", rr.Code, rr.Body.String(), rr.Header())
 	}
@@ -99,14 +99,14 @@ func TestErrorHelpersMapToStatusCodes(t *testing.T) {
 		err    error
 		status int
 	}{
-		{"invalid", app.Invalid("bad"), http.StatusBadRequest},
-		{"missing", app.Missing("gone"), http.StatusNotFound},
-		{"conflict", app.Conflict("busy"), http.StatusConflict},
-		{"locked", app.Locked("no"), http.StatusForbidden},
+		{"invalid", web.Invalid("bad"), http.StatusBadRequest},
+		{"missing", web.Missing("gone"), http.StatusNotFound},
+		{"conflict", web.Conflict("busy"), http.StatusConflict},
+		{"locked", web.Locked("no"), http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if httpErr, ok := errors.AsType[app.HTTPError](tt.err); !ok || httpErr.Status != tt.status {
+			if httpErr, ok := errors.AsType[web.HTTPError](tt.err); !ok || httpErr.Status != tt.status {
 				t.Fatalf("got %#v", tt.err)
 			}
 		})
@@ -116,16 +116,16 @@ func TestErrorHelpersMapToStatusCodes(t *testing.T) {
 func TestFormAndPathParsing(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/tasks/12", strings.NewReader("hours=4.5"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	id, err := app.FormInt64Checked(r, "missing")
+	id, err := web.FormInt64Checked(r, "missing")
 	if err != nil || id != nil {
 		t.Fatalf("expected missing ID to be optional, got %v %v", id, err)
 	}
-	hours, err := app.FormFloatRequired(r, "hours")
+	hours, err := web.FormFloatRequired(r, "hours")
 	if err != nil || hours != 4.5 {
 		t.Fatalf("got hours %v with error %v", hours, err)
 	}
 	r.SetPathValue("id", "12")
-	parsed, err := app.PathID(r, "id")
+	parsed, err := web.PathID(r, "id")
 	if err != nil || parsed != 12 {
 		t.Fatalf("got path ID %d with error %v", parsed, err)
 	}
@@ -134,14 +134,14 @@ func TestFormAndPathParsing(t *testing.T) {
 func TestFormParsingDistinguishesEmptyAndMalformedValues(t *testing.T) {
 	empty := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hours="))
 	empty.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	value, present, err := app.FormFloatValue(empty, "hours")
+	value, present, err := web.FormFloatValue(empty, "hours")
 	if err != nil || !present || value != 0 {
 		t.Fatalf("empty value: got %v %v %v", value, present, err)
 	}
 
 	malformed := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("project_id=%zz"))
 	malformed.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if _, err := app.FormInt64Checked(malformed, "project_id"); err == nil {
+	if _, err := web.FormInt64Checked(malformed, "project_id"); err == nil {
 		t.Fatal("expected malformed form error")
 	}
 }
@@ -152,8 +152,8 @@ func TestDecodeJSONRejectsOversizedBody(t *testing.T) {
 	var value struct {
 		Known string `json:"known"`
 	}
-	err := app.DecodeJSON(httptest.NewRecorder(), r, &value)
-	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusRequestEntityTooLarge {
+	err := web.DecodeJSON(httptest.NewRecorder(), r, &value)
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -167,7 +167,7 @@ func TestStaticHandlerRejectsDirectories(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staticRoot, "app.js"), []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler := app.StaticHandler(os.DirFS(staticRoot))
+	handler := web.StaticHandler(os.DirFS(staticRoot))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/static/", nil))
 	if rr.Code != http.StatusNotFound {
@@ -185,7 +185,7 @@ func TestStaticHandlerServesEmbeddedAsset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := app.StaticHandler(staticFS)
+	handler := web.StaticHandler(staticFS)
 	for _, name := range []string{"/static/js/app.js", "/static/js/chart.umd.min.js"} {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, name, nil))
@@ -198,14 +198,14 @@ func TestStaticHandlerServesEmbeddedAsset(t *testing.T) {
 func TestRenderWritesSuccessfulComponent(t *testing.T) {
 	rr := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	app.RenderPage(rr, r, http.StatusCreated, textComponent("rendered"))
+	web.RenderPage(rr, r, http.StatusCreated, textComponent("rendered"))
 	if rr.Code != http.StatusCreated || rr.Header().Get("Content-Type") != "text/html; charset=utf-8" || rr.Body.String() != "rendered" {
 		t.Fatalf("got %d %q %q", rr.Code, rr.Header().Get("Content-Type"), rr.Body.String())
 	}
 }
 
 func TestRecoverReturnsInternalServerError(t *testing.T) {
-	handler := app.Recover(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := web.Recover(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("test panic")
 	}))
 	rr := httptest.NewRecorder()

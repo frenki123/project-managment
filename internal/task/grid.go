@@ -43,7 +43,7 @@ const (
 	ViewSubproject
 )
 
-func (kind ViewKind) IsWeekly() bool {
+func IsWeekly(kind ViewKind) bool {
 	return kind == ViewProject || kind == ViewSubproject
 }
 
@@ -83,7 +83,7 @@ type GridWeekTotal struct {
 }
 
 func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, allowHistoricalEditing bool) (Grid, error) {
-	resolved, err := filter.Resolve(ctx, q)
+	resolved, err := ResolveFilter(ctx, q, filter)
 	if err != nil {
 		return Grid{}, err
 	}

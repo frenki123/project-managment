@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strings"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/web"
 )
 
 type Subproject struct {
@@ -32,7 +32,7 @@ type Patch struct {
 	TotalHours nullable.Optional[float64] `json:"total_hours,omitzero"`
 }
 
-func (in Input) Patch() Patch {
+func PatchFromInput(in Input) Patch {
 	patch := Patch{ProjectID: nullable.Present(in.ProjectID), Name: nullable.Present(in.Name)}
 	if in.TotalHours != nil {
 		patch.TotalHours = nullable.Present(*in.TotalHours)
@@ -63,16 +63,16 @@ func fromTotals(id, projectID int64, name string, totalHours, plannedHours, spen
 func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
-		return in, app.Invalid("name is required")
+		return in, web.Invalid("name is required")
 	}
 	if in.ProjectID < 1 {
-		return in, app.Invalid("project is required")
+		return in, web.Invalid("project is required")
 	}
 	if in.TotalHours == nil {
-		return in, app.Invalid("total hours is required")
+		return in, web.Invalid("total hours is required")
 	}
-	if !app.NonNegativeFinite(*in.TotalHours) {
-		return in, app.Invalid("hours cannot be negative")
+	if !web.NonNegativeFinite(*in.TotalHours) {
+		return in, web.Invalid("hours cannot be negative")
 	}
 	return in, nil
 }
@@ -90,7 +90,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		row, err := txq.CreateSubproject(ctx, db.CreateSubprojectParams{
@@ -110,7 +110,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Subproject, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Subproject, error) {
 	row, err := q.GetSubproject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Subproject{}, app.Missing("subproject not found")
+		return Subproject{}, web.Missing("subproject not found")
 	}
 	if err != nil {
 		return Subproject{}, err
@@ -184,7 +184,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("subproject not found")
+			return web.Missing("subproject not found")
 		}
 		if err != nil {
 			return err
@@ -204,19 +204,19 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
 			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: *validated.TotalHours, ID: id,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("subproject not found")
+			return web.Missing("subproject not found")
 		}
 		return err
 	})
 	if err != nil {
-		return Subproject{}, app.ReferencedConflict(err)
+		return Subproject{}, web.ReferencedConflict(err)
 	}
 	return Get(ctx, q, id)
 }
@@ -225,9 +225,9 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		_, err := txq.DeleteSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("subproject not found")
+			return web.Missing("subproject not found")
 		}
 		return err
 	})
-	return app.ReferencedConflict(err)
+	return web.ReferencedConflict(err)
 }

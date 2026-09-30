@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"testing"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
+	"cad-development/internal/web"
 )
 
 func TestHoursCap(t *testing.T) {
@@ -28,7 +28,7 @@ func TestHoursCap(t *testing.T) {
 	}
 	if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(5.0)}); err == nil {
 		t.Fatal("expected hours cap")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
 		t.Fatalf("unexpected cap error: %v", err)
 	}
 	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(4.0)})
@@ -39,7 +39,7 @@ func TestHoursCap(t *testing.T) {
 		ProjectID: nullable.Present(p.ID), Name: nullable.Present("B"), TotalHours: nullable.Present(5.0),
 	}); err == nil {
 		t.Fatal("expected update cap")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
 		t.Fatalf("unexpected cap error: %v", err)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
@@ -93,7 +93,7 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{
 		ProjectID: nullable.Present(second.ID), Name: nullable.Present(sp.Name), TotalHours: nullable.Present(sp.TotalHours),
 	})
-	var httpErr app.HTTPError
+	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("got %v", err)
 	}
@@ -122,7 +122,7 @@ func TestCannotDeleteSubprojectWithTasks(t *testing.T) {
 	}
 	if err := subproject.Delete(ctx, q, sp.ID); err == nil {
 		t.Fatal("expected delete with tasks to be rejected")
-	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("unexpected delete error: %v", err)
 	}
 	if _, err := subproject.Get(ctx, q, sp.ID); err != nil {

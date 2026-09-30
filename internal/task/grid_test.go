@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
@@ -153,7 +153,7 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 	_, err = task.Update(ctx, q, item.ID, task.Patch{
 		Name: nullable.Present(item.Name), ProjectID: nullable.Present(&secondID),
 	})
-	httpErr, ok := errors.AsType[app.HTTPError](err)
+	httpErr, ok := errors.AsType[web.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)
 	}
@@ -234,7 +234,7 @@ func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(first.ID, 10), strconv.FormatInt(sp.ID, 10)), time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
-	httpErr, ok := errors.AsType[app.HTTPError](err)
+	httpErr, ok := errors.AsType[web.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}

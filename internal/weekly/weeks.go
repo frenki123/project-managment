@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"cad-development/internal/app"
+	"cad-development/internal/web"
 )
 
 type WeekStart string
@@ -20,7 +20,7 @@ type WeekInfo struct {
 func Parse(s string) (WeekStart, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil || t.Weekday() != time.Monday {
-		return "", app.Invalid("week_start must be a Monday")
+		return "", web.Invalid("week_start must be a Monday")
 	}
 	return WeekStart(t.Format(time.DateOnly)), nil
 }
@@ -45,7 +45,7 @@ func (w WeekStart) IsLocked(now time.Time) bool {
 func (w WeekStart) Info() (WeekInfo, error) {
 	t := w.Time()
 	if t.IsZero() || t.Weekday() != time.Monday {
-		return WeekInfo{}, app.Invalid("week_start must be a Monday")
+		return WeekInfo{}, web.Invalid("week_start must be a Monday")
 	}
 	_, number := t.ISOWeek()
 	return WeekInfo{w, number, t.Format("02.01"), t.Format("2006-01"), t.Format("January 2006")}, nil

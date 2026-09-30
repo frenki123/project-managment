@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
@@ -196,7 +196,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 			if _, err := weekly.Save(ctx, q, tk.ID, weekly.WeekStart(tc.week), tc.patch, now); err == nil {
 				t.Fatal("expected invalid patch to fail")
 			} else {
-				var httpErr app.HTTPError
+				var httpErr web.HTTPError
 				if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != tc.wantMessage {
 					t.Fatalf("unexpected error: %v", err)
 				}

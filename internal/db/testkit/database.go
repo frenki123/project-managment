@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	assets "cad-development"
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 )
 
@@ -14,9 +13,9 @@ func Open(t *testing.T) *db.Queries {
 	return OpenDatabase(t).Q
 }
 
-func OpenDatabase(t *testing.T) *app.Database {
+func OpenDatabase(t *testing.T) *db.Database {
 	t.Helper()
-	database, err := app.OpenDatabase(app.DatabaseConfig{
+	database, err := db.OpenDatabase(db.DatabaseConfig{
 		DSN:          "file:" + strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name()) + "?mode=memory&cache=shared&_pragma=foreign_keys(1)",
 		Migrations:   embeddedMigrations(t),
 		MaxOpenConns: 1,

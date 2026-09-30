@@ -16,8 +16,9 @@ import (
 	"time"
 
 	assets "cad-development"
-	"cad-development/internal/app"
+	"cad-development/internal/db"
 	"cad-development/internal/handlers"
+	"cad-development/internal/web"
 )
 
 // version is set at build time with -ldflags "-X main.version=<tag>".
@@ -54,7 +55,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	database, err := app.OpenDatabase(app.DatabaseConfig{
+	database, err := db.OpenDatabase(db.DatabaseConfig{
 		DSN:          dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
 		Migrations:   migrations,
 		MaxOpenConns: 4,
@@ -75,13 +76,13 @@ func main() {
 	addr := "127.0.0.1:" + port
 
 	mux := http.NewServeMux()
-	app.RegisterStatic(mux, staticFS)
+	web.RegisterStatic(mux, staticFS)
 	handlers.Register(mux, database.Q)
 
 	log.Printf("listening on http://%s", addr)
 	server := &http.Server{
 		Addr:                addr,
-		Handler:             app.Recover(mux),
+		Handler:             web.Recover(mux),
 		ReadTimeout:         30 * time.Second,
 		ReadHeaderTimeout:   5 * time.Second,
 		IdleTimeout:         60 * time.Second,

@@ -5,23 +5,23 @@ import (
 	"net/http"
 	"strconv"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
-	projectdomain "cad-development/internal/project"
+	"cad-development/internal/project"
 	"cad-development/internal/views"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /api/v1/projects/{id}/s-curve", app.JSONGet(q, projectdomain.LoadSCurve))
+	mux.HandleFunc("GET /api/v1/projects/{id}/s-curve", web.JSONGet(q, project.LoadSCurve))
 	mux.HandleFunc("GET /chart", page(q))
 }
 
 func page(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		projects, err := projectdomain.List(r.Context(), q)
+		projects, err := project.List(r.Context(), q)
 		if err != nil {
-			app.WriteError(w, r, err)
+			web.WriteError(w, r, err)
 			return
 		}
 		data := views.ChartPageData{Projects: projects}
@@ -30,27 +30,27 @@ func page(q *db.Queries) http.HandlerFunc {
 			for _, p := range projects {
 				ids = append(ids, p.ID)
 			}
-			fallback := app.PreferredProjectID(r, ids)
+			fallback := project.PreferredProjectID(r, ids)
 			if r.URL.Query().Get("project") == "" {
-				app.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
+				web.Redirect(w, r, "/chart?project="+strconv.FormatInt(fallback, 10))
 				return
 			}
 			id, err := selectedProjectID(r)
 			if err != nil {
-				app.WriteError(w, r, err)
+				web.WriteError(w, r, err)
 				return
 			}
-			curve, err := projectdomain.LoadSCurve(r.Context(), q, id)
+			curve, err := project.LoadSCurve(r.Context(), q, id)
 			if err != nil {
-				app.WriteError(w, r, err)
+				web.WriteError(w, r, err)
 				return
 			}
-			app.RememberProject(w, id)
+			project.RememberProject(w, id)
 			data.SelectedProject = curve.Project
 			data.HasProject = true
 			data.Series = series(curve)
 		}
-		app.RenderPage(w, r, http.StatusOK, views.ChartPage(data))
+		web.RenderPage(w, r, http.StatusOK, views.ChartPage(data))
 	}
 }
 
@@ -58,12 +58,12 @@ func selectedProjectID(r *http.Request) (int64, error) {
 	value := r.URL.Query().Get("project")
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id < 1 {
-		return 0, app.Invalid("invalid project")
+		return 0, web.Invalid("invalid project")
 	}
 	return id, nil
 }
 
-func series(curve projectdomain.SCurve) views.ChartSeries {
+func series(curve project.SCurve) views.ChartSeries {
 	labels := make([]string, 0, len(curve.Weeks))
 	planned := make([]float64, 0, len(curve.Weeks))
 	spent := make([]float64, 0, len(curve.Weeks))

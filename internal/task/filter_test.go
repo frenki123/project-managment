@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"testing"
 
-	"cad-development/internal/app"
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
+	"cad-development/internal/web"
 )
 
 func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
@@ -31,7 +31,7 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := valid.Resolve(ctx, q); err != nil {
+	if _, err := ResolveFilter(ctx, q, valid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,9 +48,9 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, err := ParseFilter(tc.project, tc.subproject)
 			if err == nil {
-				_, err = f.Resolve(ctx, q)
+				_, err = ResolveFilter(ctx, q, f)
 			}
-			httpErr, ok := app.HTTPErrorFrom(err), true
+			httpErr, ok := web.HTTPErrorFrom(err), true
 			if !ok || httpErr.Status != tc.status {
 				t.Fatalf("error = %v", err)
 			}
@@ -66,7 +66,7 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := f.Key(); got != tc.key {
+		if got := FilterKey(f); got != tc.key {
 			t.Fatalf("key = %q, want %q", got, tc.key)
 		}
 	}

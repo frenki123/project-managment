@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"cad-development/internal/app/testkit"
+	"cad-development/internal/db/testkit"
 	projectdomain "cad-development/internal/project"
 )
 

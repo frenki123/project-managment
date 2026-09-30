@@ -6,9 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/web"
 )
 
 type Patch struct {
@@ -33,7 +33,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	if (!patch.PlannedHours.Present || patch.PlannedHours.Value == nil) &&
 		(!patch.SpentHours.Present || patch.SpentHours.Value == nil) &&
 		!patch.Progress.Present {
-		return Cell{}, app.Invalid("at least one value is required")
+		return Cell{}, web.Invalid("at least one value is required")
 	}
 	if patch.PlannedHours.Present && patch.PlannedHours.Value != nil {
 		if err := validHours(*patch.PlannedHours.Value); err != nil {
@@ -53,18 +53,18 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		if !patch.Unlock && weekStart.IsLocked(now) {
-			return app.Locked("historical editing is not enabled")
+			return web.Locked("historical editing is not enabled")
 		}
 		contextRow, err := txq.WeekWriteContext(ctx, db.WeekWriteContextParams{
 			TaskID: taskID, WeekStart: weekStart.String(),
 		})
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("task not found")
+			return web.Missing("task not found")
 		}
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(contextRow.Status), contextRow.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(contextRow.Status), contextRow.Reason); err != nil {
 			return err
 		}
 
@@ -110,15 +110,15 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 }
 
 func validHours(value float64) error {
-	if !app.NonNegativeFinite(value) {
-		return app.Invalid("hours cannot be negative")
+	if !web.NonNegativeFinite(value) {
+		return web.Invalid("hours cannot be negative")
 	}
 	return nil
 }
 
 func validProgress(value float64) error {
-	if !app.NonNegativeFinite(value) || value > 100 {
-		return app.Invalid("progress must be between 0 and 100")
+	if !web.NonNegativeFinite(value) || value > 100 {
+		return web.Invalid("progress must be between 0 and 100")
 	}
 	return nil
 }

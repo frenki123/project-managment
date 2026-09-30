@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strings"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
 
@@ -65,7 +65,7 @@ type Patch struct {
 	SubprojectID        nullable.Optional[*int64] `json:"subproject_id,omitzero"`
 }
 
-func (in Input) Patch() Patch {
+func PatchFromInput(in Input) Patch {
 	return Patch{
 		Name:                nullable.Present(in.Name),
 		Description:         nullable.Present(in.Description),
@@ -105,13 +105,13 @@ func validate(in Input) (Input, error) {
 	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
 	if in.Name == "" {
-		return in, app.Invalid("name is required")
+		return in, web.Invalid("name is required")
 	}
 	if in.ProjectID != nil && *in.ProjectID < 1 {
-		return in, app.Invalid("invalid project")
+		return in, web.Invalid("invalid project")
 	}
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
-		return in, app.Invalid("invalid subproject")
+		return in, web.Invalid("invalid subproject")
 	}
 	return in, nil
 }
@@ -129,7 +129,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
@@ -156,7 +156,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	row, err := q.GetTask(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Task{}, app.Missing("task not found")
+		return Task{}, web.Missing("task not found")
 	}
 	if err != nil {
 		return Task{}, err
@@ -224,14 +224,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetTask(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("task not found")
+			return web.Missing("task not found")
 		}
 		if err != nil {
 			return err
 		}
 		if patch.ProjectID.Present && patch.ProjectID.Value == nil && current.SubprojectID.Valid &&
 			(!patch.SubprojectID.Present || patch.SubprojectID.Value != nil) {
-			return app.Invalid("project cannot be cleared while subproject is assigned")
+			return web.Invalid("project cannot be cleared while subproject is assigned")
 		}
 		currentInput := Input{
 			Name: current.Name, Description: current.Description,
@@ -260,7 +260,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		if err != nil {
 			return err
 		}
-		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		projectChanged := patch.ProjectID.Present && current.ProjectID != nullable.Int64(in.ProjectID)
@@ -270,7 +270,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			if err != nil {
 				return err
 			}
-			if err := app.HTTPErrorFromReason(int(reassign.Status), reassign.Reason); err != nil {
+			if err := web.HTTPErrorFromReason(int(reassign.Status), reassign.Reason); err != nil {
 				return err
 			}
 		}
@@ -297,11 +297,11 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		_, err := txq.DeleteTask(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return app.Missing("task not found")
+			return web.Missing("task not found")
 		}
 		return err
 	})
-	return app.ReferencedConflict(err)
+	return web.ReferencedConflict(err)
 }
 
 func mapTasks(ctx context.Context, q *db.Queries, rows []db.Task, scope string, ownerID int64) ([]Task, error) {

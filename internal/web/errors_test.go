@@ -1,11 +1,11 @@
-package app_test
+package web_test
 
 import (
 	"errors"
 	"net/http"
 	"testing"
 
-	"cad-development/internal/app"
+	"cad-development/internal/web"
 )
 
 func TestHTTPErrorFromReason(t *testing.T) {
@@ -19,12 +19,12 @@ func TestHTTPErrorFromReason(t *testing.T) {
 		{http.StatusConflict, "task-has-weekly-data", "cannot reassign task with weekly data"},
 	}
 	for _, tc := range cases {
-		httpErr, ok := errors.AsType[app.HTTPError](app.HTTPErrorFromReason(tc.status, tc.reason))
+		httpErr, ok := errors.AsType[web.HTTPError](web.HTTPErrorFromReason(tc.status, tc.reason))
 		if !ok || httpErr.Status != tc.status || httpErr.Reason != tc.reason || httpErr.Message != tc.message {
 			t.Fatalf("HTTPErrorFromReason(%d, %q) = %#v", tc.status, tc.reason, httpErr)
 		}
 	}
-	if err := app.HTTPErrorFromReason(0, ""); err != nil {
+	if err := web.HTTPErrorFromReason(0, ""); err != nil {
 		t.Fatalf("zero status should return nil, got %v", err)
 	}
 }

@@ -4,37 +4,37 @@ import (
 	"net/http"
 	"strconv"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
+	"cad-development/internal/handlers/shared"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
-	taskdomain "cad-development/internal/task"
+	"cad-development/internal/task"
 	"cad-development/internal/views"
+	"cad-development/internal/web"
 )
 
 func panel(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			app.WriteFragmentError(w, r, err)
+		id, ok := shared.PathID(w, r)
+		if !ok {
 			return
 		}
-		t, err := taskdomain.Get(r.Context(), q, id)
+		t, err := task.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
 		data, err := taskPanelData(r, q, t)
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
-		app.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
+		web.RenderFragment(w, r, http.StatusOK, views.TaskPanel(data))
 	}
 }
 
-func taskPanelData(r *http.Request, q *db.Queries, t taskdomain.Task) (views.TaskPanelData, error) {
-	row := taskdomain.GridRow{
+func taskPanelData(r *http.Request, q *db.Queries, t task.Task) (views.TaskPanelData, error) {
+	row := task.GridRow{
 		ID:         t.ID,
 		Name:       t.Name,
 		TotalHours: t.TotalHours,

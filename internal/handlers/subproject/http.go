@@ -7,20 +7,20 @@ import (
 	"net/http"
 	"strconv"
 
-	"cad-development/internal/app"
 	"cad-development/internal/db"
-	"cad-development/internal/project"
-	domain "cad-development/internal/subproject"
-	task "cad-development/internal/task"
+	"cad-development/internal/handlers/shared"
+	"cad-development/internal/subproject"
+	"cad-development/internal/task"
 	"cad-development/internal/views"
+	"cad-development/internal/web"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	mux.HandleFunc("GET /api/v1/subprojects", app.JSONList(q, listSubprojects))
-	mux.HandleFunc("POST /api/v1/subprojects", app.JSONCreate(q, domain.Create))
-	mux.HandleFunc("GET /api/v1/subprojects/{id}", app.JSONGet(q, domain.Get))
-	mux.HandleFunc("PUT /api/v1/subprojects/{id}", app.JSONUpdate(q, domain.Update))
-	mux.HandleFunc("DELETE /api/v1/subprojects/{id}", app.JSONDelete(q, domain.Delete))
+	mux.HandleFunc("GET /api/v1/subprojects", web.JSONList(q, listSubprojects))
+	mux.HandleFunc("POST /api/v1/subprojects", web.JSONCreate(q, subproject.Create))
+	mux.HandleFunc("GET /api/v1/subprojects/{id}", web.JSONGet(q, subproject.Get))
+	mux.HandleFunc("PUT /api/v1/subprojects/{id}", web.JSONUpdate(q, subproject.Update))
+	mux.HandleFunc("DELETE /api/v1/subprojects/{id}", web.JSONDelete(q, subproject.Delete))
 	mux.HandleFunc("GET /subprojects/new", newForm(q))
 	mux.HandleFunc("POST /subprojects", createHTML(q))
 	mux.HandleFunc("GET /subprojects/{id}/edit", editForm(q))
@@ -28,37 +28,37 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("POST /subprojects/{id}/delete", deleteHTML(q))
 }
 
-func listSubprojects(ctx context.Context, q *db.Queries, r *http.Request) (domain.SubprojectsResponse, error) {
-	pid, err := app.FormInt64Checked(r, "project_id")
+func listSubprojects(ctx context.Context, q *db.Queries, r *http.Request) (subproject.SubprojectsResponse, error) {
+	pid, err := web.FormInt64Checked(r, "project_id")
 	if err != nil {
-		return domain.SubprojectsResponse{}, err
+		return subproject.SubprojectsResponse{}, err
 	}
-	var list []domain.Subproject
+	var list []subproject.Subproject
 	if pid != nil {
 		if _, err := q.GetProject(ctx, *pid); errors.Is(err, sql.ErrNoRows) {
-			return domain.SubprojectsResponse{}, app.Missing("project not found")
+			return subproject.SubprojectsResponse{}, web.Missing("project not found")
 		} else if err != nil {
-			return domain.SubprojectsResponse{}, err
+			return subproject.SubprojectsResponse{}, err
 		}
-		list, err = domain.ListByProjectWithTotals(ctx, q, *pid)
+		list, err = subproject.ListByProjectWithTotals(ctx, q, *pid)
 	} else {
-		list, err = domain.ListWithTotals(ctx, q)
+		list, err = subproject.ListWithTotals(ctx, q)
 	}
 	if err != nil {
-		return domain.SubprojectsResponse{}, err
+		return subproject.SubprojectsResponse{}, err
 	}
-	return domain.SubprojectsResponse{Subprojects: list}, nil
+	return subproject.SubprojectsResponse{Subprojects: list}, nil
 }
 
-func formInput(r *http.Request) (domain.Input, error) {
-	hours, err := app.FormFloatRequired(r, "total_hours")
+func formInput(r *http.Request) (subproject.Input, error) {
+	hours, err := web.FormFloatRequired(r, "total_hours")
 	if err != nil {
-		return domain.Input{}, err
+		return subproject.Input{}, err
 	}
 	vals := submittedFormValues(r)
-	in := domain.Input{Name: vals.Name}
-	if pid, err := app.FormInt64Checked(r, "project_id"); err != nil {
-		return domain.Input{}, err
+	in := subproject.Input{Name: vals.Name}
+	if pid, err := web.FormInt64Checked(r, "project_id"); err != nil {
+		return subproject.Input{}, err
 	} else if pid != nil {
 		in.ProjectID = *pid
 	}
@@ -66,60 +66,37 @@ func formInput(r *http.Request) (domain.Input, error) {
 	return in, nil
 }
 
-func formPatch(r *http.Request) (domain.Patch, error) {
-	in, err := formInput(r)
-	if err != nil {
-		return domain.Patch{}, err
-	}
-	return in.Patch(), nil
-}
-
-func projectOpts(ctxq *db.Queries, r *http.Request, selected int64) ([]task.Option, error) {
-	projects, err := project.List(r.Context(), ctxq)
-	if err != nil {
-		return nil, err
-	}
-	var out []task.Option
-	for _, p := range projects {
-		v := strconv.FormatInt(p.ID, 10)
-		out = append(out, task.Option{Value: v, Label: p.Name, Selected: p.ID == selected})
-	}
-	return out, nil
+func submittedFormValues(r *http.Request) views.SubprojectFormValues {
+	return views.SubprojectFormValues{Name: r.FormValue("name"), ProjectID: r.FormValue("project_id"), TotalHours: r.FormValue("total_hours")}
 }
 
 func renderSubprojectForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.SubprojectFormValues, action, title, deleteAction string, err error) {
-	httpErr := app.HTTPErrorFrom(err)
-	selected := int64(0)
-	if pid, parseErr := app.Int64Checked(vals.ProjectID, "project_id"); parseErr != nil {
-		httpErr = app.HTTPErrorFrom(parseErr)
-	} else if pid != nil {
-		selected = *pid
+	httpErr := web.HTTPErrorFrom(err)
+	selected, parseErr := web.Int64Checked(vals.ProjectID, "project_id")
+	if parseErr != nil {
+		httpErr = web.HTTPErrorFrom(parseErr)
 	}
-	opts, optsErr := projectOpts(q, r, selected)
+	opts, optsErr := shared.ProjectOptions(r, q, selected)
 	if optsErr != nil {
-		app.WriteFragmentError(w, r, optsErr)
+		web.WriteFragmentError(w, r, optsErr)
 		return
 	}
 	data := views.SubprojectFormData{
 		Action: action, Title: title, Context: "Project assignment and budget", Subproject: vals, Projects: opts, Error: httpErr.Message, DeleteAction: deleteAction,
 	}
-	app.RenderFragment(w, r, httpErr.Status, views.SubprojectForm(data))
+	web.RenderFragment(w, r, httpErr.Status, views.SubprojectForm(data))
 }
 
 func newForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pid, err := app.FormInt64Checked(r, "project_id")
+		pid, err := web.FormInt64Checked(r, "project_id")
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
-		selected := int64(0)
-		if pid != nil {
-			selected = *pid
-		}
-		opts, err := projectOpts(q, r, selected)
+		opts, err := shared.ProjectOptions(r, q, pid)
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
 		data := views.SubprojectFormData{
@@ -128,33 +105,32 @@ func newForm(q *db.Queries) http.HandlerFunc {
 			Context:  "Project assignment and budget",
 			Projects: opts,
 		}
-		app.RenderFragment(w, r, http.StatusOK, views.SubprojectForm(data))
+		web.RenderFragment(w, r, http.StatusOK, views.SubprojectForm(data))
 	}
 }
 
 func editForm(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			app.WriteFragmentError(w, r, err)
+		id, ok := shared.PathID(w, r)
+		if !ok {
 			return
 		}
-		s, err := domain.Get(r.Context(), q, id)
+		s, err := subproject.Get(r.Context(), q, id)
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
-		opts, err := projectOpts(q, r, s.ProjectID)
+		opts, err := shared.ProjectOptions(r, q, &s.ProjectID)
 		if err != nil {
-			app.WriteFragmentError(w, r, err)
+			web.WriteFragmentError(w, r, err)
 			return
 		}
 		data := subFormData(s, opts, "")
-		app.RenderFragment(w, r, http.StatusOK, views.SubprojectForm(data))
+		web.RenderFragment(w, r, http.StatusOK, views.SubprojectForm(data))
 	}
 }
 
-func subFormData(s domain.Subproject, opts []task.Option, errMsg string) views.SubprojectFormData {
+func subFormData(s subproject.Subproject, opts []task.Option, errMsg string) views.SubprojectFormData {
 	id := strconv.FormatInt(s.ID, 10)
 	return views.SubprojectFormData{
 		Action:  "/subprojects/" + id,
@@ -171,71 +147,35 @@ func subFormData(s domain.Subproject, opts []task.Option, errMsg string) views.S
 	}
 }
 
-func submittedFormValues(r *http.Request) views.SubprojectFormValues {
-	return views.SubprojectFormValues{Name: r.FormValue("name"), ProjectID: r.FormValue("project_id"), TotalHours: r.FormValue("total_hours")}
-}
-
 func createHTML(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vals := submittedFormValues(r)
-		in, err := formInput(r)
-		if err != nil {
-			renderSubprojectForm(w, r, q, vals, "/subprojects", "New subproject", "", err)
-			return
-		}
-		s, err := domain.Create(r.Context(), q, in)
-		if err != nil {
-			renderSubprojectForm(w, r, q, vals, "/subprojects", "New subproject", "", err)
-			return
-		}
-		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID, Subproject: &s.ID}.Key())
-	}
+	return shared.CreateForm(q, formInput, subproject.Create, func(w http.ResponseWriter, r *http.Request, err error) {
+		renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects", "New subproject", "", err)
+	}, func(s subproject.Subproject) string {
+		return "/?" + task.FilterKey(task.Filter{ID: s.ProjectID, Subproject: &s.ID})
+	})
 }
 
 func updateHTML(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			app.WriteFragmentError(w, r, err)
-			return
-		}
-		in, err := formPatch(r)
-		if err != nil {
-			renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
-			return
-		}
-		s, err := domain.Update(r.Context(), q, id, in)
-		if err != nil {
-			renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
-			return
-		}
-		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID, Subproject: &s.ID}.Key())
-	}
+	return shared.UpdateForm(q, formInput, func(ctx context.Context, q *db.Queries, id int64, in subproject.Input) (subproject.Subproject, error) {
+		return subproject.Update(ctx, q, id, subproject.PatchFromInput(in))
+	}, func(w http.ResponseWriter, r *http.Request, id int64, err error) {
+		renderSubprojectForm(w, r, q, submittedFormValues(r), "/subprojects/"+strconv.FormatInt(id, 10), "Edit subproject", "/subprojects/"+strconv.FormatInt(id, 10)+"/delete", err)
+	}, func(s subproject.Subproject) string {
+		return "/?" + task.FilterKey(task.Filter{ID: s.ProjectID, Subproject: &s.ID})
+	})
 }
 
 func deleteHTML(q *db.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := app.PathID(r, "id")
-		if err != nil {
-			app.WriteFragmentError(w, r, err)
-			return
-		}
-		s, err := domain.Get(r.Context(), q, id)
-		if err != nil {
-			app.WriteFragmentError(w, r, err)
-			return
-		}
-		if err := domain.Delete(r.Context(), q, id); err != nil {
-			idStr := strconv.FormatInt(id, 10)
-			httpErr := app.HTTPErrorFrom(err)
-			app.SetToast(w, httpErr.Message)
-			renderSubprojectForm(w, r, q, views.SubprojectFormValues{
-				Name:       s.Name,
-				ProjectID:  strconv.FormatInt(s.ProjectID, 10),
-				TotalHours: strconv.FormatFloat(s.TotalHours, 'f', -1, 64),
-			}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", httpErr)
-			return
-		}
-		app.Redirect(w, r, "/?"+task.Filter{ID: s.ProjectID}.Key())
-	}
+	return shared.DeleteForm(q, subproject.Get, subproject.Delete, func(w http.ResponseWriter, r *http.Request, s subproject.Subproject, err error) {
+		httpErr := web.HTTPErrorFrom(err)
+		web.SetToast(w, httpErr.Message)
+		idStr := strconv.FormatInt(s.ID, 10)
+		renderSubprojectForm(w, r, q, views.SubprojectFormValues{
+			Name:       s.Name,
+			ProjectID:  strconv.FormatInt(s.ProjectID, 10),
+			TotalHours: strconv.FormatFloat(s.TotalHours, 'f', -1, 64),
+		}, "/subprojects/"+idStr, "Edit subproject", "/subprojects/"+idStr+"/delete", httpErr)
+	}, func(s subproject.Subproject) string {
+		return "/?" + task.FilterKey(task.Filter{ID: s.ProjectID})
+	})
 }
