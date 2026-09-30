@@ -62,11 +62,14 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.EndDate = "2026-09-30"
-	if _, err := project.Update(ctx, q, p.ID, project.Patch{
+	_, err = project.Update(ctx, q, p.ID, project.Patch{
 		Name: nullable.Present(p.Name), TotalHours: nullable.Present(p.TotalHours),
 		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
-	}); err == nil {
+	})
+	if err == nil {
 		t.Fatal("expected date change to be rejected")
+	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Reason != "project-dates-exclude-weekly-data" || httpErr.Message != "project dates cannot exclude existing weekly data" {
+		t.Fatalf("unexpected conflict error: %v", err)
 	}
 	got, err := project.Get(ctx, q, p.ID)
 	if err != nil {

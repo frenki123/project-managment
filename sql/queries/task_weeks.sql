@@ -14,8 +14,10 @@ SELECT CAST(planned_hours AS REAL) AS planned_hours,
 FROM v_task_totals
 WHERE task_id = ?;
 
--- name: HasTaskWeeks :one
-SELECT EXISTS (SELECT 1 FROM task_weeks WHERE task_id = ?);
+-- name: TaskReassignConflict :one
+SELECT
+    CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 409 ELSE 0 END AS status,
+    CAST(CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 'task-has-weekly-data' ELSE '' END AS TEXT) AS reason;
 
 -- name: ListTaskTotals :many
 SELECT task_id,
@@ -53,10 +55,10 @@ SELECT
         ELSE 0
     END AS status,
     CAST(CASE
-        WHEN refs.subproject_id IS NOT NULL AND NOT refs.subproject_exists THEN 'subproject not found'
-        WHEN refs.project_id IS NOT NULL AND NOT refs.project_exists THEN 'project not found'
+        WHEN refs.subproject_id IS NOT NULL AND NOT refs.subproject_exists THEN 'subproject-not-found'
+        WHEN refs.project_id IS NOT NULL AND NOT refs.project_exists THEN 'project-not-found'
         WHEN refs.subproject_id IS NOT NULL AND refs.project_id IS NOT NULL
-             AND refs.subproject_project_id IS NOT refs.project_id THEN 'subproject does not belong to project'
+             AND refs.subproject_project_id IS NOT refs.project_id THEN 'subproject-project-mismatch'
         ELSE ''
     END AS TEXT) AS reason
 FROM refs;
@@ -92,8 +94,8 @@ SELECT
         ELSE 0
     END AS status,
     CASE
-        WHEN is_idea THEN 'ideas cannot be planned'
-        WHEN in_range = 0 THEN 'week is outside the project date range'
+        WHEN is_idea THEN 'idea-task-not-assignable'
+        WHEN in_range = 0 THEN 'week-outside-project-bounds'
         ELSE ''
     END AS reason,
     planned_hours, spent_hours, progress, previous_progress

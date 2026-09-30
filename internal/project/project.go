@@ -95,21 +95,21 @@ func parseDate(s string) (time.Time, error) {
 func validateFields(in Input) (Input, error) {
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.TotalHours == nil {
-		return in, app.Invalid("total_hours is required")
+		return in, app.Invalid("total hours is required")
 	}
 	if !app.NonNegativeFinite(*in.TotalHours) {
 		return in, app.Invalid("hours cannot be negative")
 	}
 	start, err := parseDate(in.StartDate)
 	if err != nil {
-		return in, app.Invalid("invalid start_date")
+		return in, app.Invalid("invalid start date")
 	}
 	end, err := parseDate(in.EndDate)
 	if err != nil {
-		return in, app.Invalid("invalid end_date")
+		return in, app.Invalid("invalid end date")
 	}
 	if end.Before(start) {
-		return in, app.Invalid("end_date must be on or after start_date")
+		return in, app.Invalid("end date must be on or after start date")
 	}
 	in.StartDate = start.Format(time.DateOnly)
 	in.EndDate = end.Format(time.DateOnly)
@@ -124,12 +124,12 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
 	in.Name = name
 	var id int64
 	err = q.InTx(ctx, func(txq *db.Queries) error {
-		taken, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: 0})
+		conflict, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: 0})
 		if err != nil {
 			return err
 		}
-		if taken {
-			return app.Conflict("project name already exists")
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+			return err
 		}
 		validated, err := validateFields(in)
 		if err != nil {
@@ -228,18 +228,18 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err != nil {
 			return err
 		}
-		taken, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: id})
+		conflict, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: id})
 		if err != nil {
 			return err
 		}
-		if taken {
-			return app.Conflict("project name already exists")
+		if err := app.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+			return err
 		}
 		validated, err := validateFields(in)
 		if err != nil {
 			return err
 		}
-		conflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
+		updateConflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
 			ProjectID:  id,
 			StartDate:  validated.StartDate,
 			EndDate:    validated.EndDate,
@@ -248,7 +248,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err != nil {
 			return err
 		}
-		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+		if err := app.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
 			return err
 		}
 		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{

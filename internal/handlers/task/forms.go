@@ -127,7 +127,7 @@ func taskFormData(r *http.Request, q *db.Queries, vals views.TaskFormValues, can
 
 func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.TaskFormValues, canReassign bool, action, title, deleteAction string, err error, summary *views.TaskPanelData) {
 	httpErr := app.HTTPErrorFrom(err)
-	data, formErr := taskFormData(r, q, vals, canReassign, app.FriendlyFormMessage(httpErr.Message))
+	data, formErr := taskFormData(r, q, vals, canReassign, httpErr.Message)
 	if formErr != nil {
 		app.WriteFragmentError(w, r, formErr)
 		return
@@ -270,9 +270,8 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 				return
 			}
 			httpErr := app.HTTPErrorFrom(err)
-			message := app.FriendlyFormMessage(httpErr.Message)
-			app.SetToast(w, message)
-			app.RenderFragment(w, r, httpErr.Status, views.TaskPanel(taskPanelError(summary, message)))
+			app.SetToast(w, httpErr.Message)
+			app.RenderFragment(w, r, httpErr.Status, views.TaskPanel(taskPanelError(summary, httpErr.Message)))
 			return
 		}
 		app.Redirect(w, r, afterTask(t))

@@ -59,7 +59,7 @@ func submittedFormValues(r *http.Request) views.ProjectFormValues {
 func renderProjectForm(w http.ResponseWriter, r *http.Request, vals views.ProjectFormValues, action, title, deleteAction string, err error) {
 	httpErr := app.HTTPErrorFrom(err)
 	data := views.ProjectFormData{
-		Action: action, Title: title, Context: projectContext(vals), Project: vals, Error: app.FriendlyFormMessage(httpErr.Message), DeleteAction: deleteAction,
+		Action: action, Title: title, Context: projectContext(vals), Project: vals, Error: httpErr.Message, DeleteAction: deleteAction,
 	}
 	app.RenderFragment(w, r, httpErr.Status, views.ProjectForm(data))
 }
@@ -169,8 +169,8 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 		}
 		if err := domain.Delete(r.Context(), q, id); err != nil {
 			httpErr := app.HTTPErrorFrom(err)
-			app.SetToast(w, app.FriendlyFormMessage(httpErr.Message))
-			app.RenderFragment(w, r, httpErr.Status, views.ProjectForm(projectFormData(p, app.FriendlyFormMessage(httpErr.Message))))
+			app.SetToast(w, httpErr.Message)
+			app.RenderFragment(w, r, httpErr.Status, views.ProjectForm(projectFormData(p, httpErr.Message)))
 			return
 		}
 		app.Redirect(w, r, "/")
