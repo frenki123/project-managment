@@ -16,11 +16,13 @@ func TestWeekStarts(t *testing.T) {
 	}
 }
 
-func TestParseMonday(t *testing.T) {
-	if _, err := ParseMonday("2026-05-04"); err != nil {
-		t.Fatal(err)
+func TestParse(t *testing.T) {
+	if ws, err := Parse("2026-05-04"); err != nil || ws.String() != "2026-05-04" {
+		t.Fatalf("got %q %v", ws, err)
 	}
-	if _, err := ParseMonday("2026-05-05"); err == nil {
-		t.Fatal("expected error for non-Monday")
+	for _, s := range []string{"2026-05-05", "not-a-date"} {
+		if _, err := Parse(s); err == nil {
+			t.Fatalf("expected %q to fail", s)
+		}
 	}
 }

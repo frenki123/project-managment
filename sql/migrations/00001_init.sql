@@ -73,7 +73,10 @@ SELECT
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
     CAST(CASE WHEN p.total_hours > 0
         THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
-        ELSE 0 END AS REAL) AS progress
+        ELSE 0 END AS REAL) AS progress,
+    CAST(CAST(CASE WHEN p.total_hours > 0
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
+        ELSE 0 END AS REAL) * p.total_hours / 100.0 AS REAL) AS earned_hours
 FROM projects p
 LEFT JOIN v_task_totals tt ON tt.project_id = p.id
 GROUP BY p.id;
@@ -99,7 +102,34 @@ SELECT
     ), 0) AS REAL) AS effective_progress
 FROM task_weeks tw;
 
+CREATE VIEW v_task_week_series AS
+WITH RECURSIVE weeks AS (
+    SELECT t.id AS task_id, b.first_week AS week_start, b.last_week
+    FROM tasks t
+    JOIN v_project_bounds b ON b.id = t.project_id
+    UNION ALL
+    SELECT task_id, date(week_start, '+7 days'), last_week
+    FROM weeks
+    WHERE week_start < last_week
+)
+SELECT
+    w.task_id,
+    w.week_start,
+    CAST(COALESCE(tw.planned_hours, 0) AS REAL) AS planned_hours,
+    CAST(COALESCE(tw.spent_hours, 0) AS REAL) AS spent_hours,
+    tw.progress AS stored_progress,
+    CAST(COALESCE(MAX(tw.progress) OVER (
+        PARTITION BY w.task_id
+        ORDER BY w.week_start
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ), 0) AS REAL) AS effective_progress
+FROM weeks w
+LEFT JOIN task_weeks tw
+    ON tw.task_id = w.task_id
+   AND tw.week_start = w.week_start;
+
 -- +goose Down
+DROP VIEW IF EXISTS v_task_week_series;
 DROP VIEW IF EXISTS v_task_week_effective;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;

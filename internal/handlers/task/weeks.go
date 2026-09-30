@@ -104,7 +104,7 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 
 func weekIndex(grid taskdomain.Grid, rowIndex int, weekStart string) int {
 	for i, cell := range grid.Rows[rowIndex].Cells {
-		if string(cell.WeekStart) == weekStart {
+		if cell.WeekStart.String() == weekStart {
 			return i
 		}
 	}

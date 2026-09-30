@@ -28,7 +28,7 @@ type Cell struct {
 }
 
 func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
-	if _, err := ParseWeekStart(weekStart); err != nil {
+	if _, err := Parse(weekStart.String()); err != nil {
 		return Cell{}, err
 	}
 	if patch.PlannedHours == nil && patch.SpentHours == nil && patch.Progress == nil && !patch.ClearProgress {
@@ -54,11 +54,11 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if !patch.Unlock && IsWeekLocked(string(weekStart), now) {
+		if !patch.Unlock && weekStart.IsLocked(now) {
 			return app.Locked("historical editing is not enabled")
 		}
 		contextRow, err := txq.WeekWriteContext(ctx, db.WeekWriteContextParams{
-			TaskID: taskID, WeekStart: string(weekStart), Progress: nullable.Float64(patch.Progress),
+			TaskID: taskID, WeekStart: weekStart.String(),
 		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
@@ -70,37 +70,40 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return err
 		}
 
-		planned, spent, progress := contextRow.PlannedHours, contextRow.SpentHours, contextRow.Progress
+		planned, spent := contextRow.PlannedHours, contextRow.SpentHours
 		if patch.PlannedHours != nil {
 			planned = *patch.PlannedHours
 		}
 		if patch.SpentHours != nil {
 			spent = *patch.SpentHours
 		}
-		if patch.Progress != nil {
+		carried := contextRow.PreviousProgress
+		store := patch.Progress != nil && *patch.Progress > carried
+		progress := contextRow.Progress
+		switch {
+		case store:
 			progress = nullable.Float64(patch.Progress)
-		} else if patch.ClearProgress {
+		case patch.Progress != nil || patch.ClearProgress:
 			progress = sql.NullFloat64{}
 		}
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
-			TaskID: taskID, WeekStart: string(weekStart), PlannedHours: planned, SpentHours: spent, Progress: progress,
+			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: progress,
 		})
 		if err != nil {
 			return err
 		}
-		if patch.Progress != nil {
+		if store {
 			if err := txq.UpdateTaskWeeksProgressAfter(ctx, db.UpdateTaskWeeksProgressAfterParams{
-				Progress:   nullable.Float64(patch.Progress),
-				TaskID:     taskID,
-				WeekStart:  string(weekStart),
-				Progress_2: nullable.Float64(patch.Progress),
+				TaskID:    taskID,
+				WeekStart: weekStart.String(),
+				Progress:  nullable.Float64(patch.Progress),
 			}); err != nil {
 				return err
 			}
 		}
 		effective := nullable.Float64Pointer(row.Progress)
 		if effective == nil {
-			effective = new(contextRow.PreviousProgress)
+			effective = new(carried)
 		}
 		result = toCell(row, effective)
 		return nil

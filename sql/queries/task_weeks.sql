@@ -89,14 +89,11 @@ SELECT
     CASE
         WHEN is_idea THEN 400
         WHEN in_range = 0 THEN 400
-        WHEN CAST(sqlc.narg(progress) AS REAL) IS NOT NULL AND CAST(sqlc.narg(progress) AS REAL) < previous_progress THEN 400
         ELSE 0
     END AS status,
     CASE
         WHEN is_idea THEN 'ideas cannot be planned'
         WHEN in_range = 0 THEN 'week is outside the project date range'
-        WHEN CAST(sqlc.narg(progress) AS REAL) IS NOT NULL AND CAST(sqlc.narg(progress) AS REAL) < previous_progress
-            THEN 'progress cannot be less than the week before'
         ELSE ''
     END AS reason,
     planned_hours, spent_hours, progress, previous_progress
@@ -116,11 +113,11 @@ RETURNING task_id, week_start, planned_hours, spent_hours, progress;
 
 -- name: UpdateTaskWeeksProgressAfter :exec
 UPDATE task_weeks
-SET progress = ?
-WHERE task_id = ?
-  AND week_start > ?
+SET progress = NULL
+WHERE task_id = sqlc.arg(task_id)
+  AND week_start > sqlc.arg(week_start)
   AND progress IS NOT NULL
-  AND progress < ?;
+  AND progress < sqlc.arg(progress);
 
 -- name: ListProjectWeekTotals :many
 WITH RECURSIVE bounds AS (

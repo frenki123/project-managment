@@ -1,6 +1,7 @@
 package weekly
 
 import (
+	"encoding/json"
 	"time"
 
 	"cad-development/internal/app"
@@ -16,12 +17,51 @@ type WeekInfo struct {
 	MonthLabel string
 }
 
-func ParseDate(s string) (time.Time, error) {
+func Parse(s string) (WeekStart, error) {
 	t, err := time.Parse(time.DateOnly, s)
-	if err != nil {
-		return time.Time{}, app.Invalid("invalid date")
+	if err != nil || t.Weekday() != time.Monday {
+		return "", app.Invalid("week_start must be a Monday")
 	}
-	return t, nil
+	return WeekStart(t.Format(time.DateOnly)), nil
+}
+
+func (w WeekStart) Time() time.Time {
+	t, _ := time.Parse(time.DateOnly, string(w))
+	return t
+}
+
+func (w WeekStart) Next() WeekStart {
+	return WeekStart(w.Time().AddDate(0, 0, 7).Format(time.DateOnly))
+}
+
+func (w WeekStart) IsLocked(now time.Time) bool {
+	t := w.Time()
+	if t.IsZero() || t.Weekday() != time.Monday {
+		return true
+	}
+	return t.Year() < now.Year() || t.Year() == now.Year() && t.Month() < now.Month()
+}
+
+func (w WeekStart) Info() (WeekInfo, error) {
+	t := w.Time()
+	if t.IsZero() || t.Weekday() != time.Monday {
+		return WeekInfo{}, app.Invalid("week_start must be a Monday")
+	}
+	_, number := t.ISOWeek()
+	return WeekInfo{w, number, t.Format("02.01"), t.Format("2006-01"), t.Format("January 2006")}, nil
+}
+
+func (w WeekStart) String() string { return string(w) }
+
+func (w WeekStart) MarshalJSON() ([]byte, error) { return json.Marshal(string(w)) }
+
+func (w *WeekStart) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*w = WeekStart(s)
+	return nil
 }
 
 func MondayOnOrBefore(t time.Time) time.Time {
@@ -33,21 +73,6 @@ func MondayOnOrBefore(t time.Time) time.Time {
 	return t.AddDate(0, 0, -int(wd-time.Monday))
 }
 
-func ParseMonday(s string) (time.Time, error) {
-	t, err := ParseDate(s)
-	if err != nil {
-		return time.Time{}, err
-	}
-	if t.Weekday() != time.Monday {
-		return time.Time{}, app.Invalid("week_start must be a Monday")
-	}
-	return t, nil
-}
-
-func ParseWeekStart(s WeekStart) (time.Time, error) {
-	return ParseMonday(string(s))
-}
-
 func WeekStarts(start, end time.Time) []WeekStart {
 	w := MondayOnOrBefore(start)
 	last := MondayOnOrBefore(end)
@@ -57,19 +82,4 @@ func WeekStarts(start, end time.Time) []WeekStart {
 		w = w.AddDate(0, 0, 7)
 	}
 	return out
-}
-
-func Info(week WeekStart) (WeekInfo, error) {
-	t, err := ParseWeekStart(week)
-	if err != nil {
-		return WeekInfo{}, err
-	}
-	_, number := t.ISOWeek()
-	return WeekInfo{
-		Start:      week,
-		Number:     number,
-		Date:       t.Format("02.01"),
-		Month:      t.Format("2006-01"),
-		MonthLabel: t.Format("January 2006"),
-	}, nil
 }

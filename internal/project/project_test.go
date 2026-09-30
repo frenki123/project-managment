@@ -223,6 +223,30 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	}
 }
 
+func TestEarnedHoursKeepsFractionalHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned, progress := 100.0, 62.9
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, Progress: &progress}, testNow()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := project.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(got.EarnedHours-62.9) > 1e-9 {
+		t.Fatalf("earned_hours should keep fractional hours 62.9, got %v", got.EarnedHours)
+	}
+}
+
 func testNow() time.Time {
 	return time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 }
