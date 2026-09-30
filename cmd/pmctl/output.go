@@ -21,7 +21,7 @@ type printer struct {
 	useTable bool
 }
 
-func (p printer) print(value any, table func(io.Writer) error) error {
+func (p printer) print[T any](value T, table func(io.Writer) error) error {
 	if p.useTable {
 		return table(p.table)
 	}
@@ -33,8 +33,16 @@ func (p printer) print(value any, table func(io.Writer) error) error {
 	return err
 }
 
+type result struct {
+	Deleted bool   `json:"deleted,omitzero"`
+	ID      int64  `json:"id,omitzero"`
+	Type    string `json:"type,omitzero"`
+	Error   string `json:"error,omitzero"`
+	Status  *int   `json:"status,omitzero"`
+}
+
 func (p printer) deleted(kind string, id int64) error {
-	return p.print(map[string]any{"deleted": true, "id": id, "type": kind}, func(w io.Writer) error {
+	return p.print(result{Deleted: true, ID: id, Type: kind}, func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "deleted %s %d\n", kind, id)
 		return err
 	})

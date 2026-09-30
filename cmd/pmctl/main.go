@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"cad-development/internal/client"
-	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"github.com/spf13/cobra"
@@ -40,9 +39,9 @@ func main() {
 }
 
 func writeError(w io.Writer, err error) {
-	payload := map[string]any{"error": err.Error()}
+	payload := result{Error: err.Error()}
 	if apiErr, ok := errors.AsType[*client.APIError](err); ok {
-		payload["status"] = apiErr.Status
+		payload.Status = &apiErr.Status
 	}
 	data, marshalErr := json.Marshal(payload)
 	if marshalErr != nil {
@@ -65,13 +64,6 @@ func newRoot(s *commandState) *cobra.Command {
 	root.PersistentFlags().BoolVar(&s.table, "table", false, "print compact human-readable tables")
 	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), updateWeekCommand(s), curveCommand(s))
 	return root
-}
-
-func textPatch(value string) nullable.Optional[string] {
-	if value == "null" {
-		return nullable.Clear[string]()
-	}
-	return nullable.Present(value)
 }
 
 func (s *commandState) printer() printer {
