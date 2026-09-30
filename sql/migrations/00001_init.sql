@@ -61,6 +61,23 @@ FROM tasks t
 LEFT JOIN task_weeks tw ON tw.task_id = t.id
 GROUP BY t.id;
 
+CREATE VIEW v_project_totals AS
+SELECT
+    p.id,
+    p.name,
+    p.purchase_order_name,
+    p.total_hours,
+    p.start_date,
+    p.end_date,
+    CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
+    CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
+    CAST(CASE WHEN p.total_hours > 0
+        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
+        ELSE 0 END AS REAL) AS progress
+FROM projects p
+LEFT JOIN v_task_totals tt ON tt.project_id = p.id
+GROUP BY p.id;
+
 CREATE VIEW v_project_bounds AS
 SELECT
     p.*,
@@ -85,6 +102,7 @@ FROM task_weeks tw;
 -- +goose Down
 DROP VIEW IF EXISTS v_task_week_effective;
 DROP VIEW IF EXISTS v_project_bounds;
+DROP VIEW IF EXISTS v_project_totals;
 DROP VIEW IF EXISTS v_task_totals;
 DROP TABLE task_weeks;
 DROP TABLE tasks;

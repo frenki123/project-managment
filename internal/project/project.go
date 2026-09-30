@@ -68,7 +68,7 @@ func FromDB(p db.Project) Project {
 	}
 }
 
-func fromTotals(row db.ListProjectsWithTotalsRow) Project {
+func fromTotals(row db.VProjectTotal) Project {
 	return Project{
 		ID: row.ID, Name: row.Name, PurchaseOrderName: row.PurchaseOrderName,
 		TotalHours: row.TotalHours, StartDate: row.StartDate, EndDate: row.EndDate,

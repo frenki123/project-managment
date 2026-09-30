@@ -1,11 +1,14 @@
 package weekly_test
 
 import (
+	"errors"
 	"math"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
+	"cad-development/internal/app"
 	"cad-development/internal/app/testkit"
 	"cad-development/internal/db"
 	"cad-development/internal/project"
@@ -200,22 +203,29 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 	negative := -1.0
 	infinite := math.Inf(1)
 	tooMuch := 101.0
+	validHours := 1.0
 	values := []struct {
-		name  string
-		patch weekly.Patch
-		week  string
+		name        string
+		patch       weekly.Patch
+		week        string
+		wantMessage string
 	}{
-		{"empty patch", weekly.Patch{}, "2026-01-05"},
-		{"negative hours", weekly.Patch{PlannedHours: &negative}, "2026-01-05"},
-		{"infinite hours", weekly.Patch{SpentHours: &infinite}, "2026-01-05"},
-		{"progress above 100", weekly.Patch{Progress: &tooMuch}, "2026-01-05"},
-		{"non-Monday", weekly.Patch{PlannedHours: &negative}, "2026-01-06"},
-		{"outside project range", weekly.Patch{PlannedHours: &negative}, "2026-06-08"},
+		{"empty patch", weekly.Patch{}, "2026-01-05", "at least one value is required"},
+		{"negative hours", weekly.Patch{PlannedHours: &negative}, "2026-01-05", "hours cannot be negative"},
+		{"infinite hours", weekly.Patch{SpentHours: &infinite}, "2026-01-05", "hours cannot be negative"},
+		{"progress above 100", weekly.Patch{Progress: &tooMuch}, "2026-01-05", "progress must be between 0 and 100"},
+		{"non-Monday", weekly.Patch{PlannedHours: &validHours}, "2026-01-06", "week_start must be a Monday"},
+		{"outside project range", weekly.Patch{PlannedHours: &validHours}, "2026-06-08", "week is outside the project date range"},
 	}
 	for _, tc := range values {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := weekly.Save(ctx, q, tk.ID, weekly.WeekStart(tc.week), tc.patch, now); err == nil {
 				t.Fatal("expected invalid patch to fail")
+			} else {
+				var httpErr app.HTTPError
+				if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != tc.wantMessage {
+					t.Fatalf("unexpected error: %v", err)
+				}
 			}
 		})
 	}
