@@ -18,17 +18,15 @@ WHERE task_id = ?;
 SELECT EXISTS (SELECT 1 FROM task_weeks WHERE task_id = ?);
 
 -- name: ListTaskTotals :many
-SELECT t.id AS task_id,
-       CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
-       CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
-       CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
-FROM tasks t
-LEFT JOIN task_weeks tw ON tw.task_id = t.id
+SELECT task_id,
+       CAST(planned_hours AS REAL) AS planned_hours,
+       CAST(spent_hours AS REAL) AS spent_hours,
+       CAST(progress AS REAL) AS progress
+FROM v_task_totals
 WHERE CAST(sqlc.arg(scope) AS TEXT) = 'all'
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'ideas' AND t.project_id IS NULL)
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'project' AND t.project_id = CAST(sqlc.arg(owner_id) AS INTEGER))
-   OR (CAST(sqlc.arg(scope) AS TEXT) = 'subproject' AND t.subproject_id = CAST(sqlc.arg(owner_id) AS INTEGER))
-GROUP BY t.id;
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'ideas' AND project_id IS NULL)
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'project' AND project_id = CAST(sqlc.arg(owner_id) AS INTEGER))
+   OR (CAST(sqlc.arg(scope) AS TEXT) = 'subproject' AND subproject_id = CAST(sqlc.arg(owner_id) AS INTEGER));
 
 -- name: ListTaskWeeksByProject :many
 SELECT tw.*
