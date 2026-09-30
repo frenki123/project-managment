@@ -16,6 +16,42 @@ import (
 	"cad-development/internal/weekly"
 )
 
+func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{
+		Name: "Progress gaps", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	first, later := 20.0, 40.0
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{Progress: &first}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-21", weekly.Patch{Progress: &later}, now); err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, week := range grid.Weeks {
+		if week.Start == "2026-09-14" {
+			if grid.Rows[0].Cells[i].Progress != first || grid.Rows[0].Cells[i].Stored {
+				t.Fatalf("missing week did not carry SQL progress: %#v", grid.Rows[0].Cells[i])
+			}
+			return
+		}
+	}
+	t.Fatal("missing gap week")
+}
+
 func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

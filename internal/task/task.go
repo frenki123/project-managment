@@ -186,24 +186,10 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 			PlannedHours: w.PlannedHours,
 			SpentHours:   w.SpentHours,
 		}
-		progress := effectiveProgress(w.EffectiveProgress)
-		c.Progress = new(progress)
+		c.Progress = new(w.EffectiveProgress)
 		out.Weeks = append(out.Weeks, c)
 	}
 	return out, nil
-}
-
-func effectiveProgress(value interface{}) float64 {
-	switch value := value.(type) {
-	case float64:
-		return value
-	case int64:
-		return float64(value)
-	case int:
-		return float64(value)
-	default:
-		return 0
-	}
 }
 
 func List(ctx context.Context, q *db.Queries) ([]Task, error) {

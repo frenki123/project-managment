@@ -58,7 +58,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return app.Locked("historical editing is not enabled")
 		}
 		contextRow, err := txq.WeekWriteContext(ctx, db.WeekWriteContextParams{
-			TaskID: taskID, WeekStart: string(weekStart),
+			TaskID: taskID, WeekStart: string(weekStart), Progress: nullable.Float64(patch.Progress),
 		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
@@ -66,11 +66,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		if err != nil {
 			return err
 		}
-		if contextRow.IsIdea {
-			return app.Invalid("ideas cannot be planned")
-		}
-		if contextRow.InRange == 0 {
-			return app.Invalid("week is outside the project date range")
+		if err := app.FromStatus(int(contextRow.Status), contextRow.Reason); err != nil {
+			return err
 		}
 
 		planned, spent, progress := contextRow.PlannedHours, contextRow.SpentHours, contextRow.Progress
@@ -80,12 +77,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		if patch.SpentHours != nil {
 			spent = *patch.SpentHours
 		}
-		var previous float64
 		if patch.Progress != nil {
-			previous = contextRow.PreviousProgress
-			if *patch.Progress < previous {
-				return app.Invalid("progress cannot be less than the week before")
-			}
 			progress = nullable.Float64(patch.Progress)
 		} else if patch.ClearProgress {
 			progress = sql.NullFloat64{}

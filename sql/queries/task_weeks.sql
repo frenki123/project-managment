@@ -68,7 +68,7 @@ SELECT
 -- name: WeekWriteContext :one
 WITH input AS (
     SELECT sqlc.arg(week_start) AS week_start, sqlc.arg(task_id) AS task_id
-)
+), context AS (
 SELECT
     t.project_id IS NULL AS is_idea,
     CASE WHEN input.week_start BETWEEN p.first_week AND p.last_week THEN 1 ELSE 0 END AS in_range,
@@ -87,7 +87,27 @@ LEFT JOIN v_project_bounds p ON p.id = t.project_id
 LEFT JOIN task_weeks tw
     ON tw.task_id = t.id
    AND tw.week_start = input.week_start
-WHERE t.id = input.task_id;
+WHERE t.id = input.task_id
+), result AS (
+SELECT
+    CASE
+        WHEN is_idea THEN 400
+        WHEN in_range = 0 THEN 400
+        WHEN sqlc.narg(progress) IS NOT NULL AND sqlc.narg(progress) < previous_progress THEN 400
+        ELSE 0
+    END AS status,
+    CASE
+        WHEN is_idea THEN 'ideas cannot be planned'
+        WHEN in_range = 0 THEN 'week is outside the project date range'
+        WHEN sqlc.narg(progress) IS NOT NULL AND sqlc.narg(progress) < previous_progress
+            THEN 'progress cannot be less than the week before'
+        ELSE ''
+    END AS reason,
+    planned_hours, spent_hours, progress, previous_progress
+FROM context
+)
+SELECT status, CAST(reason AS TEXT) AS reason, planned_hours, spent_hours, progress, previous_progress
+FROM result;
 
 -- name: UpsertTaskWeek :one
 INSERT INTO task_weeks (task_id, week_start, planned_hours, spent_hours, progress)
