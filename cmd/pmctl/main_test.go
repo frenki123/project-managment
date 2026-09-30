@@ -12,6 +12,10 @@ import (
 	"testing"
 
 	"cad-development/internal/client"
+	"cad-development/internal/project"
+	"cad-development/internal/subproject"
+	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +29,7 @@ func testRoot(t *testing.T, server *httptest.Server) *cobra.Command {
 }
 
 func TestTableOutputIsBounded(t *testing.T) {
-	values := make([]client.Task, 51)
+	values := make([]task.Task, 51)
 	for i := range values {
 		values[i].ID = int64(i + 1)
 		values[i].Name = fmt.Sprintf("Task %d", i+1)
@@ -81,7 +85,7 @@ func TestUpdateTaskWeekUnlocksSingleRequest(t *testing.T) {
 	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls = %v, want %v", calls, want)
 	}
-	var patch client.WeekPatch
+	var patch weekly.Patch
 	if err := json.Unmarshal([]byte(body), &patch); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +166,7 @@ func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	if !strings.Contains(putBody, `"priority":"high"`) || strings.Contains(putBody, `"name"`) || strings.Contains(putBody, `"project_id"`) {
 		t.Fatalf("unexpected partial patch JSON: %s", putBody)
 	}
-	var input client.TaskInput
+	var input task.Input
 	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
 		t.Fatal(err)
 	}
@@ -195,10 +199,10 @@ func TestTaskPatchSupportsNullAndIdeas(t *testing.T) {
 		t.Fatal(err)
 	}
 	patch := taskPatch(command, flags)
-	if patch.Description == nil || patch.Description.Value != nil || !patch.Description.Set {
+	if !patch.Description.Present || patch.Description.Value != nil {
 		t.Fatalf("description was not cleared: %#v", patch.Description)
 	}
-	if patch.ProjectID == nil || patch.ProjectID.Value != nil || patch.SubprojectID == nil || patch.SubprojectID.Value != nil {
+	if !patch.ProjectID.Present || patch.ProjectID.Value != nil || !patch.SubprojectID.Present || patch.SubprojectID.Value != nil {
 		t.Fatalf("ideas did not clear assignments: project=%#v subproject=%#v", patch.ProjectID, patch.SubprojectID)
 	}
 }
@@ -310,7 +314,7 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var input client.ProjectInput
+	var input project.Input
 	if err := json.Unmarshal([]byte(body), &input); err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +344,7 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	var input client.SubprojectInput
+	var input subproject.Input
 	if err := json.Unmarshal([]byte(body), &input); err != nil {
 		t.Fatal(err)
 	}

@@ -598,6 +598,50 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	}
 }
 
+func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	pid := createProject(t, mux, "P", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	put := func(body string, want int) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(body))))
+		if rr.Code != want {
+			t.Fatalf("week %s: expected %d, got %d %s", body, want, rr.Code, rr.Body.String())
+		}
+	}
+	put(`{"progress":30}`, http.StatusOK)
+	put(`{"progress":null}`, http.StatusOK)
+	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+	if err != nil || row.Progress.Valid {
+		t.Fatalf("progress null should clear stored progress: %#v %v", row, err)
+	}
+}
+
+func TestJSONRejectsClearProgressUnknownField(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	pid := createProject(t, mux, "P", start)
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	put := func(body string, want int) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(body))))
+		if rr.Code != want {
+			t.Fatalf("week %s: expected %d, got %d %s", body, want, rr.Code, rr.Body.String())
+		}
+	}
+	put(`{"progress":30}`, http.StatusOK)
+	put(`{"progress":30,"clear_progress":true}`, http.StatusBadRequest)
+}
+
 func TestJSONContractConsistency(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

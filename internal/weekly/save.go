@@ -12,11 +12,10 @@ import (
 )
 
 type Patch struct {
-	PlannedHours  *float64 `json:"planned_hours"`
-	SpentHours    *float64 `json:"spent_hours"`
-	Progress      *float64 `json:"progress"`
-	ClearProgress bool     `json:"clear_progress,omitempty"`
-	Unlock        bool     `json:"unlock,omitempty"`
+	PlannedHours nullable.Optional[float64] `json:"planned_hours,omitzero"`
+	SpentHours   nullable.Optional[float64] `json:"spent_hours,omitzero"`
+	Progress     nullable.Optional[float64] `json:"progress,omitzero"`
+	Unlock       bool                       `json:"unlock,omitzero"`
 }
 
 type Cell struct {
@@ -31,24 +30,23 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	if _, err := Parse(weekStart.String()); err != nil {
 		return Cell{}, err
 	}
-	if patch.PlannedHours == nil && patch.SpentHours == nil && patch.Progress == nil && !patch.ClearProgress {
+	if (!patch.PlannedHours.Present || patch.PlannedHours.Value == nil) &&
+		(!patch.SpentHours.Present || patch.SpentHours.Value == nil) &&
+		!patch.Progress.Present {
 		return Cell{}, app.Invalid("at least one value is required")
 	}
-	if patch.Progress != nil && patch.ClearProgress {
-		return Cell{}, app.Invalid("progress and clear_progress cannot both be set")
-	}
-	if patch.PlannedHours != nil {
-		if err := validHours(*patch.PlannedHours); err != nil {
+	if patch.PlannedHours.Present && patch.PlannedHours.Value != nil {
+		if err := validHours(*patch.PlannedHours.Value); err != nil {
 			return Cell{}, err
 		}
 	}
-	if patch.SpentHours != nil {
-		if err := validHours(*patch.SpentHours); err != nil {
+	if patch.SpentHours.Present && patch.SpentHours.Value != nil {
+		if err := validHours(*patch.SpentHours.Value); err != nil {
 			return Cell{}, err
 		}
 	}
-	if patch.Progress != nil {
-		if err := validProgress(*patch.Progress); err != nil {
+	if patch.Progress.Present && patch.Progress.Value != nil {
+		if err := validProgress(*patch.Progress.Value); err != nil {
 			return Cell{}, err
 		}
 	}
@@ -71,19 +69,19 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		}
 
 		planned, spent := contextRow.PlannedHours, contextRow.SpentHours
-		if patch.PlannedHours != nil {
-			planned = *patch.PlannedHours
+		if patch.PlannedHours.Present && patch.PlannedHours.Value != nil {
+			planned = *patch.PlannedHours.Value
 		}
-		if patch.SpentHours != nil {
-			spent = *patch.SpentHours
+		if patch.SpentHours.Present && patch.SpentHours.Value != nil {
+			spent = *patch.SpentHours.Value
 		}
 		carried := contextRow.PreviousProgress
-		store := patch.Progress != nil && *patch.Progress > carried
+		store := patch.Progress.Present && patch.Progress.Value != nil && *patch.Progress.Value > carried
 		progress := contextRow.Progress
 		switch {
 		case store:
-			progress = nullable.Float64(patch.Progress)
-		case patch.Progress != nil || patch.ClearProgress:
+			progress = nullable.Float64(patch.Progress.Value)
+		case patch.Progress.Present:
 			progress = sql.NullFloat64{}
 		}
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
@@ -96,7 +94,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			if err := txq.UpdateTaskWeeksProgressAfter(ctx, db.UpdateTaskWeeksProgressAfterParams{
 				TaskID:    taskID,
 				WeekStart: weekStart.String(),
-				Progress:  nullable.Float64(patch.Progress),
+				Progress:  nullable.Float64(patch.Progress.Value),
 			}); err != nil {
 				return err
 			}

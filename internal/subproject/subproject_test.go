@@ -36,7 +36,7 @@ func TestHoursCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{
-		ProjectID: *nullable.Set(p.ID), Name: *nullable.Set("B"), TotalHours: *nullable.Set(5.0),
+		ProjectID: nullable.Present(p.ID), Name: nullable.Present("B"), TotalHours: nullable.Present(5.0),
 	}); err == nil {
 		t.Fatal("expected update cap")
 	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
@@ -91,7 +91,7 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{
-		ProjectID: *nullable.Set(second.ID), Name: *nullable.Set(sp.Name), TotalHours: *nullable.Set(sp.TotalHours),
+		ProjectID: nullable.Present(second.ID), Name: nullable.Present(sp.Name), TotalHours: nullable.Present(sp.TotalHours),
 	})
 	var httpErr app.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "record is still used by other data" {

@@ -7,7 +7,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"cad-development/internal/client"
+	"cad-development/internal/project"
+	"cad-development/internal/subproject"
+	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 )
 
 const maxTableRows = 50
@@ -60,7 +63,7 @@ func ellipsis(value string, width int) string {
 	return value[:width-3] + "..."
 }
 
-func projectTable(w io.Writer, projects []client.Project) error {
+func projectTable(w io.Writer, projects []project.Project) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tNAME\tPO\tTOTAL\tPLANNED\tSPENT\tPROGRESS")
 	limit, more := tableLimit(len(projects))
@@ -70,7 +73,7 @@ func projectTable(w io.Writer, projects []client.Project) error {
 	tableMore(t, more)
 	return t.Flush()
 }
-func subprojectTable(w io.Writer, values []client.Subproject) error {
+func subprojectTable(w io.Writer, values []subproject.Subproject) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tPROJECT\tNAME\tTOTAL\tPLANNED\tSPENT")
 	limit, more := tableLimit(len(values))
@@ -80,7 +83,7 @@ func subprojectTable(w io.Writer, values []client.Subproject) error {
 	tableMore(t, more)
 	return t.Flush()
 }
-func taskTable(w io.Writer, values []client.Task) error {
+func taskTable(w io.Writer, values []task.Task) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "ID\tNAME\tPROJECT\tTOTAL\tSPENT\tPROGRESS\tSTATUS")
 	limit, more := tableLimit(len(values))
@@ -94,7 +97,7 @@ func taskTable(w io.Writer, values []client.Task) error {
 	tableMore(t, more)
 	return t.Flush()
 }
-func weekTable(w io.Writer, v client.WeekCell) error {
+func weekTable(w io.Writer, v weekly.Cell) error {
 	t := tableWriter(w)
 	fmt.Fprintln(t, "TASK\tWEEK\tPLANNED\tSPENT\tPROGRESS")
 	progress := ""
@@ -104,7 +107,7 @@ func weekTable(w io.Writer, v client.WeekCell) error {
 	fmt.Fprintf(t, "%d\t%s\t%.2f\t%.2f\t%s\n", v.TaskID, v.WeekStart, v.PlannedHours, v.SpentHours, progress)
 	return t.Flush()
 }
-func curveTable(w io.Writer, v client.SCurve) error {
+func curveTable(w io.Writer, v project.SCurve) error {
 	t := tableWriter(w)
 	fmt.Fprintf(t, "PROJECT\t%s\n", ellipsis(v.Project.Name, 32))
 	fmt.Fprintln(t, "WEEK\tPLANNED\tSPENT\tEARNED")

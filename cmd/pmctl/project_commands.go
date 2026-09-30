@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"cad-development/internal/client"
 	"cad-development/internal/nullable"
+	"cad-development/internal/project"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +27,7 @@ func projectCommands(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []client.Project{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []project.Project{v}) })
 	}})
 	root.AddCommand(projectCommand("create", s, false), projectCommand("update <id>", s, true), deleteCommand("delete", "project", s, func(ctx context.Context, id int64) error { return s.client.DeleteProject(ctx, id) }))
 	return root
@@ -50,9 +50,9 @@ func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f projectFlags
 	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		var v client.Project
+		var v project.Project
 		if update {
-			in := client.ProjectPatch{}
+			in := project.Patch{}
 			if cmd.Flags().Changed("name") {
 				in.Name = textPatch(f.name)
 			}
@@ -60,7 +60,7 @@ func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 				in.PurchaseOrderName = textPatch(f.purchaseOrder)
 			}
 			if cmd.Flags().Changed("total-hours") {
-				in.TotalHours = nullable.Set(f.totalHours)
+				in.TotalHours = nullable.Present(f.totalHours)
 			}
 			if cmd.Flags().Changed("start-date") {
 				in.StartDate = textPatch(f.startDate)
@@ -78,13 +78,13 @@ func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 			if cmd.Flags().Changed("total-hours") {
 				totalHours = &f.totalHours
 			}
-			in := client.ProjectInput{Name: f.name, PurchaseOrderName: f.purchaseOrder, TotalHours: totalHours, StartDate: f.startDate, EndDate: f.endDate}
+			in := project.Input{Name: f.name, PurchaseOrderName: f.purchaseOrder, TotalHours: totalHours, StartDate: f.startDate, EndDate: f.endDate}
 			v, err = s.client.CreateProject(cmd.Context(), in)
 		}
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []client.Project{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []project.Project{v}) })
 	}}
 	f.addFlags(c)
 	return c

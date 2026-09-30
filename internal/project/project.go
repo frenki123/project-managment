@@ -34,20 +34,20 @@ type Input struct {
 }
 
 type Patch struct {
-	Name              nullable.Optional[string]  `json:"name"`
-	PurchaseOrderName nullable.Optional[string]  `json:"purchase_order_name"`
-	TotalHours        nullable.Optional[float64] `json:"total_hours"`
-	StartDate         nullable.Optional[string]  `json:"start_date"`
-	EndDate           nullable.Optional[string]  `json:"end_date"`
+	Name              nullable.Optional[string]  `json:"name,omitzero"`
+	PurchaseOrderName nullable.Optional[string]  `json:"purchase_order_name,omitzero"`
+	TotalHours        nullable.Optional[float64] `json:"total_hours,omitzero"`
+	StartDate         nullable.Optional[string]  `json:"start_date,omitzero"`
+	EndDate           nullable.Optional[string]  `json:"end_date,omitzero"`
 }
 
 func (in Input) Patch() Patch {
 	patch := Patch{
-		Name: *nullable.Set(in.Name), PurchaseOrderName: *nullable.Set(in.PurchaseOrderName),
-		StartDate: *nullable.Set(in.StartDate), EndDate: *nullable.Set(in.EndDate),
+		Name: nullable.Present(in.Name), PurchaseOrderName: nullable.Present(in.PurchaseOrderName),
+		StartDate: nullable.Present(in.StartDate), EndDate: nullable.Present(in.EndDate),
 	}
 	if in.TotalHours != nil {
-		patch.TotalHours = *nullable.Set(*in.TotalHours)
+		patch.TotalHours = nullable.Present(*in.TotalHours)
 	}
 	return patch
 }

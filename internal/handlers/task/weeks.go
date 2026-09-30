@@ -8,6 +8,7 @@ import (
 	"cad-development/internal/app"
 	"cad-development/internal/db"
 	"cad-development/internal/historyaccess"
+	"cad-development/internal/nullable"
 	taskdomain "cad-development/internal/task"
 	"cad-development/internal/views"
 	"cad-development/internal/weekly"
@@ -79,14 +80,14 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 		return weekly.Patch{}, err
 	}
 	if present {
-		patch.PlannedHours = &planned
+		patch.PlannedHours = nullable.Present(planned)
 	}
 	spent, present, err := app.FormFloatValue(r, "spent_hours")
 	if err != nil {
 		return weekly.Patch{}, err
 	}
 	if present {
-		patch.SpentHours = &spent
+		patch.SpentHours = nullable.Present(spent)
 	}
 	progress, present, err := app.FormFloatValue(r, "progress")
 	if err != nil {
@@ -94,9 +95,9 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 	}
 	if present {
 		if strings.TrimSpace(r.FormValue("progress")) == "" {
-			patch.ClearProgress = true
+			patch.Progress = nullable.Clear[float64]()
 		} else {
-			patch.Progress = &progress
+			patch.Progress = nullable.Present(progress)
 		}
 	}
 	return patch, nil

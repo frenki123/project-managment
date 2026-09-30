@@ -12,6 +12,8 @@ import (
 
 	"cad-development/internal/client"
 	"cad-development/internal/nullable"
+	"cad-development/internal/project"
+	"cad-development/internal/subproject"
 	"github.com/spf13/cobra"
 )
 
@@ -65,11 +67,11 @@ func newRoot(s *commandState) *cobra.Command {
 	return root
 }
 
-func textPatch(value string) *nullable.Optional[string] {
+func textPatch(value string) nullable.Optional[string] {
 	if value == "null" {
 		return nullable.Clear[string]()
 	}
-	return nullable.Set(value)
+	return nullable.Present(value)
 }
 
 func (s *commandState) printer() printer {
@@ -104,7 +106,7 @@ func resolveProject(ctx context.Context, c *client.Client, name string) (int64, 
 		return 0, err
 	}
 	want := strings.TrimSpace(name)
-	var match *client.Project
+	var match *project.Project
 	for i := range projects.Projects {
 		p := &projects.Projects[i]
 		if strings.EqualFold(p.Name, want) {
@@ -126,7 +128,7 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, 
 		return 0, err
 	}
 	want := strings.TrimSpace(name)
-	var match *client.Subproject
+	var match *subproject.Subproject
 	for i := range subprojects.Subprojects {
 		s := &subprojects.Subprojects[i]
 		if strings.EqualFold(s.Name, want) {

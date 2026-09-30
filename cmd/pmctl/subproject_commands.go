@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"cad-development/internal/client"
 	"cad-development/internal/nullable"
+	"cad-development/internal/subproject"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +35,7 @@ func subprojectCommands(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []client.Subproject{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []subproject.Subproject{v}) })
 	}}, subprojectCommand("create", s, false), subprojectCommand("update <id>", s, true), deleteCommand("delete", "subproject", s, func(ctx context.Context, id int64) error { return s.client.DeleteSubproject(ctx, id) }))
 	return root
 }
@@ -56,17 +56,17 @@ func subprojectCommand(use string, s *commandState, update bool) *cobra.Command 
 	var f subprojectFlags
 	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		var v client.Subproject
+		var v subproject.Subproject
 		if update {
-			in := client.SubprojectPatch{}
+			in := subproject.Patch{}
 			if cmd.Flags().Changed("project-id") {
-				in.ProjectID = nullable.Set(f.projectID)
+				in.ProjectID = nullable.Present(f.projectID)
 			}
 			if cmd.Flags().Changed("name") {
 				in.Name = textPatch(f.name)
 			}
 			if cmd.Flags().Changed("total-hours") {
-				in.TotalHours = nullable.Set(f.totalHours)
+				in.TotalHours = nullable.Present(f.totalHours)
 			}
 			id, e := idArg(args)
 			if e != nil {
@@ -78,13 +78,13 @@ func subprojectCommand(use string, s *commandState, update bool) *cobra.Command 
 			if cmd.Flags().Changed("total-hours") {
 				totalHours = &f.totalHours
 			}
-			in := client.SubprojectInput{ProjectID: f.projectID, Name: f.name, TotalHours: totalHours}
+			in := subproject.Input{ProjectID: f.projectID, Name: f.name, TotalHours: totalHours}
 			v, err = s.client.CreateSubproject(cmd.Context(), in)
 		}
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []client.Subproject{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return subprojectTable(w, []subproject.Subproject{v}) })
 	}}
 	f.addFlags(c)
 	return c

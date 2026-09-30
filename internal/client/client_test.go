@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"cad-development/internal/nullable"
+	"cad-development/internal/task"
 )
 
 func newTestClient(t *testing.T, handler http.Handler) *Client {
@@ -24,8 +25,8 @@ func newTestClient(t *testing.T, handler http.Handler) *Client {
 }
 
 func TestTaskPatchOmitsAbsentAndWritesExplicitNull(t *testing.T) {
-	data, err := json.Marshal(TaskPatch{
-		Priority:  nullable.Set("high"),
+	data, err := json.Marshal(task.Patch{
+		Priority:  nullable.Present("high"),
 		ProjectID: nullable.Clear[*int64](),
 	})
 	if err != nil {
@@ -61,7 +62,7 @@ func TestAPIErrorPreservesStatusAndMessage(t *testing.T) {
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte(`{"error":"historical editing is not enabled"}`))
 	}))
-	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, nil)
+	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
 	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "historical editing is not enabled" {
 		t.Fatalf("error = %#v", err)
@@ -84,7 +85,7 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(tc.body))
 			}))
-			err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
+			err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, (*struct{})(nil))
 			apiErr, ok := errors.AsType[*APIError](err)
 			if !ok || apiErr.Status != http.StatusBadGateway || apiErr.Message != tc.want {
 				t.Fatalf("error = %#v", err)
@@ -98,7 +99,7 @@ func TestAPIErrorBodyIsBounded(t *testing.T) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(strings.Repeat("x", maxAPIErrorBody+1024)))
 	}))
-	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, nil)
+	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
 	if !ok || len(apiErr.Message) != maxAPIErrorBody+3 || !strings.HasSuffix(apiErr.Message, "...") {
 		t.Fatalf("error = %#v", err)
@@ -112,7 +113,6 @@ func TestTasksDecodeLargeSuccessfulResponse(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))
-	var err error
 	result, err := c.Tasks(context.Background(), false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestTasksDecodeLargeSuccessfulResponse(t *testing.T) {
 
 func TestEmptySuccessfulResponseIsAccepted(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	if err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, new(TasksResponse)); err != nil {
+	if err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, new(task.TasksResponse)); err != nil {
 		t.Fatal(err)
 	}
 }

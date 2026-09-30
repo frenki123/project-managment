@@ -27,15 +27,15 @@ type Input struct {
 }
 
 type Patch struct {
-	ProjectID  nullable.Optional[int64]   `json:"project_id"`
-	Name       nullable.Optional[string]  `json:"name"`
-	TotalHours nullable.Optional[float64] `json:"total_hours"`
+	ProjectID  nullable.Optional[int64]   `json:"project_id,omitzero"`
+	Name       nullable.Optional[string]  `json:"name,omitzero"`
+	TotalHours nullable.Optional[float64] `json:"total_hours,omitzero"`
 }
 
 func (in Input) Patch() Patch {
-	patch := Patch{ProjectID: *nullable.Set(in.ProjectID), Name: *nullable.Set(in.Name)}
+	patch := Patch{ProjectID: nullable.Present(in.ProjectID), Name: nullable.Present(in.Name)}
 	if in.TotalHours != nil {
-		patch.TotalHours = *nullable.Set(*in.TotalHours)
+		patch.TotalHours = nullable.Present(*in.TotalHours)
 	}
 	return patch
 }
