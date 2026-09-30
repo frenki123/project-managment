@@ -381,6 +381,16 @@ func TestSubprojectListUnknownProjectIsNotFound(t *testing.T) {
 	}
 }
 
+func TestSubprojectFormRejectsMalformedProjectID(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	rr := postForm(t, mux, "/subprojects", "name=SP&project_id=bad&total_hours=")
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid project") || strings.Contains(rr.Body.String(), "total hours is required") {
+		t.Fatalf("expected 400 with invalid project message, got %d %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestJSONUnlockAppliesToOneWeeklyRequest(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

@@ -113,6 +113,29 @@ func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 	}
 }
 
+func TestTaskUpdateReturnsUpdateFailure(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"invalid task"}`))
+			return
+		}
+		http.Error(w, "unexpected request", http.StatusBadRequest)
+	}))
+	defer server.Close()
+	root := testRoot(t, server)
+	root.SetArgs([]string{"tasks", "update", "4", "--name", "X"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected update error")
+	}
+	if len(calls) != 1 || calls[0] != "PUT /api/v1/tasks/4" {
+		t.Fatalf("calls = %v", calls)
+	}
+}
+
 func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	var putBody string
 	var methods []string
