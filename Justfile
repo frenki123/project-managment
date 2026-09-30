@@ -21,6 +21,14 @@ fmt:
 modernize:
     go fix -diff ./...
 
+# Count source lines for the refactor line-count gate.
+# Handwritten counts Go, templ, and SQL that are not generated; the total counts everything tracked.
+loc:
+    @printf 'handwritten go/templ/sql (non-generated, incl tests): '
+    @git ls-files -z '*.go' '*.templ' '*.sql' | grep -zvE '(_templ\.go$|\.sql\.go$)' | xargs -0 wc -l | tail -1
+    @printf 'total tracked source: '
+    @git ls-files -z | xargs -0 wc -l | tail -1
+
 # Generate code and build the local binaries.
 build: generate
     mkdir -p tmp
