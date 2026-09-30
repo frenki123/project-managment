@@ -16,62 +16,62 @@ one S-curve per project.
 ## Features
 
 - **Workboard** (`/`): the main grid. Rows are tasks, columns are weeks derived from the project
-  start/end date. Editable cells for weekly planned hours, weekly spent hours, and current
-  progress. Task, project, and subproject names come from forms, not the grid.
+  start/end date. Editable cells for weekly planned hours, spent hours, and progress; task, project,
+  and subproject names come from forms, not the grid.
 - **All-task summary**: the default workboard view lists every task without weekly columns;
   selecting a project opens that project's weekly planning grid, while Ideas shows unassigned tasks.
-- **Projects**: name, purchase order name, total hours, start/end date. Header strip shows
+- **Projects**: name, purchase order name, total hours, start/end date; header strip shows
   budget, planned, spent, and progress %.
-- **Subprojects**: an extra label inside a project, with its own total hours. Sum of
-  subproject hours cannot exceed project hours.
-- **Ideas**: tasks without a project. They have no weekly columns and cannot be planned until
-  a project is assigned.
-- **Progress rules**: progress is cumulative, cannot decrease, an empty week keeps the last
-  value, and lowering a week raises all later weeks to match.
-- **Historical editing**: by default every week whose Monday falls in a past calendar month is
-  locked. The UI can allow historical editing in that browser for two hours; API clients can set
-  `unlock: true` on an individual weekly update. No access state is stored in SQLite.
-- **S-curve** (`/chart`): per-project Chart.js chart of cumulative planned, spent, and
-  earned hours. Earned value is computed in SQL from the recursive week series.
-- **Task detail**: click a row to open a side panel with all entered and calculated totals,
-  plus an edit button.
-- **Filters**: project (or "Ideas"), optional subproject filter; last project remembered in a
-  cookie.
+- **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
+- **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
+- **Progress rules**: effective progress is a running maximum and never decreases. An empty week
+  carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
+- **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
+  the UI can allow editing in that browser for two hours, and API clients set `unlock: true` on that one update; no access state is stored in SQLite.
+- **S-curve** (`/chart`): per-project Chart.js chart of cumulative planned, spent, and earned
+  hours, computed in SQL from the recursive week series.
+- **Task detail**: click a row to open a side panel with all totals plus an edit button.
+- **Filters**: project (or "Ideas") and optional subproject filter; last project remembered in a cookie.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
-  add `--table` for compact terminal output. `pmctl tasks list` returns all tasks by default and
-  supports name- or ID-based project filters. POST creates use empty values for omitted fields;
-  PUT updates are presence-driven: omitted fields are preserved, `null` clears nullable fields,
-  and numeric zero sets numeric fields to zero. Weekly historical edits requiring `--unlock` send `unlock: true` on
-  that one update request. When both name and ID filters are supplied, names win;
-  project/subproject filters take precedence over `--ideas`. Use `--field null` to clear text or
-  nullable assignments; `--ideas` clears both task assignments. A task reassignment with weekly
-  data returns `409` only when the assignment field was explicitly changed.
+  add `--table` for compact output. `pmctl tasks list` returns all tasks by default; project
+  filters are name- or ID-based, names win if both given. POST creates use empty values for
+  omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
+  fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
+  `--spent-hours`, `--progress <hours>`, `--progress null` clears stored progress); historical
+  edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
+  `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
+  a reassignment with weekly data returns `409` only when that field was explicitly changed.
 
 ## API Contract
 
 Task lists accept `project_id`, `subproject_id`, and `ideas=true`. A subproject filter takes
-precedence over project, ideas, and all-task selection. Missing filters select the default view;
-present but unknown filters return `404`, and a subproject from another selected project returns
-`400`.
+precedence over project, ideas, and all-task selection; missing filters select the default view.
+Unknown filters return `404`; a subproject from another selected project returns `400`.
 
-All API errors use the same envelope and preserve the true HTTP status:
+All API errors use the same envelope and preserve the true HTTP status. Errors raised by SQL
+conflict or scope checks also carry a stable machine `reason` code for automation:
 
 ```json
-{"error":"task not found"}
+{"error":"ideas cannot be planned","reason":"idea-task-not-assignable"}
 ```
 
-API requests always receive JSON, even when HTMX headers are present. Browser and HTMX requests
-receive HTML error views or fragments with the same status. Weekly updates retain
-`clear_progress` because clearing stored progress and setting progress to zero are different
-operations.
+The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, `task-has-weekly-data`
+(week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
+and `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
+`subproject-hours-exceed-project` (project/subproject). Validation errors without a SQL-backed reason omit the key.
 
-Project names are case-insensitively unique and duplicate creates or updates return `409` with
-`project name already exists`. Attempts to delete a referenced project, subproject, or task, or to
-move a subproject that still has tasks, return `409` with `record is still used by other data`.
-Reassigning a task that has weekly data remains `409` with `cannot reassign task with weekly data`.
-An assignment to a missing project or subproject returns `404`; assigning a subproject to a
-different project returns `400` with `subproject does not belong to project`.
+API requests always receive JSON, even when HTMX headers are present; browser and HTMX requests
+get HTML error views or fragments with the same status. Weekly updates are presence-driven: absent
+fields unchanged, `"progress": null` clears the stored value; any value at or below the carried
+one is not stored (the week keeps NULL and carries the value forward); only a value above it
+is stored. Effective progress is a running maximum, so stored progress is strictly increasing.
+
+Project names are case-insensitively unique; duplicate creates or updates return `409` with
+`project name already exists`. Deleting a referenced project, subproject, or task, or moving a
+subproject that still has tasks, returns `409` with `record is still used by other data`;
+reassigning a task with weekly data returns `409` with `cannot reassign task with weekly data`.
+Assigning to a missing project or subproject returns `404`; a subproject from another project returns `400` with `subproject does not belong to project`.
 
 ## Stack
 
@@ -151,10 +151,12 @@ pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 
 ## Layout
 
-Code is organized by domain, not by layer: `internal/task`, `internal/project`,
-`internal/subproject`, `internal/weekly`, `internal/historyaccess`. `internal/app` is the small web
-and database framework; `internal/handlers` holds HTTP wiring; `internal/views` holds `templ`
-components. SQL lives in `sql/queries` and `sql/migrations`, generated code in `internal/db`.
+Code is organized by domain, not by layer: `internal/task`, `internal/project`, `internal/subproject`,
+`internal/weekly`, `internal/historyaccess`. `internal/web` is the small web framework (HTTP helpers,
+errors, CRUD, rendering, recover, static files, validation); `internal/db` holds database open,
+migration wiring, and generated sqlc code, with `internal/db/testkit` as the test helper;
+`internal/nullable` is the optional wire primitive for JSON fields. `internal/handlers` holds HTTP
+wiring; `internal/views` holds `templ` components. SQL lives in `sql/queries` and `sql/migrations`.
 
 ## License
 

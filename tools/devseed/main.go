@@ -239,7 +239,7 @@ func progressAt(s style, i, span int, final float64) *float64 {
 		value = final * float64(i+1) / float64(span)
 	case styleStepped:
 		step := max(1, span/4)
-		if i < span-1 && (i+1)%step != 0 {
+		if (i+1)%step != 0 || i+1 > 4*step {
 			return nil
 		}
 		value = final * float64(min((i+1)/step, 4)) / 4
