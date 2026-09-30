@@ -78,7 +78,7 @@ func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: *nullable.Clear[*int64]()})
+	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
 	if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
@@ -103,7 +103,7 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-01-05", weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	if err := task.Delete(ctx, q, tk.ID); err == nil {
@@ -144,7 +144,7 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 4.0
-	if _, err := weekly.Save(ctx, q, inPart.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := weekly.Save(ctx, q, inPart.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {

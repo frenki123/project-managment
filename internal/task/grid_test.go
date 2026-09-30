@@ -31,10 +31,10 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	first, later := 20.0, 40.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{Progress: &first}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{Progress: nullable.Present(first)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-21", weekly.Patch{Progress: &later}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-21", weekly.Patch{Progress: nullable.Present(later)}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
@@ -77,10 +77,10 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	secondPlanned := 50.0
 	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: &firstPlanned, SpentHours: &firstSpent, Progress: &progress}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(firstPlanned), SpentHours: nullable.Present(firstSpent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: &secondPlanned, SpentHours: &secondSpent}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(secondPlanned), SpentHours: nullable.Present(secondSpent)}, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,12 +146,12 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: &hours}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	secondID := second.ID
 	_, err = task.Update(ctx, q, item.ID, task.Patch{
-		Name: *nullable.Set(item.Name), ProjectID: *nullable.Set(&secondID),
+		Name: nullable.Present(item.Name), ProjectID: nullable.Present(&secondID),
 	})
 	httpErr, ok := errors.AsType[app.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusConflict {
@@ -185,7 +185,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	planned, spent, progress := 6.0, 4.0, 50.0
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, SpentHours: &spent, Progress: &progress}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), strconv.FormatInt(subprojectID, 10)), now, false)

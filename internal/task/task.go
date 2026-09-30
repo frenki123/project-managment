@@ -55,31 +55,27 @@ type Input struct {
 }
 
 type Patch struct {
-	Name                nullable.Optional[string] `json:"name"`
-	Description         nullable.Optional[string] `json:"description"`
-	ImplementationNotes nullable.Optional[string] `json:"implementation_notes"`
-	Department          nullable.Optional[string] `json:"department"`
-	Developers          nullable.Optional[string] `json:"developers"`
-	Priority            nullable.Optional[string] `json:"priority"`
-	ProjectID           nullable.Optional[*int64] `json:"project_id"`
-	SubprojectID        nullable.Optional[*int64] `json:"subproject_id"`
+	Name                nullable.Optional[string] `json:"name,omitzero"`
+	Description         nullable.Optional[string] `json:"description,omitzero"`
+	ImplementationNotes nullable.Optional[string] `json:"implementation_notes,omitzero"`
+	Department          nullable.Optional[string] `json:"department,omitzero"`
+	Developers          nullable.Optional[string] `json:"developers,omitzero"`
+	Priority            nullable.Optional[string] `json:"priority,omitzero"`
+	ProjectID           nullable.Optional[*int64] `json:"project_id,omitzero"`
+	SubprojectID        nullable.Optional[*int64] `json:"subproject_id,omitzero"`
 }
 
 func (in Input) Patch() Patch {
 	return Patch{
-		Name:                *nullable.Set(in.Name),
-		Description:         *nullable.Set(in.Description),
-		ImplementationNotes: *nullable.Set(in.ImplementationNotes),
-		Department:          *nullable.Set(in.Department),
-		Developers:          *nullable.Set(in.Developers),
-		Priority:            *nullable.Set(in.Priority),
-		ProjectID:           optionalID(in.ProjectID),
-		SubprojectID:        optionalID(in.SubprojectID),
+		Name:                nullable.Present(in.Name),
+		Description:         nullable.Present(in.Description),
+		ImplementationNotes: nullable.Present(in.ImplementationNotes),
+		Department:          nullable.Present(in.Department),
+		Developers:          nullable.Present(in.Developers),
+		Priority:            nullable.Present(in.Priority),
+		ProjectID:           nullable.Present(in.ProjectID),
+		SubprojectID:        nullable.Present(in.SubprojectID),
 	}
-}
-
-func optionalID(value *int64) nullable.Optional[*int64] {
-	return nullable.Optional[*int64]{Value: &value, Set: true}
 }
 
 type TasksResponse struct {
@@ -233,8 +229,8 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		if err != nil {
 			return err
 		}
-		if patch.ProjectID.Set && patch.ProjectID.Value == nil && current.SubprojectID.Valid &&
-			(!patch.SubprojectID.Set || patch.SubprojectID.Value != nil) {
+		if patch.ProjectID.Present && patch.ProjectID.Value == nil && current.SubprojectID.Valid &&
+			(!patch.SubprojectID.Present || patch.SubprojectID.Value != nil) {
 			return app.Invalid("project cannot be cleared while subproject is assigned")
 		}
 		currentInput := Input{
@@ -267,8 +263,8 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
-		projectChanged := patch.ProjectID.Set && current.ProjectID != nullable.Int64(in.ProjectID)
-		subprojectChanged := patch.SubprojectID.Set && current.SubprojectID != nullable.Int64(in.SubprojectID)
+		projectChanged := patch.ProjectID.Present && current.ProjectID != nullable.Int64(in.ProjectID)
+		subprojectChanged := patch.SubprojectID.Present && current.SubprojectID != nullable.Int64(in.SubprojectID)
 		if projectChanged || subprojectChanged {
 			hasWeeks, err := txq.HasTaskWeeks(ctx, id)
 			if err != nil {

@@ -28,7 +28,7 @@ func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &hours}, testNow()); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow()); err != nil {
 		t.Fatal(err)
 	}
 	if err := project.Delete(ctx, q, p.ID); err == nil {
@@ -58,13 +58,13 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-10-05", weekly.Patch{PlannedHours: &hours}, testNow()); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-10-05", weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow()); err != nil {
 		t.Fatal(err)
 	}
 	p.EndDate = "2026-09-30"
 	if _, err := project.Update(ctx, q, p.ID, project.Patch{
-		Name: *nullable.Set(p.Name), TotalHours: *nullable.Set(p.TotalHours),
-		StartDate: *nullable.Set(p.StartDate), EndDate: *nullable.Set(p.EndDate),
+		Name: nullable.Present(p.Name), TotalHours: nullable.Present(p.TotalHours),
+		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
 	}); err == nil {
 		t.Fatal("expected date change to be rejected")
 	}
@@ -142,8 +142,8 @@ func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = project.Update(ctx, q, second.ID, project.Patch{
-		Name: *nullable.Set(first.Name), TotalHours: *nullable.Set(-1.0),
-		StartDate: *nullable.Set(second.StartDate), EndDate: *nullable.Set(second.EndDate),
+		Name: nullable.Present(first.Name), TotalHours: nullable.Present(-1.0),
+		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
 	var httpErr app.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
@@ -169,8 +169,8 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = project.Update(ctx, q, second.ID, project.Patch{
-		Name: *nullable.Set("  Alpha  "), TotalHours: *nullable.Set(second.TotalHours),
-		StartDate: *nullable.Set(second.StartDate), EndDate: *nullable.Set(second.EndDate),
+		Name: nullable.Present("  Alpha  "), TotalHours: nullable.Present(second.TotalHours),
+		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
 	var httpErr app.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
@@ -206,8 +206,8 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = project.Update(ctx, q, p.ID, project.Patch{
-		Name: *nullable.Set(p.Name), TotalHours: *nullable.Set(5.0),
-		StartDate: *nullable.Set(p.StartDate), EndDate: *nullable.Set(p.EndDate),
+		Name: nullable.Present(p.Name), TotalHours: nullable.Present(5.0),
+		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
 	})
 	if err == nil {
 		t.Fatal("expected project total below subprojects to be rejected")
@@ -235,7 +235,7 @@ func TestEarnedHoursKeepsFractionalHours(t *testing.T) {
 		t.Fatal(err)
 	}
 	planned, progress := 100.0, 62.9
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: &planned, Progress: &progress}, testNow()); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), Progress: nullable.Present(progress)}, testNow()); err != nil {
 		t.Fatal(err)
 	}
 	got, err := project.Get(ctx, q, p.ID)

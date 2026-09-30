@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"cad-development/internal/client"
 	"cad-development/internal/nullable"
+	"cad-development/internal/task"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +44,7 @@ func taskCommands(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []client.Task{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []task.Task{v}) })
 	}}, taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
 	return root
 }
@@ -67,8 +67,8 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().BoolVar(&f.ideas, "ideas", false, "leave the task unassigned")
 }
 
-func taskInput(cmd *cobra.Command, f taskFlags) client.TaskInput {
-	in := client.TaskInput{
+func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
+	in := task.Input{
 		Name: f.name, Description: f.description, ImplementationNotes: f.notes,
 		Department: f.department, Developers: f.developers, Priority: f.priority,
 	}
@@ -84,8 +84,8 @@ func taskInput(cmd *cobra.Command, f taskFlags) client.TaskInput {
 	return in
 }
 
-func taskPatch(cmd *cobra.Command, f taskFlags) client.TaskPatch {
-	in := client.TaskPatch{}
+func taskPatch(cmd *cobra.Command, f taskFlags) task.Patch {
+	in := task.Patch{}
 	if cmd.Flags().Changed("name") {
 		in.Name = textPatch(f.name)
 	}
@@ -106,11 +106,11 @@ func taskPatch(cmd *cobra.Command, f taskFlags) client.TaskPatch {
 	}
 	if cmd.Flags().Changed("project-id") {
 		id := f.projectID
-		in.ProjectID = nullable.Set(&id)
+		in.ProjectID = nullable.Present(&id)
 	}
 	if cmd.Flags().Changed("subproject-id") {
 		id := f.subprojectID
-		in.SubprojectID = nullable.Set(&id)
+		in.SubprojectID = nullable.Present(&id)
 	}
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID = nullable.Clear[*int64]()
@@ -122,7 +122,7 @@ func taskPatch(cmd *cobra.Command, f taskFlags) client.TaskPatch {
 func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 	var f taskFlags
 	c := &cobra.Command{Use: use, Args: mutationArgs(update), RunE: func(cmd *cobra.Command, args []string) error {
-		var v client.Task
+		var v task.Task
 		var err error
 		if update {
 			in := taskPatch(cmd, f)
@@ -138,7 +138,7 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []client.Task{v}) })
+		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []task.Task{v}) })
 	}}
 	f.addFlags(c)
 	return c
