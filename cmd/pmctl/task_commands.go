@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 
-	"cad-development/internal/nullable"
 	"cad-development/internal/task"
 	"github.com/spf13/cobra"
 )
@@ -71,50 +70,11 @@ func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
 	in := task.Input{
 		Name: f.name, Description: f.description, ImplementationNotes: f.notes,
 		Department: f.department, Developers: f.developers, Priority: f.priority,
-	}
-	if cmd.Flags().Changed("project-id") {
-		in.ProjectID = &f.projectID
-	}
-	if cmd.Flags().Changed("subproject-id") {
-		in.SubprojectID = &f.subprojectID
+		ProjectID:    opt(cmd, "project-id", f.projectID).Value,
+		SubprojectID: opt(cmd, "subproject-id", f.subprojectID).Value,
 	}
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nil, nil
-	}
-	return in
-}
-
-func taskPatch(cmd *cobra.Command, f taskFlags) task.Patch {
-	in := task.Patch{}
-	if cmd.Flags().Changed("name") {
-		in.Name = textPatch(f.name)
-	}
-	if cmd.Flags().Changed("description") {
-		in.Description = textPatch(f.description)
-	}
-	if cmd.Flags().Changed("implementation-notes") {
-		in.ImplementationNotes = textPatch(f.notes)
-	}
-	if cmd.Flags().Changed("department") {
-		in.Department = textPatch(f.department)
-	}
-	if cmd.Flags().Changed("developers") {
-		in.Developers = textPatch(f.developers)
-	}
-	if cmd.Flags().Changed("priority") {
-		in.Priority = textPatch(f.priority)
-	}
-	if cmd.Flags().Changed("project-id") {
-		id := f.projectID
-		in.ProjectID = nullable.Present(&id)
-	}
-	if cmd.Flags().Changed("subproject-id") {
-		id := f.subprojectID
-		in.SubprojectID = nullable.Present(&id)
-	}
-	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
-		in.ProjectID = nullable.Clear[*int64]()
-		in.SubprojectID = nullable.Clear[*int64]()
 	}
 	return in
 }
@@ -125,7 +85,7 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		var v task.Task
 		var err error
 		if update {
-			in := taskPatch(cmd, f)
+			in := taskPatchFromFlags(cmd, f)
 			id, e := idArg(args)
 			if e != nil {
 				return e

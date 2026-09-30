@@ -117,6 +117,21 @@ func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 	}
 }
 
+func TestWeekPatchFromFlagsProgressNullClears(t *testing.T) {
+	c := &cobra.Command{}
+	c.Flags().String("progress", "", "")
+	if err := c.ParseFlags([]string{"--progress", "null"}); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := weekPatchFromFlags(c, 0, 0, "null", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !patch.Progress.Present || patch.Progress.Value != nil {
+		t.Fatalf("progress not cleared: %#v", patch.Progress)
+	}
+}
+
 func TestTaskUpdateReturnsUpdateFailure(t *testing.T) {
 	var calls []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +213,7 @@ func TestTaskPatchSupportsNullAndIdeas(t *testing.T) {
 	if err := command.ParseFlags([]string{"--description", "null", "--ideas"}); err != nil {
 		t.Fatal(err)
 	}
-	patch := taskPatch(command, flags)
+	patch := taskPatchFromFlags(command, flags)
 	if !patch.Description.Present || patch.Description.Value != nil {
 		t.Fatalf("description was not cleared: %#v", patch.Description)
 	}

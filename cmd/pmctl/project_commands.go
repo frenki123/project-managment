@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 
-	"cad-development/internal/nullable"
 	"cad-development/internal/project"
 	"github.com/spf13/cobra"
 )
@@ -52,33 +51,19 @@ func projectCommand(use string, s *commandState, update bool) *cobra.Command {
 		var err error
 		var v project.Project
 		if update {
-			in := project.Patch{}
-			if cmd.Flags().Changed("name") {
-				in.Name = textPatch(f.name)
-			}
-			if cmd.Flags().Changed("purchase-order-name") {
-				in.PurchaseOrderName = textPatch(f.purchaseOrder)
-			}
-			if cmd.Flags().Changed("total-hours") {
-				in.TotalHours = nullable.Present(f.totalHours)
-			}
-			if cmd.Flags().Changed("start-date") {
-				in.StartDate = textPatch(f.startDate)
-			}
-			if cmd.Flags().Changed("end-date") {
-				in.EndDate = textPatch(f.endDate)
-			}
 			id, e := idArg(args)
 			if e != nil {
 				return e
 			}
-			v, err = s.client.UpdateProject(cmd.Context(), id, in)
+			v, err = s.client.UpdateProject(cmd.Context(), id, project.Patch{
+				Name:              stringOpt(cmd, "name", f.name),
+				PurchaseOrderName: stringOpt(cmd, "purchase-order-name", f.purchaseOrder),
+				TotalHours:        opt(cmd, "total-hours", f.totalHours),
+				StartDate:         stringOpt(cmd, "start-date", f.startDate),
+				EndDate:           stringOpt(cmd, "end-date", f.endDate),
+			})
 		} else {
-			var totalHours *float64
-			if cmd.Flags().Changed("total-hours") {
-				totalHours = &f.totalHours
-			}
-			in := project.Input{Name: f.name, PurchaseOrderName: f.purchaseOrder, TotalHours: totalHours, StartDate: f.startDate, EndDate: f.endDate}
+			in := project.Input{Name: f.name, PurchaseOrderName: f.purchaseOrder, StartDate: f.startDate, EndDate: f.endDate, TotalHours: opt(cmd, "total-hours", f.totalHours).Value}
 			v, err = s.client.CreateProject(cmd.Context(), in)
 		}
 		if err != nil {
