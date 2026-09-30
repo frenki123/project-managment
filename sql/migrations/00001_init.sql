@@ -54,9 +54,9 @@ SELECT
     t.id AS task_id,
     t.project_id,
     t.subproject_id,
-    COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-    COALESCE(SUM(tw.spent_hours), 0) AS spent_hours,
-    COALESCE(MAX(tw.progress), 0) AS progress
+    CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
+    CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
+    CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
 FROM tasks t
 LEFT JOIN task_weeks tw ON tw.task_id = t.id
 GROUP BY t.id;
@@ -81,8 +81,8 @@ GROUP BY p.id;
 CREATE VIEW v_project_bounds AS
 SELECT
     p.*,
-    date(p.start_date, '-' || ((strftime('%w', p.start_date) + 6) % 7) || ' days') AS first_week,
-    date(p.end_date, '-' || ((strftime('%w', p.end_date) + 6) % 7) || ' days') AS last_week
+    CAST(date(p.start_date, '-' || ((strftime('%w', p.start_date) + 6) % 7) || ' days') AS TEXT) AS first_week,
+    CAST(date(p.end_date, '-' || ((strftime('%w', p.end_date) + 6) % 7) || ' days') AS TEXT) AS last_week
 FROM projects p;
 
 CREATE VIEW v_task_week_effective AS

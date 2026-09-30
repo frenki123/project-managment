@@ -40,11 +40,19 @@ DELETE FROM projects
 WHERE id = ?
 RETURNING id;
 
+-- name: ProjectNameConflict :one
+-- true when another project already has this name (case-insensitive)
+SELECT EXISTS (
+    SELECT 1 FROM projects
+    WHERE name = CAST(sqlc.arg(name) AS TEXT) COLLATE NOCASE
+      AND id != CAST(sqlc.arg(except_id) AS INTEGER)
+);
+
 -- name: ProjectUpdateConflict :one
 WITH bounds AS (
     SELECT
-        date(sqlc.arg(start_date), '-' || ((strftime('%w', sqlc.arg(start_date)) + 6) % 7) || ' days') AS first_week,
-        date(sqlc.arg(end_date), '-' || ((strftime('%w', sqlc.arg(end_date)) + 6) % 7) || ' days') AS last_week
+        date(CAST(sqlc.arg(start_date) AS TEXT), '-' || ((strftime('%w', CAST(sqlc.arg(start_date) AS TEXT)) + 6) % 7) || ' days') AS first_week,
+        date(CAST(sqlc.arg(end_date) AS TEXT), '-' || ((strftime('%w', CAST(sqlc.arg(end_date) AS TEXT)) + 6) % 7) || ' days') AS last_week
 ), checks AS (
     SELECT
         sqlc.arg(total_hours) < (

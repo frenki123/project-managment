@@ -303,7 +303,7 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
 		}
-		return app.ReferencedConflict(err)
+		return err
 	})
 	return app.ReferencedConflict(err)
 }

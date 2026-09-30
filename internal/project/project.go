@@ -77,45 +77,57 @@ func fromTotals(row db.VProjectTotal) Project {
 	}
 }
 
-type validatedInput struct {
-	Input
+func validateName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return name, app.Invalid("name is required")
+	}
+	return name, nil
 }
 
-func validate(in Input) (validatedInput, error) {
-	in.Name = strings.TrimSpace(in.Name)
+func validateFields(in Input) (Input, error) {
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
-	if in.Name == "" {
-		return validatedInput{}, app.Invalid("name is required")
-	}
 	if in.TotalHours == nil {
-		return validatedInput{}, app.Invalid("total_hours is required")
+		return in, app.Invalid("total_hours is required")
 	}
 	if !app.NonNegativeFinite(*in.TotalHours) {
-		return validatedInput{}, app.Invalid("hours cannot be negative")
+		return in, app.Invalid("hours cannot be negative")
 	}
 	start, err := weekly.ParseDate(in.StartDate)
 	if err != nil {
-		return validatedInput{}, app.Invalid("invalid start_date")
+		return in, app.Invalid("invalid start_date")
 	}
 	end, err := weekly.ParseDate(in.EndDate)
 	if err != nil {
-		return validatedInput{}, app.Invalid("invalid end_date")
+		return in, app.Invalid("invalid end_date")
 	}
 	if end.Before(start) {
-		return validatedInput{}, app.Invalid("end_date must be on or after start_date")
+		return in, app.Invalid("end_date must be on or after start_date")
 	}
 	in.StartDate = start.Format(time.DateOnly)
 	in.EndDate = end.Format(time.DateOnly)
-	return validatedInput{Input: in}, nil
+	return in, nil
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
-	validated, err := validate(in)
+	name, err := validateName(in.Name)
 	if err != nil {
 		return Project{}, err
 	}
+	in.Name = name
 	var id int64
 	err = q.InTx(ctx, func(txq *db.Queries) error {
+		taken, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: 0})
+		if err != nil {
+			return err
+		}
+		if taken {
+			return app.Conflict("project name already exists")
+		}
+		validated, err := validateFields(in)
+		if err != nil {
+			return err
+		}
 		row, err := txq.CreateProject(ctx, db.CreateProjectParams{
 			Name:              validated.Name,
 			PurchaseOrderName: validated.PurchaseOrderName,
@@ -205,7 +217,18 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 			StartDate:         patch.StartDate.Apply(current.StartDate),
 			EndDate:           patch.EndDate.Apply(current.EndDate),
 		}
-		validated, err := validate(in)
+		in.Name, err = validateName(in.Name)
+		if err != nil {
+			return err
+		}
+		taken, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: id})
+		if err != nil {
+			return err
+		}
+		if taken {
+			return app.Conflict("project name already exists")
+		}
+		validated, err := validateFields(in)
 		if err != nil {
 			return err
 		}
@@ -245,7 +268,7 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("project not found")
 		}
-		return app.ReferencedConflict(err)
+		return err
 	})
 	return app.ReferencedConflict(err)
 }
