@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"cad-development/internal/app"
 	"cad-development/internal/db"
@@ -87,9 +88,25 @@ func projectOpts(ctxq *db.Queries, r *http.Request, selected int64) ([]task.Opti
 	return out, nil
 }
 
+func parseProjectID(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || id < 1 {
+		return 0, app.HTTPError{Status: http.StatusBadRequest, Message: "invalid project_id"}
+	}
+	return id, nil
+}
+
 func renderSubprojectForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals views.SubprojectFormValues, action, title, deleteAction string, err error) {
 	httpErr := app.HTTPErrorFrom(err)
-	selected, _ := strconv.ParseInt(vals.ProjectID, 10, 64)
+	selected, parseErr := parseProjectID(vals.ProjectID)
+	if parseErr != nil {
+		httpErr = app.HTTPErrorFrom(parseErr)
+		vals.ProjectID = ""
+	}
 	opts, optsErr := projectOpts(q, r, selected)
 	if optsErr != nil {
 		app.WriteFragmentError(w, r, optsErr)

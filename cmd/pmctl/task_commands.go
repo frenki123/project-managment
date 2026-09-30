@@ -126,9 +126,9 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		var err error
 		if update {
 			in := taskPatch(cmd, f)
-			id, err := idArg(args)
-			if err != nil {
-				return err
+			id, e := idArg(args)
+			if e != nil {
+				return e
 			}
 			v, err = s.client.UpdateTask(cmd.Context(), id, in)
 		} else {
