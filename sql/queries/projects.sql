@@ -63,7 +63,11 @@ WHERE id = ?
 RETURNING id;
 
 -- name: ProjectUpdateConflict :one
-WITH checks AS (
+WITH bounds AS (
+    SELECT
+        date(sqlc.arg(start_date), '-' || ((strftime('%w', sqlc.arg(start_date)) + 6) % 7) || ' days') AS first_week,
+        date(sqlc.arg(end_date), '-' || ((strftime('%w', sqlc.arg(end_date)) + 6) % 7) || ' days') AS last_week
+), checks AS (
     SELECT
         sqlc.arg(total_hours) < (
             SELECT COALESCE(SUM(total_hours), 0)
@@ -75,8 +79,8 @@ WITH checks AS (
             FROM task_weeks tw
             JOIN tasks t ON t.id = tw.task_id
             WHERE t.project_id = sqlc.arg(project_id)
-              AND (tw.week_start < sqlc.arg(first_week)
-                   OR tw.week_start > sqlc.arg(last_week))
+              AND (tw.week_start < (SELECT first_week FROM bounds)
+                   OR tw.week_start > (SELECT last_week FROM bounds))
         ) AS weeks_outside
 )
 SELECT

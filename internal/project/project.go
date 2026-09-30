@@ -79,8 +79,6 @@ func fromTotals(row db.ListProjectsWithTotalsRow) Project {
 
 type validatedInput struct {
 	Input
-	Start time.Time
-	End   time.Time
 }
 
 func validate(in Input) (validatedInput, error) {
@@ -108,7 +106,7 @@ func validate(in Input) (validatedInput, error) {
 	}
 	in.StartDate = start.Format(time.DateOnly)
 	in.EndDate = end.Format(time.DateOnly)
-	return validatedInput{Input: in, Start: start, End: end}, nil
+	return validatedInput{Input: in}, nil
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
@@ -213,9 +211,9 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		}
 		conflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
 			ProjectID:  id,
+			StartDate:  validated.StartDate,
+			EndDate:    validated.EndDate,
 			TotalHours: *validated.TotalHours,
-			FirstWeek:  weekly.MondayOnOrBefore(validated.Start).Format(time.DateOnly),
-			LastWeek:   weekly.MondayOnOrBefore(validated.End).Format(time.DateOnly),
 		})
 		if err != nil {
 			return err

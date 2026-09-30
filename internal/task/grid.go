@@ -178,21 +178,6 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 		data.SubprojectName = resolved.Subproject.Name
 	}
 
-	start, err := weekly.ParseDate(proj.StartDate)
-	if err != nil {
-		return Grid{}, err
-	}
-	end, err := weekly.ParseDate(proj.EndDate)
-	if err != nil {
-		return Grid{}, err
-	}
-	for _, ws := range weekly.WeekStarts(start, end) {
-		info, err := weekly.Info(ws)
-		if err != nil {
-			return Grid{}, err
-		}
-		data.Weeks = append(data.Weeks, info)
-	}
 	data.POName = proj.PurchaseOrderName
 	data.BudgetHours = proj.TotalHours
 	weeks, err := q.ListTaskWeeksByProject(ctx, sql.NullInt64{Int64: pid, Valid: true})
@@ -227,6 +212,11 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 			return Grid{}, err
 		}
 		for _, row := range rows {
+			info, err := weekly.Info(weekly.WeekStart(row.WeekStart))
+			if err != nil {
+				return Grid{}, err
+			}
+			data.Weeks = append(data.Weeks, info)
 			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
 				Planned: row.PlannedHours, Spent: row.SpentHours,
 			})
@@ -249,6 +239,11 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 			return Grid{}, err
 		}
 		for _, row := range rows {
+			info, err := weekly.Info(weekly.WeekStart(row.WeekStart))
+			if err != nil {
+				return Grid{}, err
+			}
+			data.Weeks = append(data.Weeks, info)
 			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
 				Planned: row.PlannedHours, Spent: row.SpentHours,
 			})
@@ -279,7 +274,7 @@ func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 			ws := info.Start
 			cw := cellByWeek[string(ws)]
 			if cw.WeekStart != "" {
-				progress = effectiveProgress(cw.EffectiveProgress)
+				progress = cw.EffectiveProgress
 			}
 			row.Cells = append(row.Cells, GridCell{
 				WeekStart: ws,

@@ -75,11 +75,11 @@ SELECT
     tw.planned_hours,
     tw.spent_hours,
     tw.progress,
-    COALESCE(MAX(tw.progress) OVER (
+    CAST(COALESCE(MAX(tw.progress) OVER (
         PARTITION BY tw.task_id
         ORDER BY tw.week_start
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ), 0) AS effective_progress
+    ), 0) AS REAL) AS effective_progress
 FROM task_weeks tw;
 
 -- +goose Down
