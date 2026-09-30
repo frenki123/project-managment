@@ -2,6 +2,7 @@
 Build a local-first web app for project hour planning, time tracking, and progress tracking.
 
 # Development rules
+- When a minimal quick fix and a better long-term design conflict, always choose the better long-term design.
 - One Go executable; embed templates, static assets, and Goose migrations.
 - Single user on localhost; SQLite with modernc.org/sqlite; no auth.
 - Use net/http, sqlc, templ, HTMX 4, hyperscript, Pico CSS, and Chart.js.
@@ -16,7 +17,7 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Do not use curl or sqlite3 CLI checks as a substitute for Go tests.
 - Prefer small, stable Go mock tests for important calculations and HTTP handlers.
 - Organize by domain (task, project, subproject, etc.), not by technical layer. only exception is `internal\app` that will be used as small web&db framework.
-- Do not commit. Run `just` checks and report results; I will confirm when a commit should be made.
+- Never commit directly to `main`; always open a PR. Run `just check` before opening it.
 - Keep the shared UI, REST, and CLI contract documented in the README API Contract section when behavior changes.
 
 # Go 1.27
