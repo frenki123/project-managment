@@ -101,7 +101,7 @@ func FromDB(t db.Task) Task {
 	return out
 }
 
-func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
+func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
 	in.ImplementationNotes = strings.TrimSpace(in.ImplementationNotes)
@@ -117,50 +117,44 @@ func validate(ctx context.Context, q *db.Queries, in Input) (Input, error) {
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
 		return in, app.Invalid("invalid subproject_id")
 	}
-	projectFromSubproject := false
-	if in.SubprojectID != nil {
-		sp, err := q.GetSubproject(ctx, *in.SubprojectID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return in, app.Missing("subproject not found")
-		}
-		if err != nil {
-			return in, err
-		}
-		if in.ProjectID != nil && *in.ProjectID != sp.ProjectID {
-			return in, app.Invalid("subproject does not belong to project")
-		}
-		in.ProjectID = new(sp.ProjectID)
-		projectFromSubproject = true
-	}
-	if in.ProjectID != nil && !projectFromSubproject {
-		if _, err := q.GetProject(ctx, *in.ProjectID); errors.Is(err, sql.ErrNoRows) {
-			return in, app.Missing("project not found")
-		} else if err != nil {
-			return in, err
-		}
-	}
 	return in, nil
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
-	validated, err := validate(ctx, q, in)
+	validated, err := validate(in)
 	if err != nil {
 		return Task{}, err
 	}
-	row, err := q.CreateTask(ctx, db.CreateTaskParams{
-		Name:                validated.Name,
-		Description:         validated.Description,
-		ImplementationNotes: validated.ImplementationNotes,
-		Department:          validated.Department,
-		Developers:          validated.Developers,
-		Priority:            validated.Priority,
-		ProjectID:           nullable.Int64(validated.ProjectID),
-		SubprojectID:        nullable.Int64(validated.SubprojectID),
+	var id int64
+	err = q.InTx(ctx, func(txq *db.Queries) error {
+		conflict, err := txq.TaskAssignmentConflict(ctx, db.TaskAssignmentConflictParams{
+			ProjectID: nullable.Int64(validated.ProjectID), SubprojectID: nullable.Int64(validated.SubprojectID),
+		})
+		if err != nil {
+			return err
+		}
+		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+			return err
+		}
+		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
+			Name:                validated.Name,
+			Description:         validated.Description,
+			ImplementationNotes: validated.ImplementationNotes,
+			Department:          validated.Department,
+			Developers:          validated.Developers,
+			Priority:            validated.Priority,
+			ProjectID:           nullable.Int64(validated.ProjectID),
+			SubprojectID:        nullable.Int64(validated.SubprojectID),
+		})
+		if err == nil {
+			id = row.ID
+		}
+		return err
 	})
 	if err != nil {
 		return Task{}, err
 	}
-	return Get(ctx, q, row.ID)
+	return Get(ctx, q, id)
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
@@ -185,11 +179,6 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.Progress = totals.Progress
 	out.Status = Status(out.Progress)
 	out.Weeks = make([]weekly.Cell, 0, len(weeks))
-	requested := make([]string, 0, len(weeks))
-	for _, w := range weeks {
-		requested = append(requested, w.WeekStart)
-	}
-	effective := weekly.EffectiveProgress(weeks, requested)
 	for _, w := range weeks {
 		c := weekly.Cell{
 			TaskID:       w.TaskID,
@@ -197,10 +186,24 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 			PlannedHours: w.PlannedHours,
 			SpentHours:   w.SpentHours,
 		}
-		c.Progress = new(effective[w.WeekStart])
+		progress := effectiveProgress(w.EffectiveProgress)
+		c.Progress = new(progress)
 		out.Weeks = append(out.Weeks, c)
 	}
 	return out, nil
+}
+
+func effectiveProgress(value interface{}) float64 {
+	switch value := value.(type) {
+	case float64:
+		return value
+	case int64:
+		return float64(value)
+	case int:
+		return float64(value)
+	default:
+		return 0
+	}
 }
 
 func List(ctx context.Context, q *db.Queries) ([]Task, error) {
@@ -265,18 +268,27 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
 			SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
 		}
-		in, err = validate(ctx, txq, in)
+		in, err = validate(in)
 		if err != nil {
+			return err
+		}
+		conflict, err := txq.TaskAssignmentConflict(ctx, db.TaskAssignmentConflictParams{
+			ProjectID: nullable.Int64(in.ProjectID), SubprojectID: nullable.Int64(in.SubprojectID),
+		})
+		if err != nil {
+			return err
+		}
+		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
 		projectChanged := patch.ProjectID.Set && current.ProjectID != nullable.Int64(in.ProjectID)
 		subprojectChanged := patch.SubprojectID.Set && current.SubprojectID != nullable.Int64(in.SubprojectID)
 		if projectChanged || subprojectChanged {
-			weekCount, err := txq.CountTaskWeeksByTask(ctx, id)
+			hasWeeks, err := txq.HasTaskWeeks(ctx, id)
 			if err != nil {
 				return err
 			}
-			if weekCount > 0 {
+			if hasWeeks {
 				return app.Conflict("cannot reassign task with weekly data")
 			}
 		}
@@ -300,20 +312,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	return q.InTx(ctx, func(txq *db.Queries) error {
-		weeks, err := txq.CountTaskWeeksByTask(ctx, id)
-		if err != nil {
-			return err
-		}
-		if weeks > 0 {
-			return app.Conflict("cannot delete a task with weekly history")
-		}
-		_, err = txq.DeleteTask(ctx, id)
+	err := q.InTx(ctx, func(txq *db.Queries) error {
+		_, err := txq.DeleteTask(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("task not found")
 		}
-		return err
+		return app.ReferencedConflict(err)
 	})
+	return app.ReferencedConflict(err)
 }
 
 func mapTasks(ctx context.Context, q *db.Queries, rows []db.Task, scope string, ownerID int64) ([]Task, error) {

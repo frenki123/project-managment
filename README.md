@@ -66,6 +66,13 @@ receive HTML error views or fragments with the same status. Weekly updates retai
 `clear_progress` because clearing stored progress and setting progress to zero are different
 operations.
 
+Project names are case-insensitively unique and duplicate creates or updates return `409` with
+`project name already exists`. Attempts to delete a referenced project, subproject, or task, or to
+move a subproject that still has tasks, return `409` with `record is still used by other data`.
+Reassigning a task that has weekly data remains `409` with `cannot reassign task with weekly data`.
+An assignment to a missing project or subproject returns `404`; assigning a subproject to a
+different project returns `400` with `subproject does not belong to project`.
+
 ## Stack
 
 Go 1.27.1, `net/http` (stdlib `ServeMux`, no router dependency), SQLite via

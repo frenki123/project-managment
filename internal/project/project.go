@@ -83,16 +83,11 @@ type validatedInput struct {
 	End   time.Time
 }
 
-func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (validatedInput, error) {
+func validate(in Input) (validatedInput, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.PurchaseOrderName = strings.TrimSpace(in.PurchaseOrderName)
 	if in.Name == "" {
 		return validatedInput{}, app.Invalid("name is required")
-	}
-	if existing, err := q.GetProjectByName(ctx, in.Name); err == nil && existing.ID != exceptID {
-		return validatedInput{}, app.Conflict("project name already exists")
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return validatedInput{}, err
 	}
 	if in.TotalHours == nil {
 		return validatedInput{}, app.Invalid("total_hours is required")
@@ -117,21 +112,31 @@ func validate(ctx context.Context, q *db.Queries, in Input, exceptID int64) (val
 }
 
 func Create(ctx context.Context, q *db.Queries, in Input) (Project, error) {
-	validated, err := validate(ctx, q, in, 0)
+	validated, err := validate(in)
 	if err != nil {
 		return Project{}, err
 	}
-	row, err := q.CreateProject(ctx, db.CreateProjectParams{
-		Name:              validated.Name,
-		PurchaseOrderName: validated.PurchaseOrderName,
-		TotalHours:        *validated.TotalHours,
-		StartDate:         validated.StartDate,
-		EndDate:           validated.EndDate,
+	var id int64
+	err = q.InTx(ctx, func(txq *db.Queries) error {
+		row, err := txq.CreateProject(ctx, db.CreateProjectParams{
+			Name:              validated.Name,
+			PurchaseOrderName: validated.PurchaseOrderName,
+			TotalHours:        *validated.TotalHours,
+			StartDate:         validated.StartDate,
+			EndDate:           validated.EndDate,
+		})
+		if err == nil {
+			id = row.ID
+		}
+		return err
 	})
 	if err != nil {
+		if db.UniqueViolation(err, "projects.name") {
+			return Project{}, app.Conflict("project name already exists")
+		}
 		return Project{}, err
 	}
-	return Get(ctx, q, row.ID)
+	return Get(ctx, q, id)
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Project, error) {
@@ -202,32 +207,32 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 			StartDate:         patch.StartDate.Apply(current.StartDate),
 			EndDate:           patch.EndDate.Apply(current.EndDate),
 		}
-		validated, err := validate(ctx, txq, in, id)
+		validated, err := validate(in)
 		if err != nil {
 			return err
 		}
-		sum, err := txq.SumSubprojectHoursByProject(ctx, id)
-		if err != nil {
-			return err
-		}
-		if *validated.TotalHours < sum {
-			return app.Conflict("project hours cannot be less than subproject hours")
-		}
-		outside, err := txq.CountTaskWeeksOutsideRange(ctx, db.CountTaskWeeksOutsideRangeParams{
-			ProjectID: id,
-			FirstWeek: weekly.MondayOnOrBefore(validated.Start).Format(time.DateOnly),
-			LastWeek:  weekly.MondayOnOrBefore(validated.End).Format(time.DateOnly),
+		conflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
+			ProjectID:  id,
+			TotalHours: *validated.TotalHours,
+			FirstWeek:  weekly.MondayOnOrBefore(validated.Start).Format(time.DateOnly),
+			LastWeek:   weekly.MondayOnOrBefore(validated.End).Format(time.DateOnly),
 		})
 		if err != nil {
 			return err
 		}
-		if outside > 0 {
-			return app.Conflict("project dates cannot exclude existing weekly data")
+		if err := app.FromStatus(int(conflict.Status), conflict.Reason); err != nil {
+			return err
 		}
 		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{
 			Name: validated.Name, PurchaseOrderName: validated.PurchaseOrderName, TotalHours: *validated.TotalHours,
 			StartDate: validated.StartDate, EndDate: validated.EndDate, ID: id,
 		})
+		if errors.Is(err, sql.ErrNoRows) {
+			return app.Missing("project not found")
+		}
+		if db.UniqueViolation(err, "projects.name") {
+			return app.Conflict("project name already exists")
+		}
 		return err
 	})
 	if err != nil {
@@ -237,25 +242,12 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
-	return q.InTx(ctx, func(txq *db.Queries) error {
-		tasks, err := txq.CountTasksByProject(ctx, id)
-		if err != nil {
-			return err
-		}
-		if tasks > 0 {
-			return app.Conflict("cannot delete a project with tasks")
-		}
-		subprojects, err := txq.CountSubprojectsByProject(ctx, id)
-		if err != nil {
-			return err
-		}
-		if subprojects > 0 {
-			return app.Conflict("cannot delete a project with subprojects")
-		}
-		_, err = txq.DeleteProject(ctx, id)
+	err := q.InTx(ctx, func(txq *db.Queries) error {
+		_, err := txq.DeleteProject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Missing("project not found")
 		}
-		return err
+		return app.ReferencedConflict(err)
 	})
+	return app.ReferencedConflict(err)
 }

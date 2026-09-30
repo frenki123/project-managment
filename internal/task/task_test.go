@@ -108,6 +108,8 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	}
 	if err := task.Delete(ctx, q, tk.ID); err == nil {
 		t.Fatal("expected delete with weekly history to be rejected")
+	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+		t.Fatalf("unexpected delete error: %v", err)
 	}
 	if _, err := task.Get(ctx, q, tk.ID); err != nil {
 		t.Fatal("task was deleted after rejected delete")

@@ -28,6 +28,8 @@ func TestHoursCap(t *testing.T) {
 	}
 	if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(5.0)}); err == nil {
 		t.Fatal("expected hours cap")
+	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
+		t.Fatalf("unexpected cap error: %v", err)
 	}
 	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(4.0)})
 	if err != nil {
@@ -37,6 +39,8 @@ func TestHoursCap(t *testing.T) {
 		ProjectID: *nullable.Set(p.ID), Name: *nullable.Set("B"), TotalHours: *nullable.Set(5.0),
 	}); err == nil {
 		t.Fatal("expected update cap")
+	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
+		t.Fatalf("unexpected cap error: %v", err)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
 	if err != nil {
@@ -90,7 +94,7 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 		ProjectID: *nullable.Set(second.ID), Name: *nullable.Set(sp.Name), TotalHours: *nullable.Set(sp.TotalHours),
 	})
 	var httpErr app.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict {
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("got %v", err)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
@@ -118,6 +122,8 @@ func TestCannotDeleteSubprojectWithTasks(t *testing.T) {
 	}
 	if err := subproject.Delete(ctx, q, sp.ID); err == nil {
 		t.Fatal("expected delete with tasks to be rejected")
+	} else if httpErr, ok := errors.AsType[app.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+		t.Fatalf("unexpected delete error: %v", err)
 	}
 	if _, err := subproject.Get(ctx, q, sp.ID); err != nil {
 		t.Fatal("subproject was deleted after rejected delete")

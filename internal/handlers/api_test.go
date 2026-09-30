@@ -57,6 +57,29 @@ func createTask(t *testing.T, mux *http.ServeMux, body []byte) int64 {
 	return tk.ID
 }
 
+func TestJSONDuplicateProjectNameConflict(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := nextMonday(time.Now())
+	createProject(t, mux, "Alpha", start)
+	second := createProject(t, mux, "Beta", start)
+	body := []byte(`{"name":"alpha","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
+	for _, request := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/projects"},
+		{http.MethodPut, "/api/v1/projects/" + strconv.FormatInt(second, 10)},
+	} {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(request.method, request.path, bytes.NewReader(body)))
+		if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), `"error":"project name already exists"`) {
+			t.Fatalf("%s %s: %d %s", request.method, request.path, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestJSONTaskAndWeek(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
