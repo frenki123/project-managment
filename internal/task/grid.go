@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"database/sql"
 	"strconv"
 	"time"
 
@@ -91,206 +90,241 @@ func LoadGrid(ctx context.Context, q *db.Queries, filter Filter, now time.Time, 
 }
 
 func LoadResolvedGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, now time.Time, allowHistoricalEditing bool) (Grid, error) {
-	filter := resolved.Filter
+	return loadGrid(ctx, q, resolved, 0, now, allowHistoricalEditing)
+}
+
+// LoadWeekRow renders just the affected task's row plus the scope weeks and totals.
+func LoadWeekRow(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskID int64, now time.Time, allowHistoricalEditing bool) (Grid, error) {
+	return loadGrid(ctx, q, resolved, taskID, now, allowHistoricalEditing)
+}
+
+type gridContext struct {
+	grid     Grid
+	projects []project.Project
+	subNames map[int64]string
+}
+
+func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskID int64, now time.Time, allowHistoricalEditing bool) (Grid, error) {
+	gc, err := buildGridBase(ctx, q, resolved, allowHistoricalEditing)
+	if err != nil {
+		return Grid{}, err
+	}
+	switch gc.grid.Kind {
+	case ViewAll:
+		return loadAllRows(ctx, q, gc)
+	case ViewIdeas:
+		return loadIdeaRows(ctx, q, gc)
+	}
+	var tasks []Task
+	if resolved.Filter.Subproject != nil {
+		tasks, err = ListBySubproject(ctx, q, *resolved.Filter.Subproject)
+	} else {
+		tasks, err = ListByProject(ctx, q, resolved.Project.ID)
+	}
+	if err != nil {
+		return Grid{}, err
+	}
+	var byTask map[int64][]db.VTaskWeekSeries
+	if taskID != 0 {
+		idx := -1
+		for i := range tasks {
+			if tasks[i].ID == taskID {
+				idx = i
+			}
+		}
+		if idx < 0 {
+			return gc.grid, nil
+		}
+		series, err := q.ListTaskWeekSeriesByTask(ctx, taskID)
+		if err != nil {
+			return Grid{}, err
+		}
+		tasks = tasks[idx : idx+1]
+		byTask = map[int64][]db.VTaskWeekSeries{taskID: series}
+	} else {
+		rows, err := seriesRows(ctx, q, resolved)
+		if err != nil {
+			return Grid{}, err
+		}
+		byTask = make(map[int64][]db.VTaskWeekSeries)
+		for _, row := range rows {
+			byTask[row.TaskID] = append(byTask[row.TaskID], row)
+		}
+	}
+	grid, err := loadScopeSummary(ctx, q, resolved, gc.grid)
+	if err != nil {
+		return Grid{}, err
+	}
+	grid.Rows, err = buildTaskRows(tasks, byTask, grid, gc.subNames, now, allowHistoricalEditing)
+	if err != nil {
+		return Grid{}, err
+	}
+	grid.Overrun = grid.PlannedHours > grid.BudgetHours
+	return grid, nil
+}
+
+func seriesRows(ctx context.Context, q *db.Queries, resolved ResolvedFilter) ([]db.VTaskWeekSeries, error) {
+	if resolved.Filter.Subproject != nil {
+		return q.ListTaskWeekSeriesBySubproject(ctx, *resolved.Filter.Subproject)
+	}
+	return q.ListTaskWeekSeriesByProject(ctx, resolved.Project.ID)
+}
+
+func buildGridBase(ctx context.Context, q *db.Queries, resolved ResolvedFilter, allowHistoricalEditing bool) (gridContext, error) {
 	projects, err := project.List(ctx, q)
 	if err != nil {
-		return Grid{}, err
+		return gridContext{}, err
 	}
-
+	filter := resolved.Filter
+	key := filterProjectKey(filter)
 	kind := ViewProject
 	switch {
-	case filter.All && filter.Subproject == nil:
-		kind = ViewAll
-	case filter.Ideas && filter.Subproject == nil:
-		kind = ViewIdeas
 	case filter.Subproject != nil:
 		kind = ViewSubproject
+	case filter.All:
+		kind = ViewAll
+	case filter.Ideas:
+		kind = ViewIdeas
 	}
-	data := Grid{
-		FilterProject:    filterProjectKey(filter),
-		FilterSubproject: "",
-		Kind:             kind,
-		ProjectName:      "All tasks",
-		Projects:         projectOptions(projects, filterProjectKey(filter)),
+	gc := gridContext{
+		projects: projects,
+		grid:     Grid{FilterProject: key, Kind: kind, ProjectName: "All tasks", Projects: projectOptions(projects, key)},
 	}
-	if kind == ViewAll {
-		tasks, err := List(ctx, q)
-		if err != nil {
-			return Grid{}, err
-		}
-		projectNames := make(map[int64]string, len(projects))
-		for _, p := range projects {
-			projectNames[p.ID] = p.Name
-		}
-		subs, err := subproject.List(ctx, q)
-		if err != nil {
-			return Grid{}, err
-		}
-		subprojectNames := make(map[int64]string, len(subs))
-		for _, s := range subs {
-			subprojectNames[s.ID] = s.Name
-		}
-		for _, t := range tasks {
-			row := GridRow{
-				ID: t.ID, Name: t.Name, Status: t.Status,
-				TotalHours: t.TotalHours, SpentHours: t.SpentHours,
-				Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10),
-			}
-			if t.ProjectID != nil {
-				row.ProjectName = projectNames[*t.ProjectID]
-			}
-			if t.SubprojectID != nil {
-				row.Subproject = subprojectNames[*t.SubprojectID]
-			}
-			data.Rows = append(data.Rows, row)
-		}
-		return data, nil
+	if !IsWeekly(kind) {
+		return gc, nil
 	}
-	if kind == ViewIdeas {
-		tasks, err := ListIdeas(ctx, q)
-		if err != nil {
-			return Grid{}, err
-		}
-		for _, t := range tasks {
-			data.Rows = append(data.Rows, GridRow{
-				ID:          t.ID,
-				Name:        t.Name,
-				ProjectName: "",
-				Subproject:  "",
-				DetailPath:  "/tasks/" + strconv.FormatInt(t.ID, 10),
-			})
-		}
-		return data, nil
-	}
-	data.HistoricalEditingAllowed = allowHistoricalEditing
-	pid := resolved.Project.ID
-	proj := project.FromDB(*resolved.Project)
-	subs, err := subproject.ListByProject(ctx, q, pid)
+	proj := resolved.Project
+	subs, err := subproject.ListByProject(ctx, q, proj.ID)
 	if err != nil {
-		return Grid{}, err
+		return gridContext{}, err
 	}
-	data.Subprojects = subprojectOptions(subs, filter.Subproject)
-	data.ProjectName = proj.Name
-	data.StartDate = proj.StartDate
-	data.EndDate = proj.EndDate
-	if resolved.Subproject != nil {
-		data.FilterSubproject = strconv.FormatInt(*filter.Subproject, 10)
-		data.SubprojectName = resolved.Subproject.Name
-	}
-
-	data.POName = proj.PurchaseOrderName
-	data.BudgetHours = proj.TotalHours
-	weeks, err := q.ListTaskWeeksByProject(ctx, sql.NullInt64{Int64: pid, Valid: true})
-	if err != nil {
-		return Grid{}, err
-	}
-	byTask := map[int64][]db.VTaskWeekEffective{}
-	for _, w := range weeks {
-		byTask[w.TaskID] = append(byTask[w.TaskID], w)
-	}
-
-	subNames := map[int64]string{}
+	gc.subNames = make(map[int64]string, len(subs))
 	for _, s := range subs {
-		subNames[s.ID] = s.Name
+		gc.subNames[s.ID] = s.Name
 	}
-
-	var tasks []Task
+	gc.grid.Subprojects = subprojectOptions(subs, filter.Subproject)
+	gc.grid.ProjectName = proj.Name
+	gc.grid.StartDate = proj.StartDate
+	gc.grid.EndDate = proj.EndDate
+	gc.grid.POName = proj.PurchaseOrderName
+	gc.grid.BudgetHours = proj.TotalHours
+	gc.grid.HistoricalEditingAllowed = allowHistoricalEditing
 	if resolved.Subproject != nil {
-		data.BudgetHours = resolved.Subproject.TotalHours
-		tasks, err = ListBySubproject(ctx, q, *filter.Subproject)
+		gc.grid.FilterSubproject = strconv.FormatInt(*filter.Subproject, 10)
+		gc.grid.SubprojectName = resolved.Subproject.Name
+		gc.grid.BudgetHours = resolved.Subproject.TotalHours
+	}
+	return gc, nil
+}
+
+func loadAllRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, error) {
+	tasks, err := List(ctx, q)
+	if err != nil {
+		return Grid{}, err
+	}
+	subs, err := subproject.List(ctx, q)
+	if err != nil {
+		return Grid{}, err
+	}
+	projectNames := make(map[int64]string, len(gc.projects))
+	subprojectNames := make(map[int64]string, len(subs))
+	for _, p := range gc.projects {
+		projectNames[p.ID] = p.Name
+	}
+	for _, s := range subs {
+		subprojectNames[s.ID] = s.Name
+	}
+	grid := gc.grid
+	for _, t := range tasks {
+		row := GridRow{ID: t.ID, Name: t.Name, Status: t.Status, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
+		if t.ProjectID != nil {
+			row.ProjectName = projectNames[*t.ProjectID]
+		}
+		if t.SubprojectID != nil {
+			row.Subproject = subprojectNames[*t.SubprojectID]
+		}
+		grid.Rows = append(grid.Rows, row)
+	}
+	return grid, nil
+}
+
+func loadIdeaRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, error) {
+	tasks, err := ListIdeas(ctx, q)
+	if err != nil {
+		return Grid{}, err
+	}
+	grid := gc.grid
+	for _, t := range tasks {
+		grid.Rows = append(grid.Rows, GridRow{ID: t.ID, Name: t.Name, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)})
+	}
+	return grid, nil
+}
+
+func loadScopeSummary(ctx context.Context, q *db.Queries, resolved ResolvedFilter, grid Grid) (Grid, error) {
+	if resolved.Filter.Subproject != nil {
+		summary, err := q.GetSubprojectTotals(ctx, *resolved.Filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
-		summary, err := q.GetSubprojectTotals(ctx, *filter.Subproject)
-		if err != nil {
-			return Grid{}, err
-		}
-		data.PlannedHours = summary.PlannedHours
-		data.SpentHours = summary.SpentHours
-		rows, err := q.ListSubprojectWeekTotals(ctx, *filter.Subproject)
+		grid.PlannedHours, grid.SpentHours = summary.PlannedHours, summary.SpentHours
+		rows, err := q.ListSubprojectWeekTotals(ctx, *resolved.Filter.Subproject)
 		if err != nil {
 			return Grid{}, err
 		}
 		for _, row := range rows {
-			info, err := weekly.WeekStart(row.WeekStart).Info()
-			if err != nil {
+			if grid, err = addWeekTotal(grid, row.WeekStart, row.PlannedHours, row.SpentHours); err != nil {
 				return Grid{}, err
 			}
-			data.Weeks = append(data.Weeks, info)
-			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-				Planned: row.PlannedHours, Spent: row.SpentHours,
-			})
 		}
-	} else {
-		data.ProgressPct = new(0.0)
-		tasks, err = ListByProject(ctx, q, pid)
-		if err != nil {
+		return grid, nil
+	}
+	grid.ProgressPct = new(0.0)
+	summary, err := q.GetProjectTotals(ctx, resolved.Project.ID)
+	if err != nil {
+		return Grid{}, err
+	}
+	grid.PlannedHours, grid.SpentHours = summary.PlannedHours, summary.SpentHours
+	*grid.ProgressPct = summary.Progress
+	rows, err := q.ListProjectWeekTotals(ctx, resolved.Project.ID)
+	if err != nil {
+		return Grid{}, err
+	}
+	for _, row := range rows {
+		if grid, err = addWeekTotal(grid, row.WeekStart, row.PlannedHours, row.SpentHours); err != nil {
 			return Grid{}, err
-		}
-		summary, err := q.GetProjectTotals(ctx, pid)
-		if err != nil {
-			return Grid{}, err
-		}
-		data.PlannedHours = summary.PlannedHours
-		data.SpentHours = summary.SpentHours
-		*data.ProgressPct = summary.Progress
-		rows, err := q.ListProjectWeekTotals(ctx, pid)
-		if err != nil {
-			return Grid{}, err
-		}
-		for _, row := range rows {
-			info, err := weekly.WeekStart(row.WeekStart).Info()
-			if err != nil {
-				return Grid{}, err
-			}
-			data.Weeks = append(data.Weeks, info)
-			data.WeekTotals = append(data.WeekTotals, GridWeekTotal{
-				Planned: row.PlannedHours, Spent: row.SpentHours,
-			})
 		}
 	}
+	return grid, nil
+}
 
+func addWeekTotal(grid Grid, weekStart string, planned, spent float64) (Grid, error) {
+	info, err := weekly.WeekStart(weekStart).Info()
+	if err != nil {
+		return grid, err
+	}
+	grid.Weeks = append(grid.Weeks, info)
+	grid.WeekTotals = append(grid.WeekTotals, GridWeekTotal{Planned: planned, Spent: spent})
+	return grid, nil
+}
+
+func buildTaskRows(tasks []Task, byTask map[int64][]db.VTaskWeekSeries, grid Grid, subNames map[int64]string, now time.Time, allowHistoricalEditing bool) ([]GridRow, error) {
+	rows := make([]GridRow, 0, len(tasks))
 	for _, t := range tasks {
-		tweeks := byTask[t.ID]
-		cellByWeek := map[string]db.VTaskWeekEffective{}
-		for _, w := range tweeks {
-			cellByWeek[w.WeekStart] = w
-		}
-		row := GridRow{
-			ID:          t.ID,
-			Name:        t.Name,
-			ProjectName: proj.Name,
-			TotalHours:  t.TotalHours,
-			SpentHours:  t.SpentHours,
-			Progress:    t.Progress,
-			Status:      t.Status,
-			DetailPath:  "/tasks/" + strconv.FormatInt(t.ID, 10),
-		}
+		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}
-		progress := 0.0
-		for _, info := range data.Weeks {
-			ws := info.Start
-			cw := cellByWeek[ws.String()]
-			if cw.WeekStart != "" {
-				progress = cw.EffectiveProgress
+		// Series and totals weeks both derive from v_project_bounds, so they align by index.
+		for i, s := range byTask[t.ID] {
+			if i >= len(grid.Weeks) || s.WeekStart != string(grid.Weeks[i].Start) {
+				break
 			}
-			row.Cells = append(row.Cells, GridCell{
-				WeekStart: ws,
-				Planned:   cw.PlannedHours,
-				Spent:     cw.SpentHours,
-				Progress:  progress,
-				Stored:    cw.Progress.Valid,
-				Locked:    !allowHistoricalEditing && ws.IsLocked(now),
-				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + ws.String(),
-			})
+			ws := grid.Weeks[i].Start
+			row.Cells = append(row.Cells, GridCell{WeekStart: ws, Planned: s.PlannedHours, Spent: s.SpentHours, Progress: s.EffectiveProgress, Stored: s.StoredProgress.Valid, Locked: !allowHistoricalEditing && ws.IsLocked(now), SavePath: "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + ws.String()})
 		}
-		data.Rows = append(data.Rows, row)
+		rows = append(rows, row)
 	}
-	data.Overrun = data.PlannedHours > data.BudgetHours
-
-	return data, nil
+	return rows, nil
 }
 
 func projectOptions(projects []project.Project, selected string) []Option {

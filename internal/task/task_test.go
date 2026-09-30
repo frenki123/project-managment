@@ -148,29 +148,29 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		scope string
-		owner int64
-		ids   []int64
+		name string
+		load func() ([]db.VTaskTotal, error)
+		ids  []int64
 	}{
-		{"ideas", 0, []int64{idea.ID}},
-		{"project", first.ID, []int64{inPart.ID}},
-		{"subproject", sp.ID, []int64{inPart.ID}},
-		{"all", 0, []int64{idea.ID, inPart.ID, inSecond.ID}},
+		{"ideas", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsIdeas(ctx) }, []int64{idea.ID}},
+		{"project", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsByProject(ctx, first.ID) }, []int64{inPart.ID}},
+		{"subproject", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsBySubproject(ctx, sp.ID) }, []int64{inPart.ID}},
+		{"all", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsAll(ctx) }, []int64{idea.ID, inPart.ID, inSecond.ID}},
 	} {
-		rows, err := q.ListTaskTotals(ctx, db.ListTaskTotalsParams{Scope: tc.scope, OwnerID: tc.owner})
+		rows, err := tc.load()
 		if err != nil || len(rows) != len(tc.ids) {
-			t.Fatalf("%s totals: %v %v", tc.scope, rows, err)
+			t.Fatalf("%s totals: %v %v", tc.name, rows, err)
 		}
 		ids := make([]int64, 0, len(rows))
 		for _, row := range rows {
 			ids = append(ids, row.TaskID)
 			if row.TaskID == inPart.ID && row.PlannedHours != hours {
-				t.Fatalf("%s lost calculated hours: %v", tc.scope, rows)
+				t.Fatalf("%s lost calculated hours: %v", tc.name, rows)
 			}
 		}
 		slices.Sort(ids)
 		if !slices.Equal(ids, tc.ids) {
-			t.Fatalf("%s included unrelated tasks: %v", tc.scope, ids)
+			t.Fatalf("%s included unrelated tasks: %v", tc.name, ids)
 		}
 	}
 }
