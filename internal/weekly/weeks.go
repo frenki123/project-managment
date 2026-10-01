@@ -7,7 +7,9 @@ import (
 	"cad-development/internal/web"
 )
 
-type WeekStart string
+type WeekStart struct {
+	t time.Time
+}
 
 type WeekInfo struct {
 	Start      WeekStart
@@ -20,43 +22,55 @@ type WeekInfo struct {
 func Parse(s string) (WeekStart, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil || t.Weekday() != time.Monday {
-		return "", web.Invalid("week_start must be a Monday")
+		return WeekStart{}, web.Invalid("week_start must be a Monday")
 	}
-	return WeekStart(t.Format(time.DateOnly)), nil
+	return WeekStart{t: t}, nil
 }
 
-func (w WeekStart) Time() time.Time {
-	t, _ := time.Parse(time.DateOnly, string(w))
-	return t
+func fromMonday(t time.Time) WeekStart {
+	return WeekStart{t: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)}
 }
+
+func (w WeekStart) Time() time.Time { return w.t }
+
+func (w WeekStart) IsZero() bool { return w.t.IsZero() }
+
+func (w WeekStart) Next() WeekStart { return fromMonday(w.t.AddDate(0, 0, 7)) }
 
 func (w WeekStart) IsLocked(now time.Time) bool {
-	t := w.Time()
-	if t.IsZero() || t.Weekday() != time.Monday {
+	if w.t.IsZero() {
 		return true
 	}
-	return t.Year() < now.Year() || t.Year() == now.Year() && t.Month() < now.Month()
+	return w.t.Year() < now.Year() || w.t.Year() == now.Year() && w.t.Month() < now.Month()
 }
 
 func (w WeekStart) Info() (WeekInfo, error) {
-	t := w.Time()
-	if t.IsZero() || t.Weekday() != time.Monday {
+	if w.t.IsZero() {
 		return WeekInfo{}, web.Invalid("week_start must be a Monday")
 	}
-	_, number := t.ISOWeek()
-	return WeekInfo{w, number, t.Format("02.01"), t.Format("2006-01"), t.Format("January 2006")}, nil
+	_, number := w.t.ISOWeek()
+	return WeekInfo{w, number, w.t.Format("02.01"), w.t.Format("2006-01"), w.t.Format("January 2006")}, nil
 }
 
-func (w WeekStart) String() string { return string(w) }
+func (w WeekStart) String() string {
+	if w.t.IsZero() {
+		return ""
+	}
+	return w.t.Format(time.DateOnly)
+}
 
-func (w WeekStart) MarshalJSON() ([]byte, error) { return json.Marshal(string(w)) }
+func (w WeekStart) MarshalJSON() ([]byte, error) { return json.Marshal(w.String()) }
 
 func (w *WeekStart) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	*w = WeekStart(s)
+	parsed, err := Parse(s)
+	if err != nil {
+		return err
+	}
+	*w = parsed
 	return nil
 }
 
@@ -70,12 +84,12 @@ func MondayOnOrBefore(t time.Time) time.Time {
 }
 
 func WeekStarts(start, end time.Time) []WeekStart {
-	w := MondayOnOrBefore(start)
+	w := fromMonday(MondayOnOrBefore(start))
 	last := MondayOnOrBefore(end)
 	var out []WeekStart
-	for !w.After(last) {
-		out = append(out, WeekStart(w.Format(time.DateOnly)))
-		w = w.AddDate(0, 0, 7)
+	for !w.Time().After(last) {
+		out = append(out, w)
+		w = w.Next()
 	}
 	return out
 }

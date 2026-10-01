@@ -31,10 +31,10 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	first, later := 20.0, 40.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{Progress: nullable.Present(first)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(first)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-21", weekly.Patch{Progress: nullable.Present(later)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{Progress: nullable.Present(later)}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
@@ -42,7 +42,7 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, week := range grid.Weeks {
-		if week.Start == "2026-09-14" {
+		if week.Start.String() == "2026-09-14" {
 			if grid.Rows[0].Cells[i].Progress != first || grid.Rows[0].Cells[i].Stored {
 				t.Fatalf("missing week did not carry SQL progress: %#v", grid.Rows[0].Cells[i])
 			}
@@ -75,10 +75,10 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	secondPlanned := 50.0
 	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(firstPlanned), SpentHours: nullable.Present(firstSpent), Progress: nullable.Present(progress)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, first.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(firstPlanned), SpentHours: nullable.Present(firstSpent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(secondPlanned), SpentHours: nullable.Present(secondSpent)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, second.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(secondPlanned), SpentHours: nullable.Present(secondSpent)}, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +96,7 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 		t.Fatalf("expected 25%% progress, got %v", grid.ProgressPct)
 	}
 	for i, week := range grid.Weeks {
-		if week.Start != "2026-09-07" {
+		if week.Start.String() != "2026-09-07" {
 			continue
 		}
 		total := grid.WeekTotals[i]
@@ -114,7 +114,7 @@ weekTotalFound:
 			continue
 		}
 		for _, cell := range row.Cells {
-			if cell.WeekStart == "2026-09-14" {
+			if cell.WeekStart.String() == "2026-09-14" {
 				foundCarryForward = true
 				if cell.Progress != 50 {
 					t.Fatalf("expected progress to carry forward, got %v", cell.Progress)
@@ -144,7 +144,7 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-01-05", weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	secondID := second.ID
@@ -183,7 +183,7 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	planned, spent, progress := 6.0, 4.0, 50.0
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, item.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), strconv.FormatInt(subprojectID, 10)), now, false)
@@ -271,7 +271,7 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 			for _, cell := range grid.Rows[0].Cells {
 				wantLocked := !allowHistoricalEditing && cell.WeekStart.String() < "2026-05-01"
 				if cell.Locked != wantLocked {
-					t.Fatalf("project %d: unexpected lock for %s: %#v", id, cell.WeekStart, cell)
+					t.Fatalf("project %d: unexpected lock for %s: %#v", id, cell.WeekStart.String(), cell)
 				}
 			}
 		}

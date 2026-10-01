@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"cad-development/internal/db/testkit"
 	"cad-development/internal/task"
 	"cad-development/internal/weekly"
 )
@@ -46,7 +47,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	project := renderGrid(t, task.Grid{
 		Kind:  task.ViewProject,
 		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
-		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}},
+		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
 	})
 	for _, label := range []string{"Status", "Summary", "W1"} {
 		if !strings.Contains(project, label) {
@@ -74,7 +75,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 		t.Fatalf("cumulative footer values are still rendered: %s", project)
 	}
 
-	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: "2026-01-05"}}})
+	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}}})
 	if strings.Contains(subproject, ">Earned<") {
 		t.Fatalf("subproject footer should not render earned values: %s", subproject)
 	}

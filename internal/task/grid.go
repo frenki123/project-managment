@@ -298,7 +298,11 @@ func loadScopeSummary(ctx context.Context, q *db.Queries, resolved ResolvedFilte
 }
 
 func addWeekTotal(grid Grid, weekStart string, planned, spent float64) (Grid, error) {
-	info, err := weekly.WeekStart(weekStart).Info()
+	ws, err := weekly.Parse(weekStart)
+	if err != nil {
+		return grid, err
+	}
+	info, err := ws.Info()
 	if err != nil {
 		return grid, err
 	}
@@ -316,7 +320,7 @@ func buildTaskRows(tasks []Task, byTask map[int64][]db.VTaskWeekSeries, grid Gri
 		}
 		// Series and totals weeks both derive from v_project_bounds, so they align by index.
 		for i, s := range byTask[t.ID] {
-			if i >= len(grid.Weeks) || s.WeekStart != string(grid.Weeks[i].Start) {
+			if i >= len(grid.Weeks) || s.WeekStart != grid.Weeks[i].Start.String() {
 				break
 			}
 			ws := grid.Weeks[i].Start

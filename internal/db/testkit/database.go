@@ -7,7 +7,17 @@ import (
 
 	assets "cad-development"
 	"cad-development/internal/db"
+	"cad-development/internal/weekly"
 )
+
+func MustWeek(t *testing.T, s string) weekly.WeekStart {
+	t.Helper()
+	ws, err := weekly.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ws
+}
 
 func Open(t *testing.T) *db.Queries {
 	return OpenDatabase(t).Q
