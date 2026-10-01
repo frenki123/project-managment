@@ -19,42 +19,31 @@ import (
 
 func TestSaveProgressAndLock(t *testing.T) {
 	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid := p.ID
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &pid})
-	if err != nil {
-		t.Fatal(err)
-	}
+	q, _, tkID := newProjectTask(t, 100.0, "2026-01-05", "2026-06-01")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	_, err = weekly.Save(ctx, q, tk.ID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0)}, now)
+	_, err := weekly.Save(ctx, q, tkID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0)}, now)
 	if err == nil {
 		t.Fatal("expected locked April week to fail")
 	}
-	if _, err = weekly.Save(ctx, q, tk.ID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
+	if _, err = weekly.Save(ctx, q, tkID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	cell, err := weekly.Save(ctx, q, tk.ID, "2026-05-04", weekly.Patch{Progress: nullable.Present(30.0)}, now)
+	cell, err := weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(30.0)}, now)
 	if err != nil || cell.Progress == nil || *cell.Progress != 40 {
 		t.Fatalf("below-carried progress should carry effective 40: %#v %v", cell, err)
 	}
-	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-05-04"})
+	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-05-04"})
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("below-carried progress should store NULL: %#v %v", row, err)
 	}
-	if _, err = weekly.Save(ctx, q, tk.ID, "2026-05-04", weekly.Patch{Progress: nullable.Present(50.0)}, now); err != nil {
+	if _, err = weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(50.0)}, now); err != nil {
 		t.Fatal(err)
 	}
-	cell, err = weekly.Save(ctx, q, tk.ID, "2026-05-11", weekly.Patch{Progress: nullable.Present(45.0)}, now)
+	cell, err = weekly.Save(ctx, q, tkID, "2026-05-11", weekly.Patch{Progress: nullable.Present(45.0)}, now)
 	if err != nil || cell.Progress == nil || *cell.Progress != 50 {
 		t.Fatalf("below-carried progress should carry effective 50: %#v %v", cell, err)
 	}
-	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-05-11"})
+	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-05-11"})
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("below-carried progress should store NULL: %#v %v", row, err)
 	}
@@ -70,60 +59,41 @@ func TestSaveProgressAndLock(t *testing.T) {
 
 func TestSaveRequestUnlockDoesNotPersist(t *testing.T) {
 	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-04-06", EndDate: "2026-05-04"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	taskID := p.ID
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &taskID})
-	if err != nil {
-		t.Fatal(err)
-	}
+	q, _, tkID := newProjectTask(t, 10.0, "2026-04-06", "2026-05-04")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
 		t.Fatalf("historical edit with request access was rejected: %v", err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours)}, now); err == nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours)}, now); err == nil {
 		t.Fatal("historical unlock should not persist")
 	}
 }
 
 func TestCascadeProgressAndRelock(t *testing.T) {
 	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: new(100.0), StartDate: "2026-03-02", EndDate: "2026-06-01",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
+	q, pid, tkID := newProjectTask(t, 100.0, "2026-03-02", "2026-06-01")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-05-04", weekly.Patch{Progress: nullable.Present(70.0)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(70.0)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
 		t.Fatalf("re-storing the carried value should be allowed: %v", err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Present(50.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(50.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	cleared, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-04-06"})
+	cleared, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-06"})
 	if err != nil || cleared.Progress.Valid {
 		t.Fatalf("raising an earlier week should clear the stored 40 in a later week: %#v %v", cleared, err)
 	}
-	result, err := task.Get(ctx, q, tk.ID)
+	result, err := task.Get(ctx, q, tkID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,18 +103,18 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 	if result.Weeks[1].Progress == nil || *result.Weeks[1].Progress != 50 {
 		t.Fatalf("later progress should cascade to 50, got %#v", result.Weeks)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
 		t.Fatal("relocked March should reject edits")
 	}
-	keepEarlier, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-03-30"})
+	keepEarlier, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-03-30"})
 	if err != nil || !keepEarlier.Progress.Valid || keepEarlier.Progress.Float64 != 50 {
 		t.Fatalf("rejected edit changed stored earlier progress: %#v %v", keepEarlier, err)
 	}
-	keepLater, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-05-04"})
+	keepLater, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-05-04"})
 	if err != nil || !keepLater.Progress.Valid || keepLater.Progress.Float64 != 70 {
 		t.Fatalf("rejected edit changed stored later progress: %#v %v", keepLater, err)
 	}
-	filter, err := task.ParseFilter(strconv.FormatInt(p.ID, 10), "")
+	filter, err := task.ParseFilter(strconv.FormatInt(pid, 10), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,18 +135,7 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 
 func TestSaveRejectsInvalidPatches(t *testing.T) {
 	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{
-		Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	taskID := p.ID
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &taskID})
-	if err != nil {
-		t.Fatal(err)
-	}
+	q, _, tkID := newProjectTask(t, 100.0, "2026-01-05", "2026-06-01")
 	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 	values := []struct {
 		name        string
@@ -193,7 +152,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 	}
 	for _, tc := range values {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := weekly.Save(ctx, q, tk.ID, weekly.WeekStart(tc.week), tc.patch, now); err == nil {
+			if _, err := weekly.Save(ctx, q, tkID, weekly.WeekStart(tc.week), tc.patch, now); err == nil {
 				t.Fatal("expected invalid patch to fail")
 			} else {
 				var httpErr web.HTTPError
@@ -203,7 +162,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 			}
 		})
 	}
-	result, err := task.Get(ctx, q, tk.ID)
+	result, err := task.Get(ctx, q, tkID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,22 +173,14 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 
 func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
+	q, _, tkID := newProjectTask(t, 10.0, "2026-09-01", "2026-09-30")
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	planned, spent, progress := 8.0, 3.0, 25.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
 	updatedSpent := 5.0
-	cell, err := weekly.Save(ctx, q, tk.ID, "2026-09-07", weekly.Patch{SpentHours: nullable.Present(updatedSpent)}, now)
+	cell, err := weekly.Save(ctx, q, tkID, "2026-09-07", weekly.Patch{SpentHours: nullable.Present(updatedSpent)}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +188,7 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 		t.Fatalf("partial patch changed untouched values: %#v", cell)
 	}
 	nextHours := 2.0
-	cell, err = weekly.Save(ctx, q, tk.ID, "2026-09-14", weekly.Patch{PlannedHours: nullable.Present(nextHours)}, now)
+	cell, err = weekly.Save(ctx, q, tkID, "2026-09-14", weekly.Patch{PlannedHours: nullable.Present(nextHours)}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,8 +199,42 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 
 func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	ctx := t.Context()
+	q, _, tkID := newProjectTask(t, 100.0, "2026-03-02", "2026-04-27")
+	now := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	p20, p50, p70, hours := 20.0, 50.0, 70.0, 3.0
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-02", weekly.Patch{Progress: nullable.Present(p20), Unlock: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(p50), PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{Progress: nullable.Present(p70), Unlock: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64]()}, now); err == nil {
+		t.Fatal("clear should not change relocked history")
+	}
+	cell, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64](), Unlock: true}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.PlannedHours != hours || cell.Progress == nil || *cell.Progress != p20 {
+		t.Fatalf("clear did not carry forward while preserving hours: %#v", cell)
+	}
+	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-03-30"})
+	if err != nil || row.Progress.Valid {
+		t.Fatalf("explicit progress was not cleared: %#v %v", row, err)
+	}
+	later, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-06"})
+	if err != nil || !later.Progress.Valid || later.Progress.Float64 != p70 {
+		t.Fatalf("clearing earlier progress changed later explicit progress: %#v %v", later, err)
+	}
+}
+
+func newProjectTask(t *testing.T, total float64, start, end string) (*db.Queries, int64, int64) {
+	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-03-02", EndDate: "2026-04-27"})
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(total), StartDate: start, EndDate: end})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,33 +242,5 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
-	p20, p50, p70, hours := 20.0, 50.0, 70.0, 3.0
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-02", weekly.Patch{Progress: nullable.Present(p20), Unlock: true}, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Present(p50), PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-04-06", weekly.Patch{Progress: nullable.Present(p70), Unlock: true}, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64]()}, now); err == nil {
-		t.Fatal("clear should not change relocked history")
-	}
-	cell, err := weekly.Save(ctx, q, tk.ID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64](), Unlock: true}, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours || cell.Progress == nil || *cell.Progress != p20 {
-		t.Fatalf("clear did not carry forward while preserving hours: %#v", cell)
-	}
-	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-03-30"})
-	if err != nil || row.Progress.Valid {
-		t.Fatalf("explicit progress was not cleared: %#v %v", row, err)
-	}
-	later, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tk.ID, WeekStart: "2026-04-06"})
-	if err != nil || !later.Progress.Valid || later.Progress.Float64 != p70 {
-		t.Fatalf("clearing earlier progress changed later explicit progress: %#v %v", later, err)
-	}
+	return q, p.ID, tk.ID
 }

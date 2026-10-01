@@ -57,6 +57,31 @@ func createTask(t *testing.T, mux *http.ServeMux, body []byte) int64 {
 	return tk.ID
 }
 
+func createSubproject(t *testing.T, mux *http.ServeMux, body []byte) int64 {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(body)))
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create subproject: %d %s", rr.Code, rr.Body.String())
+	}
+	var sp struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &sp); err != nil {
+		t.Fatal(err)
+	}
+	return sp.ID
+}
+
+func putJSON(t *testing.T, mux *http.ServeMux, path, body string, want int) {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, strings.NewReader(body)))
+	if rr.Code != want {
+		t.Fatalf("week %s: expected %d, got %d %s", body, want, rr.Code, rr.Body.String())
+	}
+}
+
 func TestJSONDuplicateProjectNameConflict(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
@@ -430,19 +455,11 @@ func TestJSONUnlockAppliesToOneWeeklyRequest(t *testing.T) {
 	path := func(week time.Time) string {
 		return "/api/v1/tasks/" + strconv.FormatInt(id, 10) + "/weeks/" + week.Format(time.DateOnly)
 	}
-	put := func(week time.Time, body string, want int) {
-		t.Helper()
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path(week), strings.NewReader(body)))
-		if rr.Code != want {
-			t.Fatalf("week %s: expected %d, got %d %s", week.Format(time.DateOnly), want, rr.Code, rr.Body.String())
-		}
-	}
-	put(first, `{"planned_hours":6,"progress":40}`, http.StatusForbidden)
-	put(first, `{"planned_hours":6,"progress":40,"unlock":true}`, http.StatusOK)
-	put(second, `{"spent_hours":3}`, http.StatusForbidden)
-	put(second, `{"spent_hours":3,"progress":60,"unlock":true}`, http.StatusOK)
-	put(first, `{"planned_hours":7}`, http.StatusForbidden)
+	putJSON(t, mux, path(first), `{"planned_hours":6,"progress":40}`, http.StatusForbidden)
+	putJSON(t, mux, path(first), `{"planned_hours":6,"progress":40,"unlock":true}`, http.StatusOK)
+	putJSON(t, mux, path(second), `{"spent_hours":3}`, http.StatusForbidden)
+	putJSON(t, mux, path(second), `{"spent_hours":3,"progress":60,"unlock":true}`, http.StatusOK)
+	putJSON(t, mux, path(first), `{"planned_hours":7}`, http.StatusForbidden)
 	for _, want := range []struct {
 		week                  time.Time
 		plan, spent, progress float64
@@ -579,37 +596,27 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	pid := createProject(t, mux, "P", start)
 
 	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid, 10) + `,"name":"SP","total_hours":10}`)
+	spID := createSubproject(t, mux, spBody)
+
+	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
+
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(spBody)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create subproject %d %s", rr.Code, rr.Body.String())
-	}
-	var sp struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &sp); err != nil {
-		t.Fatal(err)
-	}
-
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(sp.ID, 10)+`}`))
-
-	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10)+"/delete", nil))
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(sp.ID, 10) {
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(spID, 10) {
 		t.Fatalf("task delete redirect: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 
 	form := "name=SP2&project_id=" + strconv.FormatInt(pid, 10) + "&total_hours=10"
-	r := httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(sp.ID, 10), bytes.NewBufferString(form))
+	r := httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(spID, 10), bytes.NewBufferString(form))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, r)
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(sp.ID, 10) {
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10)+"&subproject="+strconv.FormatInt(spID, 10) {
 		t.Fatalf("subproject update redirect: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(sp.ID, 10)+"/delete", nil))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/subprojects/"+strconv.FormatInt(spID, 10)+"/delete", nil))
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10) {
 		t.Fatalf("subproject delete redirect: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
@@ -623,16 +630,8 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	pid := createProject(t, mux, "P", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
-	put := func(body string, want int) {
-		t.Helper()
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(body))))
-		if rr.Code != want {
-			t.Fatalf("week %s: expected %d, got %d %s", body, want, rr.Code, rr.Body.String())
-		}
-	}
-	put(`{"progress":30}`, http.StatusOK)
-	put(`{"progress":null}`, http.StatusOK)
+	putJSON(t, mux, path, `{"progress":30}`, http.StatusOK)
+	putJSON(t, mux, path, `{"progress":null}`, http.StatusOK)
 	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("progress null should clear stored progress: %#v %v", row, err)
@@ -647,16 +646,8 @@ func TestJSONRejectsClearProgressUnknownField(t *testing.T) {
 	pid := createProject(t, mux, "P", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
-	put := func(body string, want int) {
-		t.Helper()
-		rr := httptest.NewRecorder()
-		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(body))))
-		if rr.Code != want {
-			t.Fatalf("week %s: expected %d, got %d %s", body, want, rr.Code, rr.Body.String())
-		}
-	}
-	put(`{"progress":30}`, http.StatusOK)
-	put(`{"progress":30,"clear_progress":true}`, http.StatusBadRequest)
+	putJSON(t, mux, path, `{"progress":30}`, http.StatusOK)
+	putJSON(t, mux, path, `{"progress":30,"clear_progress":true}`, http.StatusBadRequest)
 }
 
 func TestJSONContractConsistency(t *testing.T) {
@@ -972,17 +963,7 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	task1 := createTask(t, mux, []byte(`{"name":"In P1","project_id":`+strconv.FormatInt(pid1, 10)+`}`))
 
 	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid2, 10) + `,"name":"SP2","total_hours":10}`)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(spBody)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create subproject %d %s", rr.Code, rr.Body.String())
-	}
-	var sp2 struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &sp2); err != nil {
-		t.Fatal(err)
-	}
+	spID := createSubproject(t, mux, spBody)
 
 	getTasks := func(query string) []struct {
 		ID int64 `json:"id"`
@@ -1009,8 +990,8 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	if tasks := getTasks("?project_id=" + strconv.FormatInt(pid1, 10)); len(tasks) != 1 || tasks[0].ID != task1 {
 		t.Fatalf("project filter: %#v", tasks)
 	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid1, 10)+"&subproject_id="+strconv.FormatInt(sp2.ID, 10), nil))
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid1, 10)+"&subproject_id="+strconv.FormatInt(spID, 10), nil))
 	assertAPIError(t, rr, http.StatusBadRequest, "subproject does not belong to project", "")
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?subproject_id=999", nil))

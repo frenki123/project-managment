@@ -30,10 +30,6 @@ func (w WeekStart) Time() time.Time {
 	return t
 }
 
-func (w WeekStart) Next() WeekStart {
-	return WeekStart(w.Time().AddDate(0, 0, 7).Format(time.DateOnly))
-}
-
 func (w WeekStart) IsLocked(now time.Time) bool {
 	t := w.Time()
 	if t.IsZero() || t.Weekday() != time.Monday {
