@@ -30,22 +30,20 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	if weekStart.IsZero() {
 		return Cell{}, web.Invalid("week_start must be a Monday")
 	}
-	if (!patch.PlannedHours.Present || patch.PlannedHours.Value == nil) &&
-		(!patch.SpentHours.Present || patch.SpentHours.Value == nil) &&
-		!patch.Progress.Present {
+	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present {
 		return Cell{}, web.Invalid("at least one value is required")
 	}
-	if patch.PlannedHours.Present && patch.PlannedHours.Value != nil {
+	if patch.PlannedHours.HasValue() {
 		if err := validHours(*patch.PlannedHours.Value); err != nil {
 			return Cell{}, err
 		}
 	}
-	if patch.SpentHours.Present && patch.SpentHours.Value != nil {
+	if patch.SpentHours.HasValue() {
 		if err := validHours(*patch.SpentHours.Value); err != nil {
 			return Cell{}, err
 		}
 	}
-	if patch.Progress.Present && patch.Progress.Value != nil {
+	if patch.Progress.HasValue() {
 		if err := validProgress(*patch.Progress.Value); err != nil {
 			return Cell{}, err
 		}
@@ -68,24 +66,18 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return err
 		}
 
-		planned, spent := contextRow.PlannedHours, contextRow.SpentHours
-		if patch.PlannedHours.Present && patch.PlannedHours.Value != nil {
-			planned = *patch.PlannedHours.Value
-		}
-		if patch.SpentHours.Present && patch.SpentHours.Value != nil {
-			spent = *patch.SpentHours.Value
-		}
+		planned := patch.PlannedHours.ValueOr(contextRow.PlannedHours)
+		spent := patch.SpentHours.ValueOr(contextRow.SpentHours)
 		carried := contextRow.PreviousProgress
 		currentEffective := carried
-		if contextRow.Progress.Valid && contextRow.Progress.Float64 > currentEffective {
-			currentEffective = contextRow.Progress.Float64
+		if p := nullable.Float64Pointer(contextRow.Progress); p != nil {
+			currentEffective = max(carried, *p)
 		}
-		store := patch.Progress.Present && patch.Progress.Value != nil && *patch.Progress.Value > currentEffective
+		store := patch.Progress.HasValue() && *patch.Progress.Value > currentEffective
 		progress := contextRow.Progress
-		switch {
-		case store:
+		if store {
 			progress = nullable.Float64(patch.Progress.Value)
-		case patch.Progress.Present && patch.Progress.Value == nil:
+		} else if patch.Progress.Present && patch.Progress.Value == nil {
 			progress = sql.NullFloat64{}
 		}
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{

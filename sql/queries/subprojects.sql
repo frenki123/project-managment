@@ -20,6 +20,7 @@ SELECT
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours
 FROM subprojects s
 LEFT JOIN v_task_totals tt ON tt.subproject_id = s.id
+WHERE CAST(sqlc.narg(project_id) AS INTEGER) IS NULL OR s.project_id = CAST(sqlc.narg(project_id) AS INTEGER)
 GROUP BY s.id
 ORDER BY s.name COLLATE NOCASE, s.id;
 
@@ -30,17 +31,6 @@ FROM subprojects ORDER BY name COLLATE NOCASE, id;
 -- name: ListSubprojectsByProject :many
 SELECT id, project_id, name, total_hours
 FROM subprojects WHERE project_id = ? ORDER BY name COLLATE NOCASE, id;
-
--- name: ListSubprojectsByProjectWithTotals :many
-SELECT
-    s.id, s.project_id, s.name, s.total_hours,
-    CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
-    CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours
-FROM subprojects s
-LEFT JOIN v_task_totals tt ON tt.subproject_id = s.id
-WHERE s.project_id = ?
-GROUP BY s.id
-ORDER BY s.name COLLATE NOCASE, s.id;
 
 -- name: SubprojectHoursConflict :one
 WITH cap AS (

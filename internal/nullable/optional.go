@@ -14,6 +14,19 @@ type Optional[T any] struct {
 // marshaled patches while still emitting explicit null for a present-null.
 func (o Optional[T]) IsZero() bool { return !o.Present }
 
+// HasValue reports whether the field carries a concrete value (present and not
+// an explicit null).
+func (o Optional[T]) HasValue() bool { return o.Present && o.Value != nil }
+
+// ValueOr returns the concrete value, falling back to current when absent or
+// explicitly null.
+func (o Optional[T]) ValueOr(current T) T {
+	if o.HasValue() {
+		return *o.Value
+	}
+	return current
+}
+
 // Apply merges the field into current. A nil receiver or an absent field is a
 // no-op; an explicit null resets current to T's zero value.
 func (o *Optional[T]) Apply(current T) T {

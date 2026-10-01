@@ -19,21 +19,16 @@ RETURNING id, name, description, implementation_notes, department, developers, p
 SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
 FROM tasks WHERE id = ?;
 
--- name: ListTasks :many
-SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
-FROM tasks ORDER BY name COLLATE NOCASE, id;
-
 -- name: ListIdeaTasks :many
 SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
 FROM tasks WHERE project_id IS NULL ORDER BY name COLLATE NOCASE, id;
 
--- name: ListTasksByProject :many
+-- name: ListTasksScoped :many
 SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
-FROM tasks WHERE project_id = ? ORDER BY name COLLATE NOCASE, id;
-
--- name: ListTasksBySubproject :many
-SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
-FROM tasks WHERE subproject_id = ? ORDER BY name COLLATE NOCASE, id;
+FROM tasks
+WHERE (CAST(sqlc.narg(project_id) AS INTEGER) IS NULL OR project_id = CAST(sqlc.narg(project_id) AS INTEGER))
+  AND (CAST(sqlc.narg(subproject_id) AS INTEGER) IS NULL OR subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER))
+ORDER BY name COLLATE NOCASE, id;
 
 -- name: UpdateTask :one
 UPDATE tasks SET

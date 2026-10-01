@@ -19,17 +19,13 @@ SELECT
     CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 409 ELSE 0 END AS status,
     CAST(CASE WHEN EXISTS (SELECT 1 FROM task_weeks WHERE task_id = CAST(sqlc.arg(task_id) AS INTEGER)) THEN 'task-has-weekly-data' ELSE '' END AS TEXT) AS reason;
 
--- name: ListTaskTotalsAll :many
-SELECT tt.* FROM v_task_totals tt;
-
 -- name: ListTaskTotalsIdeas :many
 SELECT tt.* FROM v_task_totals tt WHERE tt.project_id IS NULL;
 
--- name: ListTaskTotalsByProject :many
-SELECT tt.* FROM v_task_totals tt WHERE tt.project_id = CAST(sqlc.arg(project_id) AS INTEGER);
-
--- name: ListTaskTotalsBySubproject :many
-SELECT tt.* FROM v_task_totals tt WHERE tt.subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER);
+-- name: ListTaskTotalsScoped :many
+SELECT tt.* FROM v_task_totals tt
+WHERE (CAST(sqlc.narg(project_id) AS INTEGER) IS NULL OR tt.project_id = CAST(sqlc.narg(project_id) AS INTEGER))
+  AND (CAST(sqlc.narg(subproject_id) AS INTEGER) IS NULL OR tt.subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER));
 
 -- name: ListTaskWeekSeriesByProject :many
 SELECT ts.* FROM v_task_week_series ts WHERE ts.task_id IN (SELECT id FROM tasks WHERE project_id = CAST(sqlc.arg(project_id) AS INTEGER)) ORDER BY ts.task_id, ts.week_start;
@@ -125,38 +121,15 @@ WHERE task_id = sqlc.arg(task_id)
   AND progress < sqlc.arg(progress);
 
 -- name: ListProjectWeekTotals :many
-WITH RECURSIVE bounds AS (
-    SELECT first_week, last_week
-    FROM v_project_bounds
-    WHERE id = CAST(sqlc.arg(project_id) AS INTEGER)
-), weeks AS (
-    SELECT
-        first_week AS week_start,
-        last_week
-    FROM bounds
-    UNION ALL
-    SELECT date(week_start, '+7 days'), last_week
-    FROM weeks
-    WHERE week_start < last_week
-), scope AS (
-    SELECT t.id, tt.planned_hours AS complexity
-    FROM tasks t
-    JOIN v_task_totals tt ON tt.task_id = t.id
-    WHERE t.project_id = CAST(sqlc.arg(project_id) AS INTEGER)
-), weekly AS (
-    SELECT
-        w.week_start,
-        COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours,
-            COALESCE(SUM(scope.complexity * COALESCE((
-                SELECT MAX(p.effective_progress)
-                FROM v_task_week_effective p
-                WHERE p.task_id = scope.id AND p.week_start <= w.week_start
-            ), 0) / 100.0), 0) AS earned_hours
-    FROM weeks w
-    LEFT JOIN scope ON TRUE
-    LEFT JOIN task_weeks tw ON tw.task_id = scope.id AND tw.week_start = w.week_start
-    GROUP BY 1
+WITH weekly AS (
+    SELECT ts.week_start,
+           SUM(ts.planned_hours) AS planned_hours,
+           SUM(ts.spent_hours) AS spent_hours,
+           SUM(tt.planned_hours * ts.effective_progress / 100.0) AS earned_hours
+    FROM v_task_week_series ts
+    JOIN v_task_totals tt ON tt.task_id = ts.task_id
+    WHERE ts.task_id IN (SELECT id FROM tasks WHERE project_id = CAST(sqlc.arg(project_id) AS INTEGER))
+    GROUP BY ts.week_start
 )
 SELECT
     CAST(week_start AS TEXT) AS week_start,
@@ -169,33 +142,13 @@ FROM weekly
 ORDER BY week_start;
 
 -- name: ListSubprojectWeekTotals :many
-WITH RECURSIVE bounds AS (
-    SELECT p.first_week, p.last_week
-    FROM v_project_bounds p
-    JOIN subprojects s ON s.project_id = p.id
-    WHERE s.id = CAST(sqlc.arg(subproject_id) AS INTEGER)
-), weeks AS (
-    SELECT
-        first_week AS week_start,
-        last_week
-    FROM bounds
-    UNION ALL
-    SELECT date(week_start, '+7 days'), last_week
-    FROM weeks
-    WHERE week_start < last_week
-), scope AS (
-    SELECT t.id
-    FROM tasks t
-    WHERE t.subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER)
-), weekly AS (
-    SELECT
-        w.week_start,
-        COALESCE(SUM(tw.planned_hours), 0) AS planned_hours,
-        COALESCE(SUM(tw.spent_hours), 0) AS spent_hours
-    FROM weeks w
-    LEFT JOIN scope ON TRUE
-    LEFT JOIN task_weeks tw ON tw.task_id = scope.id AND tw.week_start = w.week_start
-    GROUP BY 1
+WITH weekly AS (
+    SELECT ts.week_start,
+           SUM(ts.planned_hours) AS planned_hours,
+           SUM(ts.spent_hours) AS spent_hours
+    FROM v_task_week_series ts
+    WHERE ts.task_id IN (SELECT id FROM tasks WHERE subproject_id = CAST(sqlc.arg(subproject_id) AS INTEGER))
+    GROUP BY ts.week_start
 )
 SELECT
     CAST(week_start AS TEXT) AS week_start,
