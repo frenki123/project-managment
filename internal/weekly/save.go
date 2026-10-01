@@ -27,8 +27,8 @@ type Cell struct {
 }
 
 func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
-	if _, err := Parse(weekStart.String()); err != nil {
-		return Cell{}, err
+	if weekStart.IsZero() {
+		return Cell{}, web.Invalid("week_start must be a Monday")
 	}
 	if (!patch.PlannedHours.Present || patch.PlannedHours.Value == nil) &&
 		(!patch.SpentHours.Present || patch.SpentHours.Value == nil) &&
@@ -76,12 +76,16 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			spent = *patch.SpentHours.Value
 		}
 		carried := contextRow.PreviousProgress
-		store := patch.Progress.Present && patch.Progress.Value != nil && *patch.Progress.Value > carried
+		currentEffective := carried
+		if contextRow.Progress.Valid && contextRow.Progress.Float64 > currentEffective {
+			currentEffective = contextRow.Progress.Float64
+		}
+		store := patch.Progress.Present && patch.Progress.Value != nil && *patch.Progress.Value > currentEffective
 		progress := contextRow.Progress
 		switch {
 		case store:
 			progress = nullable.Float64(patch.Progress.Value)
-		case patch.Progress.Present:
+		case patch.Progress.Present && patch.Progress.Value == nil:
 			progress = sql.NullFloat64{}
 		}
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
@@ -103,7 +107,7 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 		if effective == nil {
 			effective = new(carried)
 		}
-		result = toCell(row, effective)
+		result = toCell(row, weekStart, effective)
 		return nil
 	})
 	return result, err
@@ -123,10 +127,10 @@ func validProgress(value float64) error {
 	return nil
 }
 
-func toCell(week db.TaskWeek, progress *float64) Cell {
+func toCell(week db.TaskWeek, weekStart WeekStart, progress *float64) Cell {
 	return Cell{
 		TaskID:       week.TaskID,
-		WeekStart:    WeekStart(week.WeekStart),
+		WeekStart:    weekStart,
 		PlannedHours: week.PlannedHours,
 		SpentHours:   week.SpentHours,
 		Progress:     progress,

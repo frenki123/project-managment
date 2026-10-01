@@ -60,11 +60,11 @@ func TestTasksEncodesFilters(t *testing.T) {
 func TestAPIErrorPreservesStatusAndMessage(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(`{"error":"historical editing is not enabled"}`))
+		_, _ = w.Write([]byte(`{"error":"historical editing is not enabled","reason":"week-outside-project-bounds"}`))
 	}))
-	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks/1", nil, (*struct{})(nil))
+	err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks/1", (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "historical editing is not enabled" {
+	if !ok || apiErr.Status != http.StatusConflict || apiErr.Message != "historical editing is not enabled" || apiErr.Reason != "week-outside-project-bounds" {
 		t.Fatalf("error = %#v", err)
 	}
 }
@@ -85,7 +85,7 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(tc.body))
 			}))
-			err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, (*struct{})(nil))
+			err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", (*struct{})(nil))
 			apiErr, ok := errors.AsType[*APIError](err)
 			if !ok || apiErr.Status != http.StatusBadGateway || apiErr.Message != tc.want {
 				t.Fatalf("error = %#v", err)
@@ -99,7 +99,7 @@ func TestAPIErrorBodyIsBounded(t *testing.T) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(strings.Repeat("x", maxAPIErrorBody+1024)))
 	}))
-	err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, (*struct{})(nil))
+	err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
 	if !ok || len(apiErr.Message) != maxAPIErrorBody+3 || !strings.HasSuffix(apiErr.Message, "...") {
 		t.Fatalf("error = %#v", err)
@@ -124,7 +124,7 @@ func TestTasksDecodeLargeSuccessfulResponse(t *testing.T) {
 
 func TestEmptySuccessfulResponseIsAccepted(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	if err := c.Do(context.Background(), http.MethodGet, "/api/v1/tasks", nil, new(task.TasksResponse)); err != nil {
+	if err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", new(task.TasksResponse)); err != nil {
 		t.Fatal(err)
 	}
 }

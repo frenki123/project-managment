@@ -21,14 +21,14 @@ func TestSaveProgressAndLock(t *testing.T) {
 	ctx := t.Context()
 	q, _, tkID := newProjectTask(t, 100.0, "2026-01-05", "2026-06-01")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	_, err := weekly.Save(ctx, q, tkID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0)}, now)
+	_, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-27"), weekly.Patch{Progress: nullable.Present(40.0)}, now)
 	if err == nil {
 		t.Fatal("expected locked April week to fail")
 	}
-	if _, err = weekly.Save(ctx, q, tkID, "2026-04-27", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
+	if _, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-27"), weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	cell, err := weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(30.0)}, now)
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{Progress: nullable.Present(30.0)}, now)
 	if err != nil || cell.Progress == nil || *cell.Progress != 40 {
 		t.Fatalf("below-carried progress should carry effective 40: %#v %v", cell, err)
 	}
@@ -36,10 +36,10 @@ func TestSaveProgressAndLock(t *testing.T) {
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("below-carried progress should store NULL: %#v %v", row, err)
 	}
-	if _, err = weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(50.0)}, now); err != nil {
+	if _, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{Progress: nullable.Present(50.0)}, now); err != nil {
 		t.Fatal(err)
 	}
-	cell, err = weekly.Save(ctx, q, tkID, "2026-05-11", weekly.Patch{Progress: nullable.Present(45.0)}, now)
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-05-11"), weekly.Patch{Progress: nullable.Present(45.0)}, now)
 	if err != nil || cell.Progress == nil || *cell.Progress != 50 {
 		t.Fatalf("below-carried progress should carry effective 50: %#v %v", cell, err)
 	}
@@ -52,7 +52,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := 1.0
-	if _, err = weekly.Save(ctx, q, idea.ID, "2026-05-04", weekly.Patch{PlannedHours: nullable.Present(h)}, now); err == nil {
+	if _, err = weekly.Save(ctx, q, idea.ID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{PlannedHours: nullable.Present(h)}, now); err == nil {
 		t.Fatal("ideas cannot be planned")
 	}
 }
@@ -62,10 +62,10 @@ func TestSaveRequestUnlockDoesNotPersist(t *testing.T) {
 	q, _, tkID := newProjectTask(t, 10.0, "2026-04-06", "2026-05-04")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
 		t.Fatalf("historical edit with request access was rejected: %v", err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{PlannedHours: nullable.Present(hours)}, now); err == nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(hours)}, now); err == nil {
 		t.Fatal("historical unlock should not persist")
 	}
 }
@@ -74,19 +74,19 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 	ctx := t.Context()
 	q, pid, tkID := newProjectTask(t, 100.0, "2026-03-02", "2026-06-01")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{Progress: nullable.Present(40.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-05-04", weekly.Patch{Progress: nullable.Present(70.0)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{Progress: nullable.Present(70.0)}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(20.0), Unlock: true}, now); err != nil {
 		t.Fatalf("re-storing the carried value should be allowed: %v", err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(50.0), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(50.0), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
 	cleared, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-06"})
@@ -103,7 +103,7 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 	if result.Weeks[1].Progress == nil || *result.Weeks[1].Progress != 50 {
 		t.Fatalf("later progress should cascade to 50, got %#v", result.Weeks)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
 		t.Fatal("relocked March should reject edits")
 	}
 	keepEarlier, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-03-30"})
@@ -123,7 +123,7 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cell := range grid.Rows[0].Cells {
-		if cell.WeekStart == "2026-04-06" {
+		if cell.WeekStart.String() == "2026-04-06" {
 			if cell.Progress != 50 || cell.Stored || !cell.Locked {
 				t.Fatalf("locked April carry changed: %#v", cell)
 			}
@@ -131,6 +131,31 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 		}
 	}
 	t.Fatal("missing displayed April week")
+}
+
+func TestBelowCarriedProgressDoesNotEraseStoredValue(t *testing.T) {
+	ctx := t.Context()
+	q, _, tkID := newProjectTask(t, 100.0, "2026-03-02", "2026-06-01")
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(50.0), Unlock: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{Progress: nullable.Present(60.0), Unlock: true}, now); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []float64{45, 55} {
+		cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{Progress: nullable.Present(value), Unlock: true}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cell.Progress == nil || *cell.Progress != 60 {
+			t.Fatalf("write %.0f should keep effective 60: %#v", value, cell)
+		}
+		row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-06"})
+		if err != nil || !row.Progress.Valid || row.Progress.Float64 != 60 {
+			t.Fatalf("write %.0f changed stored progress: %#v %v", value, row, err)
+		}
+	}
 }
 
 func TestSaveRejectsInvalidPatches(t *testing.T) {
@@ -152,13 +177,13 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 	}
 	for _, tc := range values {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := weekly.Save(ctx, q, tkID, weekly.WeekStart(tc.week), tc.patch, now); err == nil {
-				t.Fatal("expected invalid patch to fail")
-			} else {
-				var httpErr web.HTTPError
-				if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != tc.wantMessage {
-					t.Fatalf("unexpected error: %v", err)
-				}
+			ws, err := weekly.Parse(tc.week)
+			if err == nil {
+				_, err = weekly.Save(ctx, q, tkID, ws, tc.patch, now)
+			}
+			var httpErr web.HTTPError
+			if err == nil || !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != tc.wantMessage {
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}
@@ -176,11 +201,11 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 	q, _, tkID := newProjectTask(t, 10.0, "2026-09-01", "2026-09-30")
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	planned, spent, progress := 8.0, 3.0, 25.0
-	if _, err := weekly.Save(ctx, q, tkID, "2026-09-07", weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
 		t.Fatal(err)
 	}
 	updatedSpent := 5.0
-	cell, err := weekly.Save(ctx, q, tkID, "2026-09-07", weekly.Patch{SpentHours: nullable.Present(updatedSpent)}, now)
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{SpentHours: nullable.Present(updatedSpent)}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +213,7 @@ func TestSavePartialPatchPreservesExistingValues(t *testing.T) {
 		t.Fatalf("partial patch changed untouched values: %#v", cell)
 	}
 	nextHours := 2.0
-	cell, err = weekly.Save(ctx, q, tkID, "2026-09-14", weekly.Patch{PlannedHours: nullable.Present(nextHours)}, now)
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-09-14"), weekly.Patch{PlannedHours: nullable.Present(nextHours)}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,19 +227,19 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	q, _, tkID := newProjectTask(t, 100.0, "2026-03-02", "2026-04-27")
 	now := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
 	p20, p50, p70, hours := 20.0, 50.0, 70.0, 3.0
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-02", weekly.Patch{Progress: nullable.Present(p20), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-02"), weekly.Patch{Progress: nullable.Present(p20), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Present(p50), PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(p50), PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-04-06", weekly.Patch{Progress: nullable.Present(p70), Unlock: true}, now); err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{Progress: nullable.Present(p70), Unlock: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64]()}, now); err == nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Clear[float64]()}, now); err == nil {
 		t.Fatal("clear should not change relocked history")
 	}
-	cell, err := weekly.Save(ctx, q, tkID, "2026-03-30", weekly.Patch{Progress: nullable.Clear[float64](), Unlock: true}, now)
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Clear[float64](), Unlock: true}, now)
 	if err != nil {
 		t.Fatal(err)
 	}

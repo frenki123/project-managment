@@ -33,6 +33,7 @@ type APIError struct {
 	Path    string
 	Status  int
 	Message string
+	Reason  string
 }
 
 func (e *APIError) Error() string {
@@ -53,15 +54,19 @@ func New(rawURL string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) Do[Out any](ctx context.Context, method, path string, input any, output *Out) error {
-	var body io.Reader
-	if input != nil {
-		data, err := json.Marshal(input)
-		if err != nil {
-			return fmt.Errorf("encode request: %w", err)
-		}
-		body = bytes.NewReader(data)
+func (c *Client) Do[In, Out any](ctx context.Context, method, path string, input In, output *Out) error {
+	data, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("encode request: %w", err)
 	}
+	return c.do(ctx, method, path, bytes.NewReader(data), output)
+}
+
+func (c *Client) DoNoBody[Out any](ctx context.Context, method, path string, output *Out) error {
+	return c.do(ctx, method, path, nil, output)
+}
+
+func (c *Client) do[Out any](ctx context.Context, method, path string, body io.Reader, output *Out) error {
 	rel, err := url.Parse(path)
 	if err != nil {
 		return fmt.Errorf("create request URL: %w", err)
@@ -73,7 +78,7 @@ func (c *Client) Do[Out any](ctx context.Context, method, path string, input any
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	if input != nil {
+	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
@@ -88,7 +93,8 @@ func (c *Client) Do[Out any](ctx context.Context, method, path string, input any
 			return fmt.Errorf("read response: %w", err)
 		}
 		var payload struct {
-			Error string `json:"error"`
+			Error  string `json:"error"`
+			Reason string `json:"reason"`
 		}
 		_ = json.Unmarshal(data, &payload)
 		message := strings.TrimSpace(payload.Error)
@@ -98,7 +104,7 @@ func (c *Client) Do[Out any](ctx context.Context, method, path string, input any
 		if len(message) > maxAPIErrorBody {
 			message = message[:maxAPIErrorBody] + "..."
 		}
-		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message}
+		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message, Reason: strings.TrimSpace(payload.Reason)}
 	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -124,11 +130,11 @@ func (c *Client) Do[Out any](ctx context.Context, method, path string, input any
 
 func (c *Client) Projects(ctx context.Context) (project.ProjectsResponse, error) {
 	var v project.ProjectsResponse
-	return v, c.Do(ctx, http.MethodGet, "/api/v1/projects", nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, "/api/v1/projects", &v)
 }
 func (c *Client) Project(ctx context.Context, id int64) (project.Project, error) {
 	var v project.Project
-	return v, c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d", id), nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d", id), &v)
 }
 func (c *Client) CreateProject(ctx context.Context, in project.Input) (project.Project, error) {
 	var v project.Project
@@ -139,7 +145,7 @@ func (c *Client) UpdateProject(ctx context.Context, id int64, in project.Patch) 
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/projects/%d", id), in, &v)
 }
 func (c *Client) DeleteProject(ctx context.Context, id int64) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/projects/%d", id), nil, (*struct{})(nil))
+	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/projects/%d", id), (*struct{})(nil))
 }
 
 func (c *Client) Subprojects(ctx context.Context, projectID *int64) (subproject.SubprojectsResponse, error) {
@@ -148,11 +154,11 @@ func (c *Client) Subprojects(ctx context.Context, projectID *int64) (subproject.
 	if projectID != nil {
 		path += "?project_id=" + url.QueryEscape(fmt.Sprint(*projectID))
 	}
-	return v, c.Do(ctx, http.MethodGet, path, nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, path, &v)
 }
 func (c *Client) Subproject(ctx context.Context, id int64) (subproject.Subproject, error) {
 	var v subproject.Subproject
-	return v, c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/subprojects/%d", id), nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/subprojects/%d", id), &v)
 }
 func (c *Client) CreateSubproject(ctx context.Context, in subproject.Input) (subproject.Subproject, error) {
 	var v subproject.Subproject
@@ -163,7 +169,7 @@ func (c *Client) UpdateSubproject(ctx context.Context, id int64, in subproject.P
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/subprojects/%d", id), in, &v)
 }
 func (c *Client) DeleteSubproject(ctx context.Context, id int64) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/subprojects/%d", id), nil, (*struct{})(nil))
+	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/subprojects/%d", id), (*struct{})(nil))
 }
 
 func (c *Client) Tasks(ctx context.Context, ideas bool, projectID, subprojectID *int64) (task.TasksResponse, error) {
@@ -182,11 +188,11 @@ func (c *Client) Tasks(ctx context.Context, ideas bool, projectID, subprojectID 
 		path += "?" + values.Encode()
 	}
 	var v task.TasksResponse
-	return v, c.Do(ctx, http.MethodGet, path, nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, path, &v)
 }
 func (c *Client) Task(ctx context.Context, id int64) (task.Task, error) {
 	var v task.Task
-	return v, c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/tasks/%d", id), nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/tasks/%d", id), &v)
 }
 func (c *Client) CreateTask(ctx context.Context, in task.Input) (task.Task, error) {
 	var v task.Task
@@ -197,7 +203,7 @@ func (c *Client) UpdateTask(ctx context.Context, id int64, in task.Patch) (task.
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d", id), in, &v)
 }
 func (c *Client) DeleteTask(ctx context.Context, id int64) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/tasks/%d", id), nil, (*struct{})(nil))
+	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/tasks/%d", id), (*struct{})(nil))
 }
 func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in weekly.Patch) (weekly.Cell, error) {
 	var v weekly.Cell
@@ -205,5 +211,5 @@ func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in w
 }
 func (c *Client) SCurve(ctx context.Context, id int64) (project.SCurve, error) {
 	var v project.SCurve
-	return v, c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d/s-curve", id), nil, &v)
+	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d/s-curve", id), &v)
 }

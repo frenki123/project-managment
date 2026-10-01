@@ -27,7 +27,12 @@ func weekJSON(q *db.Queries) http.HandlerFunc {
 			web.WriteError(w, r, err)
 			return
 		}
-		cell, err := weekly.Save(r.Context(), q, id, weekly.WeekStart(r.PathValue("weekStart")), patch, currentTime)
+		ws, err := weekly.Parse(r.PathValue("weekStart"))
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		cell, err := weekly.Save(r.Context(), q, id, ws, patch, currentTime)
 		if err != nil {
 			web.WriteError(w, r, err)
 			return
@@ -60,7 +65,11 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			web.WriteError(w, r, web.Invalid("task or week is outside the selected view"))
 			return
 		}
-		_, err = weekly.Save(r.Context(), q, id, weekly.WeekStart(r.PathValue("weekStart")), patch, currentTime)
+		if cellIndex < 0 {
+			web.WriteError(w, r, web.HTTPErrorFromReason(http.StatusBadRequest, "week-outside-project-bounds"))
+			return
+		}
+		_, err = weekly.Save(r.Context(), q, id, grid.Rows[rowIndex].Cells[cellIndex].WeekStart, patch, currentTime)
 		if err != nil {
 			httpErr := web.HTTPErrorFrom(err)
 			grid.Rows[rowIndex].Cells[cellIndex].Error = httpErr.Message
@@ -103,6 +112,10 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 }
 
 func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, historicalEditingAllowed bool) (task.Grid, int, int, error) {
+	ws, err := weekly.Parse(r.PathValue("weekStart"))
+	if err != nil {
+		return task.Grid{}, -1, -1, err
+	}
 	filter, err := task.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 	if err != nil {
 		return task.Grid{}, -1, -1, err
@@ -117,10 +130,11 @@ func weekGrid(r *http.Request, q *db.Queries, taskID int64, now time.Time, histo
 	}
 	if len(grid.Rows) == 1 && grid.Rows[0].ID == taskID {
 		for i, cell := range grid.Rows[0].Cells {
-			if cell.WeekStart.String() == r.PathValue("weekStart") {
+			if cell.WeekStart.String() == ws.String() {
 				return grid, 0, i, nil
 			}
 		}
+		return grid, 0, -1, nil
 	}
 	return grid, -1, -1, nil
 }
@@ -131,7 +145,7 @@ func renderWeekRow(w http.ResponseWriter, r *http.Request, q *db.Queries, taskID
 		web.WriteError(w, r, err)
 		return
 	}
-	if rowIndex >= 0 {
+	if rowIndex >= 0 && cellIndex >= 0 {
 		grid.Rows[rowIndex].Cells[cellIndex].Error = errMsg
 		w.Header().Set("HX-Reswap", "outerHTML")
 		web.RenderFragment(w, r, status, views.WeekRowResponse(grid, rowIndex))

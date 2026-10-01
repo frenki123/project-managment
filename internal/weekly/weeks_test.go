@@ -1,7 +1,6 @@
 package weekly
 
 import (
-	"slices"
 	"testing"
 	"time"
 )
@@ -10,9 +9,10 @@ func TestWeekStarts(t *testing.T) {
 	start := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC) // Wednesday
 	end := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)  // Wednesday
 	got := WeekStarts(start, end)
-	want := []WeekStart{"2026-05-04", "2026-05-11", "2026-05-18"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("got %v want %v", got, want)
+	for i, want := range []string{"2026-05-04", "2026-05-11", "2026-05-18"} {
+		if got[i].String() != want {
+			t.Fatalf("got %q want %q", got[i].String(), want)
+		}
 	}
 }
 
