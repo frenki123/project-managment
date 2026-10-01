@@ -53,10 +53,10 @@ func FromDB(s db.Subproject) Subproject {
 	}
 }
 
-func fromTotals(id, projectID int64, name string, totalHours, plannedHours, spentHours float64) Subproject {
+func fromTotalsRow(row db.ListSubprojectsWithTotalsRow) Subproject {
 	return Subproject{
-		ID: id, ProjectID: projectID, Name: name, TotalHours: totalHours,
-		PlannedHours: plannedHours, SpentHours: spentHours,
+		ID: row.ID, ProjectID: row.ProjectID, Name: row.Name, TotalHours: row.TotalHours,
+		PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
 	}
 }
 
@@ -133,13 +133,13 @@ func populateTotals(ctx context.Context, q *db.Queries, s *Subproject) error {
 }
 
 func ListWithTotals(ctx context.Context, q *db.Queries) ([]Subproject, error) {
-	rows, err := q.ListSubprojectsWithTotals(ctx)
+	rows, err := q.ListSubprojectsWithTotals(ctx, sql.NullInt64{})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Subproject, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, fromTotals(row.ID, row.ProjectID, row.Name, row.TotalHours, row.PlannedHours, row.SpentHours))
+		out = append(out, fromTotalsRow(row))
 	}
 	return out, nil
 }
@@ -169,13 +169,13 @@ func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Subpr
 }
 
 func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64) ([]Subproject, error) {
-	rows, err := q.ListSubprojectsByProjectWithTotals(ctx, projectID)
+	rows, err := q.ListSubprojectsWithTotals(ctx, nullable.Int64(&projectID))
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Subproject, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, fromTotals(row.ID, row.ProjectID, row.Name, row.TotalHours, row.PlannedHours, row.SpentHours))
+		out = append(out, fromTotalsRow(row))
 	}
 	return out, nil
 }

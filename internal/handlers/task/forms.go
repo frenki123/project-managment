@@ -122,8 +122,6 @@ func renderTaskForm(w http.ResponseWriter, r *http.Request, q *db.Queries, vals 
 	if summary != nil {
 		data.Summary = *summary
 		data.DetailPath = "/tasks/" + strconv.FormatInt(summary.Task.ID, 10)
-	}
-	if summary != nil {
 		web.RenderFragment(w, r, httpErr.Status, views.TaskFormPanel(data))
 		return
 	}

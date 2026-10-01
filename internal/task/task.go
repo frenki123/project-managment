@@ -193,27 +193,55 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 }
 
 func List(ctx context.Context, q *db.Queries) ([]Task, error) {
-	return withTotals(ctx, q, q.ListTasks, q.ListTaskTotalsAll)
+	return listScoped(ctx, q, sql.NullInt64{}, sql.NullInt64{})
 }
 
 func ListIdeas(ctx context.Context, q *db.Queries) ([]Task, error) {
-	return withTotals(ctx, q, q.ListIdeaTasks, q.ListTaskTotalsIdeas)
+	rows, err := q.ListIdeaTasks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	totals, err := q.ListTaskTotalsIdeas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mergeTotals(rows, totals), nil
 }
 
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task, error) {
-	return withTotals(ctx, q, func(c context.Context) ([]db.Task, error) {
-		return q.ListTasksByProject(c, nullable.Int64(&projectID))
-	}, func(c context.Context) ([]db.VTaskTotal, error) {
-		return q.ListTaskTotalsByProject(c, projectID)
-	})
+	return listScoped(ctx, q, nullable.Int64(&projectID), sql.NullInt64{})
 }
 
 func ListBySubproject(ctx context.Context, q *db.Queries, subprojectID int64) ([]Task, error) {
-	return withTotals(ctx, q, func(c context.Context) ([]db.Task, error) {
-		return q.ListTasksBySubproject(c, nullable.Int64(&subprojectID))
-	}, func(c context.Context) ([]db.VTaskTotal, error) {
-		return q.ListTaskTotalsBySubproject(c, subprojectID)
-	})
+	return listScoped(ctx, q, sql.NullInt64{}, nullable.Int64(&subprojectID))
+}
+
+func listScoped(ctx context.Context, q *db.Queries, projectID, subprojectID sql.NullInt64) ([]Task, error) {
+	scope := db.ListTaskTotalsScopedParams{ProjectID: projectID, SubprojectID: subprojectID}
+	rows, err := q.ListTasksScoped(ctx, db.ListTasksScopedParams(scope))
+	if err != nil {
+		return nil, err
+	}
+	totals, err := q.ListTaskTotalsScoped(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return mergeTotals(rows, totals), nil
+}
+
+func mergeTotals(rows []db.Task, totals []db.VTaskTotal) []Task {
+	byID := make(map[int64]db.VTaskTotal, len(totals))
+	for _, total := range totals {
+		byID[total.TaskID] = total
+	}
+	out := make([]Task, 0, len(rows))
+	for _, row := range rows {
+		t := FromDB(row)
+		total := byID[t.ID]
+		t.TotalHours, t.SpentHours, t.Progress, t.Status = total.PlannedHours, total.SpentHours, total.Progress, Status(total.Progress)
+		out = append(out, t)
+	}
+	return out
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, error) {
@@ -298,27 +326,4 @@ func Delete(ctx context.Context, q *db.Queries, id int64) error {
 		return err
 	})
 	return web.ReferencedConflict(err)
-}
-
-func withTotals(ctx context.Context, q *db.Queries, list func(context.Context) ([]db.Task, error), loadTotals func(context.Context) ([]db.VTaskTotal, error)) ([]Task, error) {
-	rows, err := list(ctx)
-	if err != nil {
-		return nil, err
-	}
-	totals, err := loadTotals(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[int64]db.VTaskTotal, len(totals))
-	for _, total := range totals {
-		byID[total.TaskID] = total
-	}
-	out := make([]Task, 0, len(rows))
-	for _, row := range rows {
-		t := FromDB(row)
-		total := byID[t.ID]
-		t.TotalHours, t.SpentHours, t.Progress, t.Status = total.PlannedHours, total.SpentHours, total.Progress, Status(total.Progress)
-		out = append(out, t)
-	}
-	return out, nil
 }

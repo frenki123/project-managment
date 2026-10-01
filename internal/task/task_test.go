@@ -153,9 +153,13 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		ids  []int64
 	}{
 		{"ideas", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsIdeas(ctx) }, []int64{idea.ID}},
-		{"project", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsByProject(ctx, first.ID) }, []int64{inPart.ID}},
-		{"subproject", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsBySubproject(ctx, sp.ID) }, []int64{inPart.ID}},
-		{"all", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsAll(ctx) }, []int64{idea.ID, inPart.ID, inSecond.ID}},
+		{"project", func() ([]db.VTaskTotal, error) {
+			return q.ListTaskTotalsScoped(ctx, db.ListTaskTotalsScopedParams{ProjectID: nullable.Int64(&first.ID)})
+		}, []int64{inPart.ID}},
+		{"subproject", func() ([]db.VTaskTotal, error) {
+			return q.ListTaskTotalsScoped(ctx, db.ListTaskTotalsScopedParams{SubprojectID: nullable.Int64(&sp.ID)})
+		}, []int64{inPart.ID}},
+		{"all", func() ([]db.VTaskTotal, error) { return q.ListTaskTotalsScoped(ctx, db.ListTaskTotalsScopedParams{}) }, []int64{idea.ID, inPart.ID, inSecond.ID}},
 	} {
 		rows, err := tc.load()
 		if err != nil || len(rows) != len(tc.ids) {

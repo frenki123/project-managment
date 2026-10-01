@@ -11,13 +11,14 @@ import (
 
 	"cad-development/internal/db/testkit"
 	"cad-development/internal/handlers"
+	"cad-development/internal/weekly"
 )
 
 func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "Project", start)
 	projectID := strconv.FormatInt(pid, 10)
 	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))

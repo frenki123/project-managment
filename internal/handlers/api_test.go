@@ -18,12 +18,6 @@ import (
 	"cad-development/internal/weekly"
 )
 
-func nextMonday(now time.Time) time.Time {
-	day := now.AddDate(0, 0, 1)
-	offset := (time.Monday - day.Weekday() + 7) % 7
-	return day.AddDate(0, 0, int(offset))
-}
-
 func createProject(t *testing.T, mux *http.ServeMux, name string, start time.Time) int64 {
 	t.Helper()
 	body := []byte(`{"name":"` + name + `","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
@@ -86,7 +80,7 @@ func TestJSONDuplicateProjectNameConflict(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	createProject(t, mux, "Alpha", start)
 	second := createProject(t, mux, "Beta", start)
 	body := []byte(`{"name":"alpha","total_hours":100,"start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
@@ -108,7 +102,7 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projID := createProject(t, mux, "Alpha", start)
 
 	// Keep this map to pin the request wire shape independently of domain types.
@@ -198,7 +192,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projID := createProject(t, mux, "Alpha", start)
 	tk := struct {
 		ID int64 `json:"id"`
@@ -289,7 +283,7 @@ func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projectID := createProject(t, mux, "Alpha", start)
 	taskID := createTask(t, mux, []byte(`{"name":"Original task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
 
@@ -362,7 +356,7 @@ func TestJSONProjectValidationErrorMessage(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	body := []byte(`{"name":"P","start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(body)))
@@ -475,7 +469,7 @@ func TestHistoryAccessHTMLFragmentPreservesFilters(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	projectID := createProject(t, mux, "Lock filter", nextMonday(time.Now()))
+	projectID := createProject(t, mux, "Lock filter", weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7)))
 	project := strconv.FormatInt(projectID, 10)
 	r := httptest.NewRequest(http.MethodPost, "/history-access/set", bytes.NewBufferString("project="+project+"&historical_editing=true"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -555,7 +549,7 @@ func TestEditTaskReassignConflictKeepsStoredProject(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	a := createProject(t, mux, "A", start)
 	b := createProject(t, mux, "B", start)
 
@@ -592,7 +586,7 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 
 	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid, 10) + `,"name":"SP","total_hours":10}`)
@@ -626,7 +620,7 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
@@ -642,7 +636,7 @@ func TestJSONRejectsClearProgressUnknownField(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
@@ -654,7 +648,7 @@ func TestJSONContractConsistency(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 
 	noHours := []byte(`{"name":"No hours","start_date":"` + start.Format("2006-01-02") + `","end_date":"` + start.AddDate(0, 0, 28).Format("2006-01-02") + `"}`)
 	rr := httptest.NewRecorder()
@@ -762,7 +756,7 @@ func TestJSONConflictReasonCodes(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	weekPath := func(id int64, week time.Time) string {
 		return "/api/v1/tasks/" + strconv.FormatInt(id, 10) + "/weeks/" + week.Format("2006-01-02")
 	}
@@ -800,7 +794,7 @@ func TestUIFormMutationRedirects(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	span := "&start_date=" + start.Format("2006-01-02") + "&end_date=" + start.AddDate(0, 0, 28).Format("2006-01-02")
 
 	rr := postForm(t, mux, "/projects", "name=P&total_hours=50"+span)
@@ -855,7 +849,7 @@ func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 
@@ -895,7 +889,7 @@ func TestHTMLWeekEditRejectsInvalidDisplayContextBeforeSaving(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 	other := createProject(t, mux, "Other", start)
 	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
@@ -956,7 +950,7 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
-	start := nextMonday(time.Now())
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	createTask(t, mux, []byte(`{"name":"Idea"}`))
 	pid1 := createProject(t, mux, "P1", start)
 	pid2 := createProject(t, mux, "P2", start)
