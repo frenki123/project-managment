@@ -23,21 +23,12 @@ func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
 	plainID := createTask(t, mux, []byte(`{"name":"Untracked","project_id":`+projectID+`}`))
 
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewBufferString(`{"name":"Part","project_id":`+projectID+`,"total_hours":10}`)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create subproject: %d %s", rr.Code, rr.Body.String())
-	}
-	var sp struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &sp); err != nil {
-		t.Fatal(err)
-	}
-	trackedID := createTask(t, mux, []byte(`{"name":"Tracked","project_id":`+projectID+`,"subproject_id":`+strconv.FormatInt(sp.ID, 10)+`}`))
+	spBody := []byte(`{"name":"Part","project_id":` + projectID + `,"total_hours":10}`)
+	spID := createSubproject(t, mux, spBody)
+	trackedID := createTask(t, mux, []byte(`{"name":"Tracked","project_id":`+projectID+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
 	for i, body := range []string{`{"planned_hours":8,"spent_hours":3,"progress":25}`, `{"planned_hours":2,"spent_hours":4}`} {
 		week := start.AddDate(0, 0, i*7).Format("2006-01-02")
-		rr = httptest.NewRecorder()
+		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(trackedID, 10)+"/weeks/"+week, bytes.NewBufferString(body)))
 		if rr.Code != http.StatusOK {
 			t.Fatalf("save week %s: %d %s", week, rr.Code, rr.Body.String())
@@ -88,9 +79,9 @@ func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 	check("/api/v1/tasks", ideaID, trackedID, plainID)
 	check("/api/v1/tasks?ideas=true", ideaID)
 	check("/api/v1/tasks?project_id="+projectID, trackedID, plainID)
-	check("/api/v1/tasks?subproject_id="+strconv.FormatInt(sp.ID, 10), trackedID)
+	check("/api/v1/tasks?subproject_id="+strconv.FormatInt(spID, 10), trackedID)
 	check("/api/v1/tasks?ideas=true&project_id="+projectID, trackedID, plainID)
-	check("/api/v1/tasks?ideas=true&project_id="+projectID+"&subproject_id="+strconv.FormatInt(sp.ID, 10), trackedID)
+	check("/api/v1/tasks?ideas=true&project_id="+projectID+"&subproject_id="+strconv.FormatInt(spID, 10), trackedID)
 }
 
 func TestTaskListMissingProjectIsNotFound(t *testing.T) {

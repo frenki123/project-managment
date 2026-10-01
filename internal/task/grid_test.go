@@ -61,13 +61,11 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstID := p.ID
-	secondID := p.ID
-	first, err := task.Create(ctx, q, task.Input{Name: "Half complete", ProjectID: &firstID})
+	first, err := task.Create(ctx, q, task.Input{Name: "Half complete", ProjectID: &p.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := task.Create(ctx, q, task.Input{Name: "Not started", ProjectID: &secondID})
+	second, err := task.Create(ctx, q, task.Input{Name: "Not started", ProjectID: &p.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
