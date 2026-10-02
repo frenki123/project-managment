@@ -298,7 +298,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 				return err
 			}
 		}
-		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{
+		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{ //nolint:droppedvalue -- the returned row cannot replace the post-update Get; only the error is needed
 			Name:                in.Name,
 			Description:         in.Description,
 			ImplementationNotes: in.ImplementationNotes,
@@ -319,7 +319,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteTask(ctx, id)
+		_, err := txq.DeleteTask(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
 		if errors.Is(err, sql.ErrNoRows) {
 			return web.Missing("task not found")
 		}

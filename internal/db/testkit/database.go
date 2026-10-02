@@ -33,7 +33,11 @@ func OpenDatabase(t *testing.T) *db.Database {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = database.Close() })
+	t.Cleanup(func() {
+		if err := database.Close(); err != nil {
+			t.Logf("close test database: %v", err)
+		}
+	})
 	return database
 }
 

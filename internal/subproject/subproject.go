@@ -207,7 +207,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
-		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{
+		_, err = txq.UpdateSubproject(ctx, db.UpdateSubprojectParams{ //nolint:droppedvalue -- the returned row cannot replace the post-update Get; only the error is needed
 			ProjectID: validated.ProjectID, Name: validated.Name, TotalHours: *validated.TotalHours, ID: id,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
@@ -223,7 +223,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteSubproject(ctx, id)
+		_, err := txq.DeleteSubproject(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
 		if errors.Is(err, sql.ErrNoRows) {
 			return web.Missing("subproject not found")
 		}

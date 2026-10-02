@@ -48,7 +48,7 @@ func (w WeekStart) Info() (WeekInfo, error) {
 	if w.t.IsZero() {
 		return WeekInfo{}, web.Invalid("week_start must be a Monday")
 	}
-	_, number := w.t.ISOWeek()
+	_, number := w.t.ISOWeek() //nolint:droppedvalue -- only the ISO week number is used, not the ISO year
 	return WeekInfo{w, number, w.t.Format("02.01"), w.t.Format("2006-01"), w.t.Format("January 2006")}, nil
 }
 

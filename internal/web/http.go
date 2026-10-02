@@ -44,13 +44,17 @@ func JSON[T any](w http.ResponseWriter, status int, v T) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":"internal error"}`))
+		if _, err := w.Write([]byte(`{"error":"internal error"}`)); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
+			log.Printf("write internal error response: %v", err)
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	_, _ = w.Write(body.Bytes())
+	if _, err := w.Write(body.Bytes()); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
+		log.Printf("write JSON response: %v", err)
+	}
 }
 
 func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
@@ -60,7 +64,7 @@ func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
 		json.RejectUnknownMembers(true),
 		json.MatchCaseInsensitiveNames(true),
 	); err != nil {
-		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok { //nolint:droppedvalue -- the error value itself is not needed, only whether it matches
 			return HTTPError{Status: http.StatusRequestEntityTooLarge, Message: "request body too large"}
 		}
 		return HTTPError{Status: http.StatusBadRequest, Message: "invalid json"}
@@ -154,7 +158,7 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	_, err := w.Write(body.Bytes())
+	_, err := w.Write(body.Bytes()) //nolint:droppedvalue -- Write's byte count is uninteresting; the error is returned
 	if err != nil {
 		return ResponseError{Err: err}
 	}
@@ -162,7 +166,7 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 }
 
 func writeRenderError(w http.ResponseWriter, r *http.Request, err error, fragment bool) {
-	if _, ok := errors.AsType[ResponseError](err); ok {
+	if _, ok := errors.AsType[ResponseError](err); ok { //nolint:droppedvalue -- the error value itself is not needed, only whether it matches
 		log.Printf("write response: %v", err)
 		return
 	}

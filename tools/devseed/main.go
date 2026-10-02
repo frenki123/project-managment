@@ -150,7 +150,7 @@ func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number in
 			return fmt.Errorf("project %d task %d: %w", number, i+1, err)
 		}
 		for _, cell := range cells {
-			if _, err := q.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
+			if _, err := q.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{ //nolint:droppedvalue -- the upserted week row is not needed for seeding, only the error
 				TaskID:       createdTask.ID,
 				WeekStart:    cell.weekStart,
 				PlannedHours: cell.planned,
@@ -175,7 +175,7 @@ func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number in
 
 func seedIdeas(ctx context.Context, q *db.Queries) error {
 	for i := range 10 {
-		if _, err := task.Create(ctx, q, task.Input{
+		if _, err := task.Create(ctx, q, task.Input{ //nolint:droppedvalue -- the created task is not needed for seeding ideas, only the error
 			Name: fmt.Sprintf("Idea %d", i+1),
 		}); err != nil {
 			return err
