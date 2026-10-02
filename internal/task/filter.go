@@ -8,11 +8,12 @@ import (
 	"strconv"
 
 	"cad-development/internal/db"
+	"cad-development/internal/nullable"
 	"cad-development/internal/web"
 )
 
 // Filter selects all tasks, idea tasks, or a project and optional subproject.
-// A subproject takes precedence over project, ideas, and all.
+// Ideas and subprojects are mutually exclusive by schema, so a filter never needs both.
 type Filter struct {
 	All        bool
 	Ideas      bool
@@ -38,6 +39,9 @@ func ParseFilter(projectKey, subprojectValue string) (Filter, error) {
 		}
 		f.ID = id
 	}
+	if f.Ideas && subprojectValue != "" {
+		return Filter{}, web.Invalid("ideas cannot be filtered by subproject")
+	}
 	if subprojectValue != "" {
 		id, err := strconv.ParseInt(subprojectValue, 10, 64)
 		if err != nil || id < 1 {
@@ -60,6 +64,35 @@ func FilterKey(f Filter) string {
 		values.Set("subproject", strconv.FormatInt(*f.Subproject, 10))
 	}
 	return values.Encode()
+}
+
+// ValidateFilter reports whether the filter identifies an existing scope, without loading
+// any rows. Missing projects or subprojects are 404; a subproject from another project is 400.
+func ValidateFilter(ctx context.Context, q *db.Queries, f Filter) error {
+	if (f.All || f.Ideas) && f.Subproject == nil {
+		return nil
+	}
+	var projectID, subprojectID sql.NullInt64
+	if !f.All && !f.Ideas {
+		projectID = nullable.Int64(&f.ID)
+	}
+	if f.Subproject != nil {
+		subprojectID = nullable.Int64(f.Subproject)
+	}
+	scope, err := q.TaskFilterScope(ctx, db.TaskFilterScopeParams{ProjectID: projectID, SubprojectID: subprojectID})
+	if err != nil {
+		return err
+	}
+	if !f.All && !f.Ideas && scope.ProjectExists == 0 {
+		return web.Missing("project not found")
+	}
+	if f.Subproject != nil && scope.SubprojectExists == 0 {
+		return web.Missing("subproject not found")
+	}
+	if !f.All && !f.Ideas && f.Subproject != nil && scope.SubprojectProjectID != f.ID {
+		return web.Invalid("subproject does not belong to project")
+	}
+	return nil
 }
 
 func ResolveFilter(ctx context.Context, q *db.Queries, f Filter) (ResolvedFilter, error) {
@@ -101,17 +134,22 @@ func ResolveFilter(ctx context.Context, q *db.Queries, f Filter) (ResolvedFilter
 }
 
 func ListByFilter(ctx context.Context, q *db.Queries, f Filter) ([]Task, error) {
-	if _, err := ResolveFilter(ctx, q, f); err != nil {
+	if f.Ideas {
+		return ListIdeas(ctx, q)
+	}
+	var projectID, subprojectID sql.NullInt64
+	if !f.All {
+		projectID = nullable.Int64(&f.ID)
+	}
+	if f.Subproject != nil {
+		subprojectID = nullable.Int64(f.Subproject)
+	}
+	list, err := listScoped(ctx, q, projectID, subprojectID)
+	if err != nil {
 		return nil, err
 	}
-	switch {
-	case f.Subproject != nil:
-		return ListBySubproject(ctx, q, *f.Subproject)
-	case !f.All && !f.Ideas:
-		return ListByProject(ctx, q, f.ID)
-	case f.Ideas:
-		return ListIdeas(ctx, q)
-	default:
-		return List(ctx, q)
+	if len(list) > 0 {
+		return list, nil
 	}
+	return list, ValidateFilter(ctx, q, f)
 }

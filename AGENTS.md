@@ -3,6 +3,7 @@ Build a local-first web app for project hour planning, time tracking, and progre
 
 # Development rules
 - When a minimal quick fix and a better long-term design conflict, always choose the better long-term design.
+- Happy path optimized, error path can be slower.
 - One Go executable; embed templates, static assets, and Goose migrations.
 - Single user on localhost; SQLite with modernc.org/sqlite; no auth.
 - Use net/http, sqlc, templ, HTMX 4, hyperscript, Pico CSS, and Chart.js.
