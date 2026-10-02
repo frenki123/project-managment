@@ -29,8 +29,16 @@ DROP TABLE app_test;
 	}
 	defer database.Close()
 
-	if _, err := database.Conn.Exec("INSERT INTO app_test (id) VALUES (1)"); err != nil {
+	result, err := database.Conn.Exec("INSERT INTO app_test (id) VALUES (1)")
+	if err != nil {
 		t.Fatal(err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected != 1 {
+		t.Fatalf("insert affected %d rows, want 1", affected)
 	}
 	var count int
 	if err := database.Conn.QueryRow("SELECT COUNT(*) FROM app_test").Scan(&count); err != nil {

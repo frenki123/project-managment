@@ -41,15 +41,29 @@ func TestForeignKeyViolationUsesPrimaryCode(t *testing.T) {
 func TestDriverUniqueConstraintCode(t *testing.T) {
 	database := testkit.OpenDatabase(t)
 	ctx := t.Context()
-	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05"); err != nil {
+	result, err := database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05")
+	if err != nil {
 		t.Fatal(err)
 	}
-	_, err := database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05")
+	affected, err := result.RowsAffected()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected != 1 {
+		t.Fatalf("insert affected %d rows, want 1", affected)
+	}
+	duplicate, err := database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05")
 	if !db.UniqueViolation(err, "projects.name") {
 		t.Fatalf("expected real unique violation, got %v", err)
 	}
-	_, err = database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999)
+	if duplicate != nil {
+		t.Fatalf("failed insert returned a result: %#v", duplicate)
+	}
+	missing, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999)
 	if !db.ForeignKeyViolation(err) {
 		t.Fatalf("expected real foreign-key violation, got %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("failed insert returned a result: %#v", missing)
 	}
 }

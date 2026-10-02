@@ -49,18 +49,22 @@ func TestTasksEncodesFilters(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tasks":[]}`))
+		writeBody(t, w, `{"tasks":[]}`)
 	}))
 	projectID := int64(7)
-	if _, err := c.Tasks(context.Background(), false, &projectID, nil); err != nil {
+	result, err := c.Tasks(context.Background(), false, &projectID, nil)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(result.Tasks) != 0 {
+		t.Fatalf("unexpected tasks: %#v", result.Tasks)
 	}
 }
 
 func TestAPIErrorPreservesStatusAndMessage(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(`{"error":"historical editing is not enabled","reason":"week-outside-project-bounds"}`))
+		writeBody(t, w, `{"error":"historical editing is not enabled","reason":"week-outside-project-bounds"}`)
 	}))
 	err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks/1", (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
@@ -83,7 +87,7 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadGateway)
-				_, _ = w.Write([]byte(tc.body))
+				writeBody(t, w, tc.body)
 			}))
 			err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", (*struct{})(nil))
 			apiErr, ok := errors.AsType[*APIError](err)
@@ -97,7 +101,7 @@ func TestAPIErrorFallsBackToResponseBody(t *testing.T) {
 func TestAPIErrorBodyIsBounded(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(strings.Repeat("x", maxAPIErrorBody+1024)))
+		writeBody(t, w, strings.Repeat("x", maxAPIErrorBody+1024))
 	}))
 	err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", (*struct{})(nil))
 	apiErr, ok := errors.AsType[*APIError](err)
@@ -111,7 +115,7 @@ func TestTasksDecodeLargeSuccessfulResponse(t *testing.T) {
 	body := `{"tasks":[` + strings.Repeat(item+",", 10000) + item + `]}`
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
+		writeBody(t, w, body)
 	}))
 	result, err := c.Tasks(context.Background(), false, nil, nil)
 	if err != nil {
@@ -126,5 +130,17 @@ func TestEmptySuccessfulResponseIsAccepted(t *testing.T) {
 	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	if err := c.DoNoBody(context.Background(), http.MethodGet, "/api/v1/tasks", new(task.TasksResponse)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func writeBody(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	n, err := w.Write([]byte(body))
+	if err != nil {
+		t.Errorf("write response body: %v", err)
+		return
+	}
+	if n != len(body) {
+		t.Errorf("short response write: got %d bytes, want %d", n, len(body))
 	}
 }

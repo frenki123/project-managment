@@ -31,8 +31,12 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ResolveFilter(ctx, q, valid); err != nil {
+	resolved, err := ResolveFilter(ctx, q, valid)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if resolved.Project == nil || resolved.Project.ID != first.ID || resolved.Subproject == nil || resolved.Subproject.ID != sp.ID {
+		t.Fatalf("unexpected resolved filter: %#v", resolved)
 	}
 
 	for _, tc := range []struct {
@@ -48,7 +52,11 @@ func TestFilterValidatesAndListsWithPrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, err := ParseFilter(tc.project, tc.subproject)
 			if err == nil {
-				_, err = ResolveFilter(ctx, q, f)
+				resolved, resolveErr := ResolveFilter(ctx, q, f)
+				if resolved != (ResolvedFilter{}) {
+					t.Fatalf("rejected resolve returned a filter: %#v", resolved)
+				}
+				err = resolveErr
 			}
 			httpErr, ok := web.HTTPErrorFrom(err), true
 			if !ok || httpErr.Status != tc.status {

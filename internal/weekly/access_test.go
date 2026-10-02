@@ -13,7 +13,8 @@ func TestIsWeekLocked(t *testing.T) {
 	if !testkit.MustWeek(t, "2026-04-27").IsLocked(now) || !testkit.MustWeek(t, "2026-03-30").IsLocked(now) || !testkit.MustWeek(t, "2026-01-05").IsLocked(now) {
 		t.Fatal("previous months should be locked")
 	}
-	if _, err := weekly.Parse("not-a-date"); err == nil || !(weekly.WeekStart{}.IsLocked(now)) {
+	ws, err := weekly.Parse("not-a-date")
+	if err == nil || !ws.IsZero() || !(weekly.WeekStart{}.IsLocked(now)) {
 		t.Fatal("invalid or zero starts must be locked")
 	}
 	if testkit.MustWeek(t, "2026-05-04").IsLocked(now) || testkit.MustWeek(t, "2026-06-01").IsLocked(now) {

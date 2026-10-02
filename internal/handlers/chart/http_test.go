@@ -24,10 +24,14 @@ func TestSeriesUsesClearHourLabels(t *testing.T) {
 
 func TestUnknownProjectIsNotRecoveredToAnotherChart(t *testing.T) {
 	q := testkit.Open(t)
-	if _, err := projectdomain.Create(t.Context(), q, projectdomain.Input{
+	known, err := projectdomain.Create(t.Context(), q, projectdomain.Input{
 		Name: "Known", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-01-12",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if known.Name != "Known" || known.TotalHours != 10 {
+		t.Fatalf("unexpected created project: %#v", known)
 	}
 	rr := httptest.NewRecorder()
 	page(q).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/chart?project=999", nil))
