@@ -60,8 +60,8 @@ lint: generate
     staticcheck ./...
     go run ./tools/droppedcheck ./...
 
-# Run tests and build the application.
-check: test vet build
+# Run tests, build the application, and lint.
+check: test vet build lint
 
 # Reset and recreate the development database.
 db-reset:
