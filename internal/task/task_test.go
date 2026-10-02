@@ -33,12 +33,19 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := task.Create(ctx, q, task.Input{Name: "   "}); err == nil {
+	blank, err := task.Create(ctx, q, task.Input{Name: "   "})
+	if err == nil {
 		t.Fatal("expected blank task name to be rejected")
 	}
-	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
+	if blank.ID != 0 {
+		t.Fatalf("rejected create returned a task: %#v", blank)
+	}
+	wrong, err := task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
+	}
+	if wrong.ID != 0 {
+		t.Fatalf("rejected create returned a task: %#v", wrong)
 	}
 }
 
@@ -78,9 +85,12 @@ func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
+	rejected, err := task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
+	}
+	if rejected.ID != 0 {
+		t.Fatalf("rejected update returned a task: %#v", rejected)
 	}
 	updated, err := task.Get(ctx, q, item.ID)
 	if err != nil {
@@ -103,16 +113,24 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if cell.PlannedHours != hours {
+		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	if err := task.Delete(ctx, q, tk.ID); err == nil {
 		t.Fatal("expected delete with weekly history to be rejected")
 	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("unexpected delete error: %v", err)
 	}
-	if _, err := task.Get(ctx, q, tk.ID); err != nil {
+	kept, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
 		t.Fatal("task was deleted after rejected delete")
+	}
+	if kept.ID != tk.ID {
+		t.Fatalf("rejected delete returned a different task: %#v", kept)
 	}
 }
 
@@ -144,8 +162,12 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 4.0
-	if _, err := weekly.Save(ctx, q, inPart.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	cell, err := weekly.Save(ctx, q, inPart.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if cell.PlannedHours != hours {
+		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	for _, tc := range []struct {
 		name string

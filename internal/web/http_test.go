@@ -20,7 +20,7 @@ import (
 type textComponent string
 
 func (c textComponent) Render(_ context.Context, w io.Writer) error {
-	_, err := io.WriteString(w, string(c))
+	_, err := io.WriteString(w, string(c)) //nolint:droppedvalue -- the written byte count is uninteresting; the error is returned
 	return err
 }
 
@@ -141,8 +141,12 @@ func TestFormParsingDistinguishesEmptyAndMalformedValues(t *testing.T) {
 
 	malformed := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("project_id=%zz"))
 	malformed.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if _, err := web.FormInt64Checked(malformed, "project_id"); err == nil {
+	malformedValue, err := web.FormInt64Checked(malformed, "project_id")
+	if err == nil {
 		t.Fatal("expected malformed form error")
+	}
+	if malformedValue != nil {
+		t.Fatalf("malformed form returned a value: %#v", malformedValue)
 	}
 }
 

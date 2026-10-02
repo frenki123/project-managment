@@ -78,9 +78,12 @@ func TestUpdateTaskWeekUnlocksSingleRequest(t *testing.T) {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
-		data, _ := io.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
 		body = string(data)
-		_, _ = w.Write([]byte(`{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`))
+		writeBody(t, w, `{"task_id":4,"week_start":"2026-09-21","planned_hours":8,"spent_hours":2,"progress":50}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "update-task-week", "4", "2026-09-21", "--planned-hours", "8", "--unlock"); err != nil {
@@ -106,7 +109,7 @@ func TestUpdateTaskWeekReturnsUpdateFailure(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/v1/tasks/4/weeks/2026-09-21" {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"error":"invalid hours"}`))
+			writeBody(t, w, `{"error":"invalid hours"}`)
 			return
 		}
 		http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -142,7 +145,7 @@ func TestTaskUpdateReturnsUpdateFailure(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4" {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(`{"error":"invalid task"}`))
+			writeBody(t, w, `{"error":"invalid task"}`)
 			return
 		}
 		http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -163,9 +166,12 @@ func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		methods = append(methods, r.Method+" "+r.URL.Path)
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4" {
-			data, _ := io.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read request body: %v", err)
+			}
 			putBody = string(data)
-			_, _ = w.Write([]byte(`{"id":4,"name":"","priority":"high"}`))
+			writeBody(t, w, `{"id":4,"name":"","priority":"high"}`)
 			return
 		}
 		http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -226,13 +232,13 @@ func TestTaskListUsesProjectBeforeIdeasAndProjectID(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v1/projects":
-			_, _ = w.Write([]byte(`{"projects":[{"id":5,"name":"Alpha"}]}`))
+			writeBody(t, w, `{"projects":[{"id":5,"name":"Alpha"}]}`)
 		case "/api/v1/tasks":
 			if r.URL.Query().Get("project_id") != "5" || r.URL.Query().Get("ideas") != "" {
 				http.Error(w, "unexpected query", http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"tasks":[]}`))
+			writeBody(t, w, `{"tasks":[]}`)
 		default:
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
@@ -250,7 +256,7 @@ func TestTaskListDefaultsToAllTasks(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tasks":[]}`))
+		writeBody(t, w, `{"tasks":[]}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "tasks", "list"); err != nil {
@@ -267,13 +273,13 @@ func TestTaskListResolvesSubprojectNameWithoutProject(t *testing.T) {
 				http.Error(w, "unexpected query", http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"subprojects":[{"id":9,"project_id":3,"name":"Backend"}]}`))
+			writeBody(t, w, `{"subprojects":[{"id":9,"project_id":3,"name":"Backend"}]}`)
 		case "/api/v1/tasks":
 			if r.URL.Query().Get("subproject_id") != "9" || r.URL.Query().Get("project_id") != "" || r.URL.Query().Get("ideas") != "" {
 				http.Error(w, "unexpected query", http.StatusBadRequest)
 				return
 			}
-			_, _ = w.Write([]byte(`{"tasks":[]}`))
+			writeBody(t, w, `{"tasks":[]}`)
 		default:
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
@@ -292,7 +298,7 @@ func TestTaskListLeavesInvalidFilterValidationToServer(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"project not found"}`))
+		writeBody(t, w, `{"error":"project not found"}`)
 	}))
 	defer server.Close()
 	err := runCommand(t, server, "tasks", "list", "--project-id", "0")
@@ -309,10 +315,13 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
-		data, _ := io.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
 		body = string(data)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":7,"name":"Alpha","purchase_order_name":"PO-7","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`))
+		writeBody(t, w, `{"id":7,"name":"Alpha","purchase_order_name":"PO-7","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "projects", "update", "7", "--name", "Alpha", "--purchase-order-name", "PO-7", "--total-hours", "120", "--start-date", "2026-01-05", "--end-date", "2026-03-30"); err != nil {
@@ -337,10 +346,13 @@ func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
-		data, _ := io.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
 		body = string(data)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":9,"project_id":7,"name":"Backend","total_hours":40}`))
+		writeBody(t, w, `{"id":9,"project_id":7,"name":"Backend","total_hours":40}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "subprojects", "update", "9", "--project-id", "7", "--name", "Backend", "--total-hours", "40"); err != nil {
@@ -362,7 +374,7 @@ func TestProjectSCurveUsesProjectIDWithoutResolution(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"project":{"id":7,"name":"Alpha"},"weeks":[]}`))
+		writeBody(t, w, `{"project":{"id":7,"name":"Alpha"},"weeks":[]}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "project-s-curve", "--project-id", "7"); err != nil {
@@ -377,7 +389,7 @@ func TestTaskListSendsCombinedProjectAndSubprojectIDs(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tasks":[]}`))
+		writeBody(t, w, `{"tasks":[]}`)
 	}))
 	defer server.Close()
 	if err := runCommand(t, server, "tasks", "list", "--project-id", "5", "--subproject-id", "9", "--ideas"); err != nil {
@@ -404,9 +416,9 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v1/projects":
-			_, _ = w.Write([]byte(`{"projects":[{"id":5,"name":"Alpha"}]}`))
+			writeBody(t, w, `{"projects":[{"id":5,"name":"Alpha"}]}`)
 		case "/api/v1/projects/5/s-curve":
-			_, _ = w.Write([]byte(`{"project":{"id":5,"name":"Alpha"},"weeks":[]}`))
+			writeBody(t, w, `{"project":{"id":5,"name":"Alpha"},"weeks":[]}`)
 		default:
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 		}
@@ -414,5 +426,17 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 	defer server.Close()
 	if err := runCommand(t, server, "project-s-curve", "--project", "Alpha", "--project-id", "7"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func writeBody(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	n, err := w.Write([]byte(body))
+	if err != nil {
+		t.Errorf("write response body: %v", err)
+		return
+	}
+	if n != len(body) {
+		t.Errorf("short response write: got %d bytes, want %d", n, len(body))
 	}
 }

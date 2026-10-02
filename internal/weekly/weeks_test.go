@@ -21,8 +21,12 @@ func TestParse(t *testing.T) {
 		t.Fatalf("got %q %v", ws, err)
 	}
 	for _, s := range []string{"2026-05-05", "not-a-date"} {
-		if _, err := Parse(s); err == nil {
+		ws, err := Parse(s)
+		if err == nil {
 			t.Fatalf("expected %q to fail", s)
+		}
+		if !ws.IsZero() {
+			t.Fatalf("failed parse %q returned a non-zero week", s)
 		}
 	}
 }

@@ -31,11 +31,19 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	first, later := 20.0, 40.0
-	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(first)}, now); err != nil {
+	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(first)}, now)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{Progress: nullable.Present(later)}, now); err != nil {
+	if cell.Progress == nil || *cell.Progress != first {
+		t.Fatalf("week 1 save should store progress %v: %#v", first, cell)
+	}
+	cell, err = weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{Progress: nullable.Present(later)}, now)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if cell.Progress == nil || *cell.Progress != later {
+		t.Fatalf("later save should store progress %v: %#v", later, cell)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
 	if err != nil {
@@ -75,11 +83,19 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	secondPlanned := 50.0
 	secondSpent := 100.0
 	progress := 50.0
-	if _, err := weekly.Save(ctx, q, first.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(firstPlanned), SpentHours: nullable.Present(firstSpent), Progress: nullable.Present(progress)}, now); err != nil {
+	cell, err := weekly.Save(ctx, q, first.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(firstPlanned), SpentHours: nullable.Present(firstSpent), Progress: nullable.Present(progress)}, now)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := weekly.Save(ctx, q, second.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(secondPlanned), SpentHours: nullable.Present(secondSpent)}, now); err != nil {
+	if cell.PlannedHours != firstPlanned || cell.SpentHours != firstSpent || cell.Progress == nil || *cell.Progress != progress {
+		t.Fatalf("first task save returned unexpected cell: %#v", cell)
+	}
+	cell, err = weekly.Save(ctx, q, second.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(secondPlanned), SpentHours: nullable.Present(secondSpent)}, now)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if cell.PlannedHours != secondPlanned || cell.SpentHours != secondSpent || cell.Progress == nil || *cell.Progress != 0 {
+		t.Fatalf("second task save should carry zero progress: %#v", cell)
 	}
 
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
@@ -144,16 +160,23 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
+	cell, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
+	if err != nil {
 		t.Fatal(err)
 	}
+	if cell.PlannedHours != hours {
+		t.Fatalf("save returned unexpected planned hours: %#v", cell)
+	}
 	secondID := second.ID
-	_, err = task.Update(ctx, q, item.ID, task.Patch{
+	updated, err := task.Update(ctx, q, item.ID, task.Patch{
 		Name: nullable.Present(item.Name), ProjectID: nullable.Present(&secondID),
 	})
 	httpErr, ok := errors.AsType[web.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusConflict {
 		t.Fatalf("got %v", err)
+	}
+	if updated.ID != 0 {
+		t.Fatalf("rejected update returned a task: %#v", updated)
 	}
 	got, err := task.Get(ctx, q, item.ID)
 	if err != nil {
@@ -183,8 +206,12 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 	}
 	planned, spent, progress := 6.0, 4.0, 50.0
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now); err != nil {
+	cell, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Progress: nullable.Present(progress)}, now)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if cell.PlannedHours != planned || cell.SpentHours != spent || cell.Progress == nil || *cell.Progress != progress {
+		t.Fatalf("save returned unexpected cell: %#v", cell)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), strconv.FormatInt(subprojectID, 10)), now, false)
 	if err != nil {
@@ -204,8 +231,12 @@ func TestGridUsesSQLSubprojectTotals(t *testing.T) {
 func TestIdeasGridHasNoWeeklyData(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	if _, err := task.Create(ctx, q, task.Input{Name: "Idea"}); err != nil {
+	idea, err := task.Create(ctx, q, task.Input{Name: "Idea"})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if idea.Name != "Idea" || idea.ProjectID != nil {
+		t.Fatalf("unexpected idea task: %#v", idea)
 	}
 	grid, err := task.LoadGrid(ctx, q, mustFilter(t, "ideas", ""), time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC), false)
 	if err != nil {
@@ -231,10 +262,13 @@ func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(first.ID, 10), strconv.FormatInt(sp.ID, 10)), time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(first.ID, 10), strconv.FormatInt(sp.ID, 10)), time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), false)
 	httpErr, ok := errors.AsType[web.HTTPError](err)
 	if !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
+	}
+	if grid.Kind != task.ViewAll || len(grid.Rows) != 0 {
+		t.Fatalf("rejected grid load returned grid data: %#v", grid)
 	}
 }
 
@@ -254,8 +288,12 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []int64{p.ID, other.ID} {
-		if _, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &id}); err != nil {
+		item, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &id})
+		if err != nil {
 			t.Fatal(err)
+		}
+		if item.ProjectID == nil || *item.ProjectID != id {
+			t.Fatalf("unexpected task assignment: %#v", item)
 		}
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
