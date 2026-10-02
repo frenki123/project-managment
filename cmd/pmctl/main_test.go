@@ -60,7 +60,7 @@ func TestWriteErrorIncludesHTTPStatusAsJSON(t *testing.T) {
 		Error  string `json:"error"`
 		Status int    `json:"status"`
 	}
-	if err := json.Unmarshal([]byte(out.String()), &got); err != nil {
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Error != "HTTP 404: task not found" || got.Status != http.StatusNotFound {
