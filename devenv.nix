@@ -32,5 +32,6 @@
     sqlc version
     goose --version
     templ version
+    staticcheck -version
   '';
 }

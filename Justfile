@@ -54,6 +54,12 @@ test: generate
 vet: generate
     go vet ./...
 
+# Run staticcheck and the dropped-value analyzer after generating code.
+# Deliberate drops need a reason: //nolint:droppedvalue -- <reason>
+lint: generate
+    staticcheck ./...
+    go run ./tools/droppedcheck ./...
+
 # Run tests and build the application.
 check: test vet build
 
