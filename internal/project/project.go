@@ -251,7 +251,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err := web.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
 			return err
 		}
-		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{
+		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{ //nolint:droppedvalue -- the returned row cannot replace the post-update Get; only the error is needed
 			Name: validated.Name, PurchaseOrderName: validated.PurchaseOrderName, TotalHours: *validated.TotalHours,
 			StartDate: validated.StartDate, EndDate: validated.EndDate, ID: id,
 		})
@@ -271,7 +271,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteProject(ctx, id)
+		_, err := txq.DeleteProject(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
 		if errors.Is(err, sql.ErrNoRows) {
 			return web.Missing("project not found")
 		}

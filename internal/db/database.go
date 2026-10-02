@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"log"
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -36,19 +37,31 @@ func OpenDatabase(config DatabaseConfig) (*Database, error) {
 		conn.SetMaxOpenConns(config.MaxOpenConns)
 	}
 	if err := conn.Ping(); err != nil {
-		_ = conn.Close()
+		closeAndLog(conn)
 		return nil, err
 	}
 	provider, err := goose.NewProvider(goose.DialectSQLite3, conn, config.Migrations)
 	if err != nil {
-		_ = conn.Close()
+		closeAndLog(conn)
 		return nil, err
 	}
-	if _, err := provider.Up(context.Background()); err != nil {
-		_ = conn.Close()
+	n, err := provider.Up(context.Background())
+	if err != nil {
+		closeAndLog(conn)
 		return nil, err
+	}
+	if len(n) > 0 {
+		log.Printf("applied %d migrations", len(n))
 	}
 	return &Database{Conn: conn, Q: New(conn)}, nil
+}
+
+// closeAndLog closes a connection that will not be returned, surfacing the error
+// without failing the caller's happy path.
+func closeAndLog(conn *sql.DB) {
+	if err := conn.Close(); err != nil {
+		log.Printf("close database: %v", err)
+	}
 }
 
 func (d *Database) Close() error {

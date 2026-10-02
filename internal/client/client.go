@@ -96,10 +96,9 @@ func (c *Client) do[Out any](ctx context.Context, method, path string, body io.R
 			Error  string `json:"error"`
 			Reason string `json:"reason"`
 		}
-		_ = json.Unmarshal(data, &payload)
-		message := strings.TrimSpace(payload.Error)
-		if message == "" {
-			message = strings.TrimSpace(string(data))
+		message := strings.TrimSpace(string(data))
+		if err := json.Unmarshal(data, &payload); err == nil && strings.TrimSpace(payload.Error) != "" {
+			message = strings.TrimSpace(payload.Error)
 		}
 		if len(message) > maxAPIErrorBody {
 			message = message[:maxAPIErrorBody] + "..."
@@ -110,13 +109,13 @@ func (c *Client) do[Out any](ctx context.Context, method, path string, body io.R
 		return nil
 	}
 	if output == nil {
-		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil { //nolint:droppedvalue -- the number of discarded bytes is uninteresting
 			return fmt.Errorf("read response: %w", err)
 		}
 		return nil
 	}
 	reader := bufio.NewReader(resp.Body)
-	if _, err := reader.Peek(1); err != nil {
+	if _, err := reader.Peek(1); err != nil { //nolint:droppedvalue -- the peeked byte is not needed, only whether it fails
 		if errors.Is(err, io.EOF) {
 			return nil
 		}

@@ -69,7 +69,7 @@ func weekHTML(q *db.Queries) http.HandlerFunc {
 			web.WriteError(w, r, web.HTTPErrorFromReason(http.StatusBadRequest, "week-outside-project-bounds"))
 			return
 		}
-		_, err = weekly.Save(r.Context(), q, id, grid.Rows[rowIndex].Cells[cellIndex].WeekStart, patch, currentTime)
+		_, err = weekly.Save(r.Context(), q, id, grid.Rows[rowIndex].Cells[cellIndex].WeekStart, patch, currentTime) //nolint:droppedvalue -- the saved cell is not needed here, only the error
 		if err != nil {
 			httpErr := web.HTTPErrorFrom(err)
 			grid.Rows[rowIndex].Cells[cellIndex].Error = httpErr.Message
