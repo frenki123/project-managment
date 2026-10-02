@@ -2,10 +2,11 @@
 // on values assigned to blank identifiers.
 //
 // Every blank in the left-hand side of an assignment or short-variable
-// declaration is flagged, including in if/switch/for initializers. Two
+// declaration is flagged, including in if/switch/for initializers. Three
 // patterns are deliberately exempt because they are structural, not value
-// drops: the key (and key/value) bindings of a for-range statement, and
-// compile-time assertions written as var declarations (var _ T = ...).
+// drops: the key (and key/value) bindings of a for-range statement,
+// compile-time assertions written as var declarations (var _ T = ...), and
+// keep-alive assignments of an already-bound identifier to a blank (_ = x).
 // Generated files are skipped entirely.
 //
 // A deliberate drop can be justified with a reason:
@@ -13,14 +14,17 @@
 //	_, _ = w.Write(b) //nolint:droppedvalue -- Write returns count and error, http.Error reports failure
 //
 // The marker must carry a reason; a bare //nolint:droppedvalue is itself a
-// diagnostic, so dropping the reason fails the build.
+// diagnostic, so dropping the reason fails the build. The marker may be a
+// trailing comment on the assignment's line, on any line of a multi-line
+// assignment, or a standalone comment on the line directly above (but not a
+// trailing comment of a preceding statement), and it may appear anywhere in a
+// //nolint linter-name list.
 package main
 
 import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"regexp"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -37,60 +41,80 @@ var Analyzer = &analysis.Analyzer{
 	Run:  run,
 }
 
-var reasonRe = regexp.MustCompile(`^//nolint:droppedvalue(?:,\s*\w+)*\s+--\s+(.+)$`)
-
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, file := range pass.Files {
 		if ast.IsGenerated(file) {
 			continue
 		}
 		comments := collectComments(pass, file)
-		for _, assign := range findAssignments(file) {
-			line := pass.Fset.Position(assign.Pos()).Line
+		assigns := findAssignments(file)
+		assignLines := make(map[int]bool, len(assigns))
+		for _, assign := range assigns {
+			start := pass.Fset.Position(assign.Pos()).Line
+			end := pass.Fset.Position(assign.End()).Line
+			for line := start; line <= end; line++ {
+				assignLines[line] = true
+			}
+		}
+		for _, assign := range assigns {
 			if n := droppedBlanks(assign); n > 0 {
-				reportDrop(pass, comments, assign, line, n)
+				reportDrop(pass, comments, assign, assignLines, n)
 			}
 		}
 	}
 	return nil, nil
 }
 
-// reportDrop reports an assignment that drops n values. A marker on the same
-// line or the line directly above suppresses the diagnostic only when it
-// carries a reason; a bare marker is additionally reported as requiring one and
-// does not suppress the drop, so it cannot be used as a silent bypass.
-func reportDrop(pass *analysis.Pass, comments []commentLine, assign *ast.AssignStmt, line, n int) {
-	marker := markerNear(comments, line)
-	if marker == nil {
-		pass.Report(analysis.Diagnostic{
-			Pos:     assign.Pos(),
-			Message: fmt.Sprintf("assigned value is dropped (%d blank identifier(s)); assign it to a named identifier or justify with %s -- <reason>", n, Marker),
-		})
+// reportDrop reports an assignment that drops n values. An applicable marker
+// suppresses the diagnostic only when it carries a reason; a bare marker is
+// additionally reported as requiring one and does not suppress the drop, so it
+// cannot be used as a silent bypass.
+func reportDrop(pass *analysis.Pass, comments []commentLine, assign *ast.AssignStmt, assignLines map[int]bool, n int) {
+	marker := markerApplies(pass, comments, assign, assignLines)
+	if marker != nil && parseMarker(marker.text) == justified {
 		return
 	}
-	if reasonRe.MatchString(strings.TrimSpace(marker.text)) {
-		return // justified drop
+	if marker != nil {
+		pass.Report(analysis.Diagnostic{
+			Pos:     marker.pos,
+			Message: fmt.Sprintf("droppedvalue marker requires a reason: use %q -- <reason>", Marker),
+		})
 	}
 	pass.Report(analysis.Diagnostic{
-		Pos:     marker.pos,
-		Message: fmt.Sprintf("%s requires a reason: %s -- <reason>", Marker, Marker),
-	})
-	pass.Report(analysis.Diagnostic{
 		Pos:     assign.Pos(),
-		Message: fmt.Sprintf("assigned value is dropped (%d blank identifier(s)); assign it to a named identifier or justify with %s -- <reason>", n, Marker),
+		Message: dropMessage(n),
 	})
 }
 
-// markerNear returns the droppedvalue marker closest to the given source line,
-// if any, looking at the same line and the line directly above it.
-func markerNear(comments []commentLine, line int) *commentLine {
+// dropMessage reports that n blank identifiers dropped a computed value.
+func dropMessage(n int) string {
+	var blanks string
+	if n == 1 {
+		blanks = "1 blank identifier"
+	} else {
+		blanks = fmt.Sprintf("%d blank identifiers", n)
+	}
+	return fmt.Sprintf("assigned value is dropped (%s); assign it to a named identifier or justify with %s -- <reason>", blanks, Marker)
+}
+
+// markerApplies returns the droppedvalue marker that applies to assign, if any.
+// A marker on the same line as the assignment or anywhere within a multi-line
+// assignment's line range always applies; a marker on the line directly above
+// applies only when it is a standalone leading comment, i.e. no assignment
+// occupies that marker's line, so a trailing comment of a prior statement can
+// never suppress a later drop.
+func markerApplies(pass *analysis.Pass, comments []commentLine, assign *ast.AssignStmt, assignLines map[int]bool) *commentLine {
+	startLine := pass.Fset.Position(assign.Pos()).Line
+	endLine := pass.Fset.Position(assign.End()).Line
 	var best *commentLine
 	for i := range comments {
 		c := &comments[i]
-		if !strings.Contains(c.text, "nolint:droppedvalue") {
+		if parseMarker(c.text) == notAMarker {
 			continue
 		}
-		if c.line != line && c.line != line-1 {
+		inRange := c.line >= startLine && c.line <= endLine
+		leading := c.line == startLine-1 && !assignLines[c.line]
+		if !inRange && !leading {
 			continue
 		}
 		if best == nil || c.line > best.line {
@@ -100,6 +124,56 @@ func markerNear(comments []commentLine, line int) *commentLine {
 	return best
 }
 
+// markerKind classifies a comment's relationship to the droppedvalue linter.
+type markerKind int
+
+const (
+	// notAMarker is a comment that is not a droppedvalue directive (including
+	// nolint directives for other linters), and is ignored entirely.
+	notAMarker markerKind = iota
+	// justified is a droppedvalue directive carrying a non-empty "-- reason".
+	justified
+	// missingReason is a droppedvalue directive without the required reason.
+	missingReason
+)
+
+// parseMarker classifies a comment as a droppedvalue nolint directive. The
+// linter-name list runs from "//nolint:" up to the "-- reason" separator (or
+// to a nested "//", e.g. an analysistest "// want" expectation); "droppedvalue"
+// may appear anywhere in the comma-separated list.
+func parseMarker(text string) markerKind {
+	t := strings.TrimSpace(text)
+	rest, ok := strings.CutPrefix(t, "//nolint:")
+	if !ok {
+		return notAMarker
+	}
+	head := rest
+	if i := strings.Index(rest, "--"); i >= 0 {
+		head = rest[:i] // linter-name list
+	}
+	if i := strings.Index(head, "//"); i >= 0 {
+		head = head[:i]
+	}
+	hasDropped := false
+	for _, name := range strings.Split(head, ",") {
+		if strings.TrimSpace(name) == "droppedvalue" {
+			hasDropped = true
+			break
+		}
+	}
+	if !hasDropped {
+		return notAMarker
+	}
+	reason := ""
+	if i := strings.Index(rest, "--"); i >= 0 {
+		reason = rest[i+2:]
+	}
+	if strings.TrimSpace(reason) == "" {
+		return missingReason
+	}
+	return justified
+}
+
 // commentLine is a single comment line with its source position.
 type commentLine struct {
 	line int
@@ -107,17 +181,17 @@ type commentLine struct {
 	text string
 }
 
-// collectComments returns every comment line in the file with its source line
-// number and position, expanding multi-line /* */ comments line by line.
+// collectComments returns every line comment in the file with its source line
+// number and position. Block comments are not valid marker carriers and are
+// ignored entirely.
 func collectComments(pass *analysis.Pass, file *ast.File) []commentLine {
 	var out []commentLine
 	for _, group := range file.Comments {
 		for _, c := range group.List {
-			base := pass.Fset.Position(c.Pos())
-			for i, part := range strings.Split(c.Text, "\n") {
-				pos := token.Pos(int(c.Pos()) + i)
-				out = append(out, commentLine{line: base.Line + i, pos: pos, text: strings.TrimSpace(part)})
+			if !strings.HasPrefix(c.Text, "//") {
+				continue
 			}
+			out = append(out, commentLine{line: pass.Fset.Position(c.Pos()).Line, pos: c.Pos(), text: strings.TrimSpace(c.Text)})
 		}
 	}
 	return out
@@ -156,8 +230,10 @@ func droppedBlanks(assign *ast.AssignStmt) int {
 }
 
 // computesValue reports whether the right-hand side consumed by the i-th
-// left-hand side evaluates a new value (a call or operation) rather than merely
-// referencing an already-bound variable (ident, selector, index, dereference).
+// left-hand side computes a new value. Any expression other than a bare
+// reference to an already-bound identifier computes a value and is a dropped
+// value when assigned to a blank; only a plain identifier (a keep-alive like
+// _ = x) is exempt.
 func computesValue(assign *ast.AssignStmt, i int) bool {
 	var r ast.Expr
 	if len(assign.Rhs) == 1 && len(assign.Lhs) > 1 {
@@ -166,8 +242,8 @@ func computesValue(assign *ast.AssignStmt, i int) bool {
 		r = assign.Rhs[i]
 	}
 	switch r.(type) {
-	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr, *ast.StarExpr:
-		return false
+	case *ast.Ident:
+		return false // plain identifier reference, a keep-alive, not a computed value
 	default:
 		return true
 	}
