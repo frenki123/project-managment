@@ -97,3 +97,14 @@ func TestTaskListMissingProjectIsNotFound(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskListRejectsIdeasWithSubproject(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?ideas=true&subproject_id=5", nil))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("ideas with subproject should be 400: %d %s", rr.Code, rr.Body.String())
+	}
+}

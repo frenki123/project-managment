@@ -25,7 +25,7 @@ func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 		now := time.Now()
 		filter, err := task.ParseFilter(r.FormValue("project"), r.FormValue("subproject"))
 		if err == nil {
-			_, err = task.ResolveFilter(r.Context(), q, filter)
+			err = task.ValidateFilter(r.Context(), q, filter)
 		}
 		if err != nil {
 			web.WriteError(w, r, err)

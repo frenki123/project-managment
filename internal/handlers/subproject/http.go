@@ -2,13 +2,12 @@ package subprojecthandler
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"cad-development/internal/db"
 	"cad-development/internal/handlers/shared"
+	"cad-development/internal/nullable"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
 	"cad-development/internal/views"
@@ -35,12 +34,19 @@ func listSubprojects(ctx context.Context, q *db.Queries, r *http.Request) (subpr
 	}
 	var list []subproject.Subproject
 	if pid != nil {
-		if _, err := q.GetProject(ctx, *pid); errors.Is(err, sql.ErrNoRows) {
-			return subproject.SubprojectsResponse{}, web.Missing("project not found")
-		} else if err != nil {
+		list, err = subproject.ListByProjectWithTotals(ctx, q, *pid)
+		if err != nil {
 			return subproject.SubprojectsResponse{}, err
 		}
-		list, err = subproject.ListByProjectWithTotals(ctx, q, *pid)
+		if len(list) == 0 {
+			scope, err := q.TaskFilterScope(ctx, db.TaskFilterScopeParams{ProjectID: nullable.Int64(pid)})
+			if err != nil {
+				return subproject.SubprojectsResponse{}, err
+			}
+			if scope.ProjectExists == 0 {
+				return subproject.SubprojectsResponse{}, web.Missing("project not found")
+			}
+		}
 	} else {
 		list, err = subproject.ListWithTotals(ctx, q)
 	}

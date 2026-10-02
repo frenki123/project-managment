@@ -30,6 +30,12 @@ WHERE (CAST(sqlc.narg(project_id) AS INTEGER) IS NULL OR project_id = CAST(sqlc.
   AND (CAST(sqlc.narg(subproject_id) AS INTEGER) IS NULL OR subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER))
 ORDER BY name COLLATE NOCASE, id;
 
+-- name: TaskFilterScope :one
+SELECT
+    CAST(COALESCE((SELECT 1 FROM projects WHERE id = CAST(sqlc.narg(project_id) AS INTEGER)), 0) AS INTEGER) AS project_exists,
+    CAST(COALESCE((SELECT 1 FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)), 0) AS INTEGER) AS subproject_exists,
+    CAST(COALESCE((SELECT project_id FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)), 0) AS INTEGER) AS subproject_project_id;
+
 -- name: UpdateTask :one
 UPDATE tasks SET
     name = ?,

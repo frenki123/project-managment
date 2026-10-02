@@ -45,8 +45,8 @@ one S-curve per project.
 
 ## API Contract
 
-Task lists accept `project_id`, `subproject_id`, and `ideas=true`. A subproject filter takes
-precedence over project, ideas, and all-task selection; missing filters select the default view.
+Task lists accept `project_id`, `subproject_id`, and `ideas=true`. Ideas and subproject filters are
+mutually exclusive; requesting both returns `400`. Missing filters select the default view.
 Unknown filters return `404`; a subproject from another selected project returns `400`.
 
 All API errors use the same envelope and preserve the true HTTP status. Errors raised by SQL

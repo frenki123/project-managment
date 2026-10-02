@@ -417,6 +417,50 @@ func TestSubprojectListUnknownProjectIsNotFound(t *testing.T) {
 	}
 }
 
+func TestSubprojectListKnownProjectWithoutSubprojectsIsEmpty(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	pid := createProject(t, mux, "Empty", start)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/subprojects?project_id="+strconv.FormatInt(pid, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("valid project with no subprojects should be 200: %d %s", rr.Code, rr.Body.String())
+	}
+	var out struct {
+		Subprojects []struct{} `json:"subprojects"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Subprojects) != 0 {
+		t.Fatalf("expected empty list, got %d", len(out.Subprojects))
+	}
+}
+
+func TestTaskListKnownProjectWithoutTasksIsEmpty(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	pid := createProject(t, mux, "Empty", start)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("valid project with no tasks should be 200: %d %s", rr.Code, rr.Body.String())
+	}
+	var out struct {
+		Tasks []struct{} `json:"tasks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Tasks) != 0 {
+		t.Fatalf("expected empty list, got %d", len(out.Tasks))
+	}
+}
+
 func TestSubprojectFormRejectsMalformedProjectID(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
