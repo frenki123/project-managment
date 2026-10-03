@@ -20,8 +20,8 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Organize by domain (task, project, subproject, etc.), not by technical layer. only exception is `internal\app` that will be used as small web&db framework.
 - Never commit directly to `main`; always open a PR. Run `just check` before opening it.
 - Keep the shared UI, REST, and CLI contract documented in the README API Contract section when behavior changes.
-- `just check` runs `test`, `vet`, `build`, and `lint`. `lint` runs staticcheck (full default checks) plus the `droppedvalue` analyzer (`tools/droppedcheck`), which fails the build on values assigned to blank identifiers.
-- Never drop a value: capture it and use it, or justify the drop with `//nolint:droppedvalue -- <reason>` on the same line (or a standalone comment on the line directly above). A bare marker without a reason is itself a diagnostic. Tests must assert real calculated values, not just the absence of an error. Exemptions are structural only: range bindings, `var _` compile-time assertions, generated files, and keep-alive references like `_ = x`.
+- `just check` = `test`, `vet`, `build`, `lint` (staticcheck + `tools/droppedcheck`).
+- Never drop a value; justify drops with `//nolint:droppedvalue -- <reason>`. Tests assert real values, not just no error.
 
 # Go 1.27
 - Prefer `errors.AsType`, `new(expr)`, `t.Context()`, and `slices` helpers when they improve clarity.

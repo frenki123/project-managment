@@ -96,7 +96,7 @@ just dev-reset        # reset DB, seed example data, start Air
 Then open http://127.0.0.1:8080. The server also runs standalone with `just run`, and applies
 migrations on boot. `PORT` overrides the default `8080`; the database is `data/app.db`.
 
-Run `just --list` to see every recipe. `just check` runs tests, vet, and a build.
+Run `just --list` to see every recipe. `just check` runs tests, vet, a build, and lint.
 
 ## Releases
 
