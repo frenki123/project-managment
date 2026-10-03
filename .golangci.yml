@@ -1,0 +1,66 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - staticcheck
+    - govet
+    - gocognit
+    - dupl
+    - dogsled
+    - goconst
+    - importas
+    - modernize
+    - thelper
+    - gosec
+    - sloglint
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI table output and deferred resource closes: the error is either
+        # surfaced by the caller (tabwriter Flush) or not actionable at teardown.
+        - "fmt.Fprintln"
+        - "fmt.Fprintf"
+        - "(*net/http.Response).Body.Close"
+        - "(*database/sql.DB).Close"
+        - "(io.ReadCloser).Close"
+        - "(*cad-development/internal/db.Database).Close"
+    gocognit:
+      min-complexity: 20
+    dupl:
+      threshold: 100
+    dogsled:
+      max-blank-identifiers: 2
+    goconst:
+      min-occurrences: 5
+    importas:
+      alias:
+        - pkg: cad-development
+          alias: assets
+        - pkg: cad-development/internal/handlers/task
+          alias: taskhdl
+        - pkg: cad-development/internal/handlers/project
+          alias: projecthdl
+        - pkg: cad-development/internal/handlers/subproject
+          alias: subprojecthdl
+        - pkg: cad-development/internal/handlers/chart
+          alias: charthdl
+        - pkg: cad-development/internal/handlers/historyaccess
+          alias: historyaccesshdl
+        - pkg: cad-development/internal/project
+          alias: projectdomain
+    gosec:
+      excludes:
+        - G104
+        - G404
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - gocognit
+          - goconst
+      - path: tools/devseed/data\.go
+        linters:
+          - dupl

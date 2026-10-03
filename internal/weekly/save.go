@@ -30,23 +30,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 	if weekStart.IsZero() {
 		return Cell{}, web.Invalid("week_start must be a Monday")
 	}
-	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present {
-		return Cell{}, web.Invalid("at least one value is required")
-	}
-	if patch.PlannedHours.HasValue() {
-		if err := validHours(*patch.PlannedHours.Value); err != nil {
-			return Cell{}, err
-		}
-	}
-	if patch.SpentHours.HasValue() {
-		if err := validHours(*patch.SpentHours.Value); err != nil {
-			return Cell{}, err
-		}
-	}
-	if patch.Progress.HasValue() {
-		if err := validProgress(*patch.Progress.Value); err != nil {
-			return Cell{}, err
-		}
+	if err := validatePatch(patch); err != nil {
+		return Cell{}, err
 	}
 	var result Cell
 	err := q.InTx(ctx, func(txq *db.Queries) error {
@@ -68,20 +53,9 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 
 		planned := patch.PlannedHours.ValueOr(contextRow.PlannedHours)
 		spent := patch.SpentHours.ValueOr(contextRow.SpentHours)
-		carried := contextRow.PreviousProgress
-		currentEffective := carried
-		if p := nullable.Float64Pointer(contextRow.Progress); p != nil {
-			currentEffective = max(carried, *p)
-		}
-		store := patch.Progress.HasValue() && *patch.Progress.Value > currentEffective
-		progress := contextRow.Progress
-		if store {
-			progress = nullable.Float64(patch.Progress.Value)
-		} else if patch.Progress.Present && patch.Progress.Value == nil {
-			progress = sql.NullFloat64{}
-		}
+		stored, store, carried := resolveProgress(patch, contextRow)
 		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
-			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: progress,
+			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: stored,
 		})
 		if err != nil {
 			return err
@@ -95,14 +69,55 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 		}
-		effective := nullable.Float64Pointer(row.Progress)
-		if effective == nil {
-			effective = new(carried)
-		}
-		result = toCell(row, weekStart, effective)
+		result = toCell(row, weekStart, effectiveProgress(carried, row.Progress))
 		return nil
 	})
 	return result, err
+}
+
+func validatePatch(patch Patch) error {
+	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present {
+		return web.Invalid("at least one value is required")
+	}
+	if patch.PlannedHours.HasValue() {
+		if err := validHours(*patch.PlannedHours.Value); err != nil {
+			return err
+		}
+	}
+	if patch.SpentHours.HasValue() {
+		if err := validHours(*patch.SpentHours.Value); err != nil {
+			return err
+		}
+	}
+	if patch.Progress.HasValue() {
+		if err := validProgress(*patch.Progress.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveProgress(patch Patch, contextRow db.WeekWriteContextRow) (stored sql.NullFloat64, store bool, carried float64) {
+	carried = contextRow.PreviousProgress
+	currentEffective := carried
+	if p := nullable.Float64Pointer(contextRow.Progress); p != nil {
+		currentEffective = max(carried, *p)
+	}
+	store = patch.Progress.HasValue() && *patch.Progress.Value > currentEffective
+	stored = contextRow.Progress
+	if store {
+		stored = nullable.Float64(patch.Progress.Value)
+	} else if patch.Progress.Present && patch.Progress.Value == nil {
+		stored = sql.NullFloat64{}
+	}
+	return stored, store, carried
+}
+
+func effectiveProgress(carried float64, stored sql.NullFloat64) *float64 {
+	if p := nullable.Float64Pointer(stored); p != nil {
+		return p
+	}
+	return new(carried)
 }
 
 func validHours(value float64) error {

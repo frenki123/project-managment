@@ -14,6 +14,7 @@
     pkgs.sqlc
     pkgs.goose
     pkgs.templ
+    pkgs.golangci-lint
   ];
 
   languages.go.enable = true;
@@ -32,6 +33,6 @@
     sqlc version
     goose --version
     templ version
-    staticcheck -version
+    golangci-lint version
   '';
 }

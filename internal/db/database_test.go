@@ -15,7 +15,7 @@ CREATE TABLE app_test (id INTEGER PRIMARY KEY);
 
 -- +goose Down
 DROP TABLE app_test;
-`), 0o644); err != nil {
+`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

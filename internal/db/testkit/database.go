@@ -20,6 +20,7 @@ func MustWeek(t *testing.T, s string) weekly.WeekStart {
 }
 
 func Open(t *testing.T) *db.Queries {
+	t.Helper()
 	return OpenDatabase(t).Q
 }
 

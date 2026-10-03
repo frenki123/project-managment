@@ -57,7 +57,7 @@ func main() {
 	}
 
 	dataDir := filepath.Join(root, "data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o750); err != nil { //nolint:gosec // G703: root comes from DEVENV_ROOT or CWD, trusted for a single-user local app
 		slog.Error("create data directory", "err", err)
 		os.Exit(1)
 	}

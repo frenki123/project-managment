@@ -165,10 +165,10 @@ func TestDecodeJSONRejectsOversizedBody(t *testing.T) {
 func TestStaticHandlerRejectsDirectories(t *testing.T) {
 	root := t.TempDir()
 	staticRoot := filepath.Join(root, "static")
-	if err := os.Mkdir(staticRoot, 0o755); err != nil {
+	if err := os.Mkdir(staticRoot, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(staticRoot, "app.js"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(staticRoot, "app.js"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	handler := web.StaticHandler(os.DirFS(staticRoot))

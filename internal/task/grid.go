@@ -332,7 +332,7 @@ func buildTaskRows(tasks []Task, byTask map[int64][]db.VTaskWeekSeries, grid Gri
 }
 
 func projectOptions(projects []project.Project, selected string) []Option {
-	out := []Option{{Value: "all", Label: "All tasks", Selected: selected == "all"}, {Value: "ideas", Label: "Ideas", Selected: selected == "ideas"}}
+	out := []Option{{Value: filterAll, Label: "All tasks", Selected: selected == filterAll}, {Value: filterIdeas, Label: "Ideas", Selected: selected == filterIdeas}}
 	for _, p := range projects {
 		v := strconv.FormatInt(p.ID, 10)
 		out = append(out, Option{Value: v, Label: p.Name, Selected: v == selected})
@@ -342,10 +342,10 @@ func projectOptions(projects []project.Project, selected string) []Option {
 
 func filterProjectKey(filter Filter) string {
 	if filter.Ideas {
-		return "ideas"
+		return filterIdeas
 	}
 	if filter.All {
-		return "all"
+		return filterAll
 	}
 	return strconv.FormatInt(filter.ID, 10)
 }

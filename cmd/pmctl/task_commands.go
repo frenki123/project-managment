@@ -34,17 +34,7 @@ func taskCommands(s *commandState) *cobra.Command {
 	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project ID")
 	list.Flags().StringVar(&subprojectName, "subproject", "", "filter by subproject name within the project")
 	list.Flags().Int64Var(&subprojectID, "subproject-id", 0, "filter by subproject ID")
-	root.AddCommand(list, &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(args)
-		if err != nil {
-			return err
-		}
-		v, err := s.client.Task(cmd.Context(), id)
-		if err != nil {
-			return err
-		}
-		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []task.Task{v}) })
-	}}, taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
+	root.AddCommand(list, getCommand(s, s.client.Task, taskTable), taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
 	return root
 }
 

@@ -257,46 +257,9 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			(!patch.SubprojectID.Present || patch.SubprojectID.Value != nil) {
 			return web.Invalid("project cannot be cleared while subproject is assigned")
 		}
-		currentInput := Input{
-			Name: current.Name, Description: current.Description,
-			ImplementationNotes: current.ImplementationNotes, Department: current.Department,
-			Developers: current.Developers, Priority: current.Priority,
-			ProjectID:    nullable.Int64Pointer(current.ProjectID),
-			SubprojectID: nullable.Int64Pointer(current.SubprojectID),
-		}
-		in := Input{
-			Name:                patch.Name.Apply(currentInput.Name),
-			Description:         patch.Description.Apply(currentInput.Description),
-			ImplementationNotes: patch.ImplementationNotes.Apply(currentInput.ImplementationNotes),
-			Department:          patch.Department.Apply(currentInput.Department),
-			Developers:          patch.Developers.Apply(currentInput.Developers),
-			Priority:            patch.Priority.Apply(currentInput.Priority),
-			ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
-			SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
-		}
-		in, err = validate(in)
+		in, err := resolveAssignment(ctx, txq, id, current, patch, mergeInput(current, patch))
 		if err != nil {
 			return err
-		}
-		conflict, err := txq.TaskAssignmentConflict(ctx, db.TaskAssignmentConflictParams{
-			ProjectID: nullable.Int64(in.ProjectID), SubprojectID: nullable.Int64(in.SubprojectID),
-		})
-		if err != nil {
-			return err
-		}
-		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
-			return err
-		}
-		projectChanged := patch.ProjectID.Present && current.ProjectID != nullable.Int64(in.ProjectID)
-		subprojectChanged := patch.SubprojectID.Present && current.SubprojectID != nullable.Int64(in.SubprojectID)
-		if projectChanged || subprojectChanged {
-			reassign, err := txq.TaskReassignConflict(ctx, id)
-			if err != nil {
-				return err
-			}
-			if err := web.HTTPErrorFromReason(int(reassign.Status), reassign.Reason); err != nil {
-				return err
-			}
 		}
 		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{ // the returned row cannot replace the post-update Get; only the error is needed
 			Name:                in.Name,
@@ -315,6 +278,54 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		return Task{}, err
 	}
 	return Get(ctx, q, id)
+}
+
+func mergeInput(current db.Task, patch Patch) Input {
+	currentInput := Input{
+		Name: current.Name, Description: current.Description,
+		ImplementationNotes: current.ImplementationNotes, Department: current.Department,
+		Developers: current.Developers, Priority: current.Priority,
+		ProjectID:    nullable.Int64Pointer(current.ProjectID),
+		SubprojectID: nullable.Int64Pointer(current.SubprojectID),
+	}
+	return Input{
+		Name:                patch.Name.Apply(currentInput.Name),
+		Description:         patch.Description.Apply(currentInput.Description),
+		ImplementationNotes: patch.ImplementationNotes.Apply(currentInput.ImplementationNotes),
+		Department:          patch.Department.Apply(currentInput.Department),
+		Developers:          patch.Developers.Apply(currentInput.Developers),
+		Priority:            patch.Priority.Apply(currentInput.Priority),
+		ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
+		SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
+	}
+}
+
+func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current db.Task, patch Patch, in Input) (Input, error) {
+	in, err := validate(in)
+	if err != nil {
+		return in, err
+	}
+	conflict, err := txq.TaskAssignmentConflict(ctx, db.TaskAssignmentConflictParams{
+		ProjectID: nullable.Int64(in.ProjectID), SubprojectID: nullable.Int64(in.SubprojectID),
+	})
+	if err != nil {
+		return in, err
+	}
+	if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		return in, err
+	}
+	projectChanged := patch.ProjectID.Present && current.ProjectID != nullable.Int64(in.ProjectID)
+	subprojectChanged := patch.SubprojectID.Present && current.SubprojectID != nullable.Int64(in.SubprojectID)
+	if projectChanged || subprojectChanged {
+		reassign, err := txq.TaskReassignConflict(ctx, id)
+		if err != nil {
+			return in, err
+		}
+		if err := web.HTTPErrorFromReason(int(reassign.Status), reassign.Reason); err != nil {
+			return in, err
+		}
+	}
+	return in, nil
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {

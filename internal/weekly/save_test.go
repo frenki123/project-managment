@@ -354,6 +354,7 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 }
 
 func newProjectTask(t *testing.T, total float64, start, end string) (*db.Queries, int64, int64) {
+	t.Helper()
 	ctx := t.Context()
 	q := testkit.Open(t)
 	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(total), StartDate: start, EndDate: end})
