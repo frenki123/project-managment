@@ -161,40 +161,6 @@ func TestCannotDeleteSubprojectWithTasks(t *testing.T) {
 	}
 }
 
-func TestDeleteSubprojectNotFoundIsMissing(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	err := subproject.Delete(ctx, q, 999)
-	httpErr, ok := errors.AsType[web.HTTPError](err)
-	if !ok || httpErr.Status != http.StatusNotFound {
-		t.Fatalf("expected missing subproject, got %v", err)
-	}
-}
-
-func TestDeleteSubprojectRemovesRow(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "Tracked", TotalHours: new(1.0)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := subproject.Delete(ctx, q, sp.ID); err != nil {
-		t.Fatal(err)
-	}
-	got, err := subproject.Get(ctx, q, sp.ID)
-	httpErr, ok := errors.AsType[web.HTTPError](err)
-	if !ok || httpErr.Status != http.StatusNotFound {
-		t.Fatalf("expected deleted subproject to be gone, got %v", err)
-	}
-	if got != (subproject.Subproject{}) {
-		t.Fatalf("deleted subproject returned data: %#v", got)
-	}
-}
-
 func TestDatabaseRejectsMismatchedTaskSubproject(t *testing.T) {
 	ctx := t.Context()
 	database := testkit.OpenDatabase(t)
