@@ -1,7 +1,7 @@
 package web
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 )
@@ -11,7 +11,7 @@ func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if value := recover(); value != nil {
-				log.Printf("panic: %v\n%s", value, debug.Stack())
+				slog.Error("panic", "value", value, "stack", string(debug.Stack()))
 				WriteError(w, r, HTTPError{Status: http.StatusInternalServerError, Message: "internal server error"})
 			}
 		}()
