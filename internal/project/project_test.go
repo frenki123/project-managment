@@ -70,17 +70,13 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	p.EndDate = "2026-09-30"
-	updated, err := project.Update(ctx, q, p.ID, project.Patch{
+	if _, err := project.Update(ctx, q, p.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 		Name: nullable.Present(p.Name), TotalHours: nullable.Present(p.TotalHours),
 		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
-	})
-	if err == nil {
+	}); err == nil {
 		t.Fatal("expected date change to be rejected")
 	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Reason != "project-dates-exclude-weekly-data" || httpErr.Message != "project dates cannot exclude existing weekly data" {
 		t.Fatalf("unexpected conflict error: %v", err)
-	}
-	if updated != (project.Project{}) {
-		t.Fatalf("rejected update returned a project: %#v", updated)
 	}
 	got, err := project.Get(ctx, q, p.ID)
 	if err != nil {
@@ -95,12 +91,8 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		created, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(value), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-		if err == nil {
+		if _, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(value), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
 			t.Fatalf("expected non-finite value %v to be rejected", value)
-		}
-		if created != (project.Project{}) {
-			t.Fatalf("rejected create returned a project: %#v", created)
 		}
 	}
 	projects, err := project.List(ctx, q)
@@ -122,8 +114,7 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 	if first.Name != "Alpha" || first.TotalHours != 10 {
 		t.Fatalf("unexpected created project: %#v", first)
 	}
-	duplicate, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	if err == nil {
+	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged project count is asserted via List below
 		t.Fatal("expected duplicate project name to be rejected")
 	} else {
 		var httpErr web.HTTPError
@@ -131,8 +122,12 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 			t.Fatalf("unexpected duplicate error: %v", err)
 		}
 	}
-	if duplicate != (project.Project{}) {
-		t.Fatalf("rejected duplicate create returned a project: %#v", duplicate)
+	projects, err := project.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("duplicate create persisted a project: %#v", projects)
 	}
 }
 
@@ -146,13 +141,10 @@ func TestCreateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 	if first.Name != "Alpha" || first.TotalHours != 10 {
 		t.Fatalf("unexpected created project: %#v", first)
 	}
-	conflicted, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	_, err = project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
-	}
-	if conflicted != (project.Project{}) {
-		t.Fatalf("rejected create returned a project: %#v", conflicted)
 	}
 	projects, err := project.List(ctx, q)
 	if err != nil {
@@ -174,16 +166,13 @@ func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejected, err := project.Update(ctx, q, second.ID, project.Patch{
+	_, err = project.Update(ctx, q, second.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 		Name: nullable.Present(first.Name), TotalHours: nullable.Present(-1.0),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
-	}
-	if rejected != (project.Project{}) {
-		t.Fatalf("rejected update returned a project: %#v", rejected)
 	}
 	got, err := project.Get(ctx, q, second.ID)
 	if err != nil {
@@ -208,7 +197,7 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejected, err := project.Update(ctx, q, second.ID, project.Patch{
+	_, err = project.Update(ctx, q, second.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged name is asserted via Get below
 		Name: nullable.Present("  Alpha  "), TotalHours: nullable.Present(second.TotalHours),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
@@ -216,21 +205,22 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected trimmed name conflict, got %v", err)
 	}
-	if rejected != (project.Project{}) {
-		t.Fatalf("rejected update returned a project: %#v", rejected)
+	got, err := project.Get(ctx, q, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Beta" {
+		t.Fatalf("rejected update changed the name: %#v", got)
 	}
 }
 
 func TestCreateEmptyNameReturnsBadRequest(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	created, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	_, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != "name is required" {
 		t.Fatalf("expected name required, got %v", err)
-	}
-	if created != (project.Project{}) {
-		t.Fatalf("rejected create returned a project: %#v", created)
 	}
 	projects, err := project.List(ctx, q)
 	if err != nil {
@@ -255,17 +245,13 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	if sp.ProjectID != p.ID || sp.TotalHours != 6 {
 		t.Fatalf("unexpected created subproject: %#v", sp)
 	}
-	rejected, err := project.Update(ctx, q, p.ID, project.Patch{
+	if _, err := project.Update(ctx, q, p.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 		Name: nullable.Present(p.Name), TotalHours: nullable.Present(5.0),
 		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
-	})
-	if err == nil {
+	}); err == nil {
 		t.Fatal("expected project total below subprojects to be rejected")
 	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "project hours cannot be less than subproject hours" {
 		t.Fatalf("unexpected conflict error: %v", err)
-	}
-	if rejected != (project.Project{}) {
-		t.Fatalf("rejected update returned a project: %#v", rejected)
 	}
 	got, err := project.Get(ctx, q, p.ID)
 	if err != nil {
