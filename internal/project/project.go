@@ -271,11 +271,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteProject(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
-		if errors.Is(err, sql.ErrNoRows) {
+		rows, err := txq.DeleteProject(ctx, id)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
 			return web.Missing("project not found")
 		}
-		return err
+		return nil
 	})
 	return web.ReferencedConflict(err)
 }

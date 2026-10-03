@@ -50,6 +50,36 @@ func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 	}
 }
 
+func TestDeleteProjectNotFoundIsMissing(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	err := project.Delete(ctx, q, 999)
+	httpErr, ok := errors.AsType[web.HTTPError](err)
+	if !ok || httpErr.Status != http.StatusNotFound {
+		t.Fatalf("expected missing project, got %v", err)
+	}
+}
+
+func TestDeleteProjectRemovesRow(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-10-05"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.Delete(ctx, q, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := project.Get(ctx, q, p.ID)
+	httpErr, ok := errors.AsType[web.HTTPError](err)
+	if !ok || httpErr.Status != http.StatusNotFound {
+		t.Fatalf("expected deleted project to be gone, got %v", err)
+	}
+	if got != (project.Project{}) {
+		t.Fatalf("deleted project returned data: %#v", got)
+	}
+}
+
 func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

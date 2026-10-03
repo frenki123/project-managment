@@ -51,7 +51,6 @@ UPDATE tasks SET
 WHERE tasks.id = sqlc.arg(id)
 RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
 
--- name: DeleteTask :one
+-- name: DeleteTask :execrows
 DELETE FROM tasks
-WHERE id = ?
-RETURNING id;
+WHERE id = ?;
