@@ -1,9 +1,7 @@
-// Package main implements droppedvalue, a check that fails on values assigned
-// to blank identifiers. A deliberate drop needs a reason:
+// Package main implements droppedvalue, failing the build on values assigned to
+// blank identifiers unless the drop is justified:
 //
 //	_, _ = w.Write(b) //nolint:droppedvalue -- count and error are uninteresting
-//
-// Range bindings, var _ assertions, generated files, and keep-alive _ = x are exempt.
 package main
 
 import (
@@ -109,15 +107,15 @@ func parseMarker(text string) markerKind {
 	if !ok {
 		return notAMarker
 	}
-	head := rest
+	linterList := rest
 	if i := strings.Index(rest, "--"); i >= 0 {
-		head = rest[:i]
+		linterList = rest[:i]
 	}
-	if i := strings.Index(head, "//"); i >= 0 {
-		head = head[:i]
+	if i := strings.Index(linterList, "//"); i >= 0 {
+		linterList = linterList[:i] // stop at a trailing // want expectation
 	}
 	hasDropped := false
-	for _, name := range strings.Split(head, ",") {
+	for _, name := range strings.Split(linterList, ",") {
 		if strings.TrimSpace(name) == "droppedvalue" {
 			hasDropped = true
 			break
@@ -128,7 +126,7 @@ func parseMarker(text string) markerKind {
 	}
 	reason := ""
 	if i := strings.Index(rest, "--"); i >= 0 {
-		reason = rest[i+2:]
+		reason = rest[i+len("--"):]
 	}
 	if strings.TrimSpace(reason) == "" {
 		return missingReason
@@ -181,13 +179,13 @@ func droppedBlanks(assign *ast.AssignStmt) int {
 }
 
 func computesValue(assign *ast.AssignStmt, i int) bool {
-	var r ast.Expr
+	var rhs ast.Expr
 	if len(assign.Rhs) == 1 && len(assign.Lhs) > 1 {
-		r = assign.Rhs[0] // a call with multiple results distributes to all LHS
+		rhs = assign.Rhs[0] // a call with multiple results distributes to all LHS
 	} else {
-		r = assign.Rhs[i]
+		rhs = assign.Rhs[i]
 	}
-	switch r.(type) {
+	switch rhs.(type) {
 	case *ast.Ident:
 		return false
 	default:
