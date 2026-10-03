@@ -20,7 +20,7 @@ import (
 type textComponent string
 
 func (c textComponent) Render(_ context.Context, w io.Writer) error {
-	_, err := io.WriteString(w, string(c)) //nolint:droppedvalue -- the written byte count is uninteresting; the error is returned
+	_, err := io.WriteString(w, string(c))
 	return err
 }
 

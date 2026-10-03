@@ -24,7 +24,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 		t.Fatal("expected a project ID")
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
-	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-27"), weekly.Patch{Progress: nullable.Present(40.0)}, now); err == nil { //nolint:droppedvalue -- the error-return cell is uninteresting; not-persisted is asserted via GetTaskWeek below
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-27"), weekly.Patch{Progress: nullable.Present(40.0)}, now); err == nil {
 		t.Fatal("expected locked April week to fail")
 	}
 	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-27"})
@@ -66,7 +66,7 @@ func TestSaveProgressAndLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := 1.0
-	if _, err := weekly.Save(ctx, q, idea.ID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{PlannedHours: nullable.Present(h)}, now); err == nil { //nolint:droppedvalue -- the error-return cell is uninteresting; the idea's empty week list is asserted via task.Get below
+	if _, err := weekly.Save(ctx, q, idea.ID, testkit.MustWeek(t, "2026-05-04"), weekly.Patch{PlannedHours: nullable.Present(h)}, now); err == nil {
 		t.Fatal("ideas cannot be planned")
 	}
 	result, err := task.Get(ctx, q, idea.ID)
@@ -94,7 +94,7 @@ func TestSaveRequestUnlockDoesNotPersist(t *testing.T) {
 		t.Fatalf("unlocked save stored unexpected hours: %#v", cell)
 	}
 	changedHours := 2.0
-	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(changedHours)}, now); err == nil { //nolint:droppedvalue -- the error-return cell is uninteresting; the unchanged stored hours are asserted via GetTaskWeek below
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(changedHours)}, now); err == nil {
 		t.Fatal("historical unlock should not persist")
 	}
 	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-04-06"})
@@ -159,7 +159,7 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 	if result.Weeks[1].Progress == nil || *result.Weeks[1].Progress != 50 {
 		t.Fatalf("later progress should cascade to 50, got %#v", result.Weeks)
 	}
-	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil { //nolint:droppedvalue -- the error-return cell is uninteresting; the unchanged data is asserted via GetTaskWeek below
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
 		t.Fatal("relocked March should reject edits")
 	}
 	keepEarlier, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: "2026-03-30"})
@@ -249,7 +249,7 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ws, err := weekly.Parse(tc.week)
 			if err == nil {
-				_, err = weekly.Save(ctx, q, tkID, ws, tc.patch, now) //nolint:droppedvalue -- the error-return cell is uninteresting; the real assertion is after the loop
+				_, err = weekly.Save(ctx, q, tkID, ws, tc.patch, now)
 			}
 			var httpErr web.HTTPError
 			if err == nil || !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != tc.wantMessage {

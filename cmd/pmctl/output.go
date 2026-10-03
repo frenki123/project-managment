@@ -29,7 +29,7 @@ func (p printer) print[T any](value T, table func(io.Writer) error) error {
 	if err != nil {
 		return fmt.Errorf("encode output: %w", err)
 	}
-	_, err = fmt.Fprintln(p.json, string(data)) //nolint:droppedvalue -- Fprintln's byte count is uninteresting; the error is returned
+	_, err = fmt.Fprintln(p.json, string(data))
 	return err
 }
 
@@ -43,7 +43,7 @@ type result struct {
 
 func (p printer) deleted(kind string, id int64) error {
 	return p.print(result{Deleted: true, ID: id, Type: kind}, func(w io.Writer) error {
-		_, err := fmt.Fprintf(w, "deleted %s %d\n", kind, id) //nolint:droppedvalue -- Fprintf's byte count is uninteresting; the error is returned
+		_, err := fmt.Fprintf(w, "deleted %s %d\n", kind, id)
 		return err
 	})
 }

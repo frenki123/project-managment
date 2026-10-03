@@ -109,13 +109,13 @@ func (c *Client) do[Out any](ctx context.Context, method, path string, body io.R
 		return nil
 	}
 	if output == nil {
-		if _, err := io.Copy(io.Discard, resp.Body); err != nil { //nolint:droppedvalue -- the number of discarded bytes is uninteresting
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 			return fmt.Errorf("read response: %w", err)
 		}
 		return nil
 	}
 	reader := bufio.NewReader(resp.Body)
-	if _, err := reader.Peek(1); err != nil { //nolint:droppedvalue -- the peeked byte is not needed, only whether it fails
+	if _, err := reader.Peek(1); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil
 		}

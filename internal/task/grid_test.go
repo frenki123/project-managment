@@ -168,7 +168,7 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	secondID := second.ID
-	_, err = task.Update(ctx, q, item.ID, task.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	_, err = task.Update(ctx, q, item.ID, task.Patch{
 		Name: nullable.Present(item.Name), ProjectID: nullable.Present(&secondID),
 	})
 	httpErr, ok := errors.AsType[web.HTTPError](err)

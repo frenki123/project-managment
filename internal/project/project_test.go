@@ -70,7 +70,7 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	p.EndDate = "2026-09-30"
-	if _, err := project.Update(ctx, q, p.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	if _, err := project.Update(ctx, q, p.ID, project.Patch{
 		Name: nullable.Present(p.Name), TotalHours: nullable.Present(p.TotalHours),
 		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
 	}); err == nil {
@@ -91,7 +91,7 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		if _, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(value), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
+		if _, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(value), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 			t.Fatalf("expected non-finite value %v to be rejected", value)
 		}
 	}
@@ -114,7 +114,7 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 	if first.Name != "Alpha" || first.TotalHours != 10 {
 		t.Fatalf("unexpected created project: %#v", first)
 	}
-	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged project count is asserted via List below
+	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 		t.Fatal("expected duplicate project name to be rejected")
 	} else {
 		var httpErr web.HTTPError
@@ -141,7 +141,7 @@ func TestCreateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 	if first.Name != "Alpha" || first.TotalHours != 10 {
 		t.Fatalf("unexpected created project: %#v", first)
 	}
-	_, err = project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
+	_, err = project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
@@ -166,7 +166,7 @@ func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = project.Update(ctx, q, second.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	_, err = project.Update(ctx, q, second.ID, project.Patch{
 		Name: nullable.Present(first.Name), TotalHours: nullable.Present(-1.0),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
@@ -197,7 +197,7 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = project.Update(ctx, q, second.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged name is asserted via Get below
+	_, err = project.Update(ctx, q, second.ID, project.Patch{
 		Name: nullable.Present("  Alpha  "), TotalHours: nullable.Present(second.TotalHours),
 		StartDate: nullable.Present(second.StartDate), EndDate: nullable.Present(second.EndDate),
 	})
@@ -217,7 +217,7 @@ func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 func TestCreateEmptyNameReturnsBadRequest(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	_, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via List below
+	_, err := project.Create(ctx, q, project.Input{Name: "   ", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != "name is required" {
 		t.Fatalf("expected name required, got %v", err)
@@ -245,7 +245,7 @@ func TestUpdateRejectsTotalBelowSubprojects(t *testing.T) {
 	if sp.ProjectID != p.ID || sp.TotalHours != 6 {
 		t.Fatalf("unexpected created subproject: %#v", sp)
 	}
-	if _, err := project.Update(ctx, q, p.ID, project.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	if _, err := project.Update(ctx, q, p.ID, project.Patch{
 		Name: nullable.Present(p.Name), TotalHours: nullable.Present(5.0),
 		StartDate: nullable.Present(p.StartDate), EndDate: nullable.Present(p.EndDate),
 	}); err == nil {

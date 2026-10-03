@@ -43,7 +43,7 @@ func TestHoursCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{
 		ProjectID: nullable.Present(p.ID), Name: nullable.Present("B"), TotalHours: nullable.Present(5.0),
 	}); err == nil {
 		t.Fatal("expected update cap")
@@ -74,7 +74,7 @@ func TestHoursRejectNonFiniteValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "bad", TotalHours: new(value)}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged subproject list is asserted via ListByProject below
+		if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "bad", TotalHours: new(value)}); err == nil {
 			t.Fatalf("expected non-finite value %v to be rejected", value)
 		}
 	}
@@ -109,7 +109,7 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 	if item.ProjectID == nil || *item.ProjectID != first.ID || item.SubprojectID == nil || *item.SubprojectID != sp.ID {
 		t.Fatalf("unexpected task assignment: %#v", item)
 	}
-	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{
 		ProjectID: nullable.Present(second.ID), Name: nullable.Present(sp.Name), TotalHours: nullable.Present(sp.TotalHours),
 	})
 	var httpErr web.HTTPError

@@ -33,10 +33,10 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := task.Create(ctx, q, task.Input{Name: "   "}); err == nil { //nolint:droppedvalue -- the error-return task is uninteresting; the unchanged task list is asserted via List below
+	if _, err := task.Create(ctx, q, task.Input{Name: "   "}); err == nil {
 		t.Fatal("expected blank task name to be rejected")
 	}
-	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID}) //nolint:droppedvalue -- the error-return task is uninteresting; the unchanged task list is asserted via List below
+	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
@@ -85,7 +85,7 @@ func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
+	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
