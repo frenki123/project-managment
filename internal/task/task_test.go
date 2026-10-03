@@ -134,40 +134,6 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	}
 }
 
-func TestDeleteTaskNotFoundIsMissing(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	err := task.Delete(ctx, q, 999)
-	httpErr, ok := errors.AsType[web.HTTPError](err)
-	if !ok || httpErr.Status != http.StatusNotFound {
-		t.Fatalf("expected missing task, got %v", err)
-	}
-}
-
-func TestDeleteTaskRemovesRow(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tk, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: &p.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := task.Delete(ctx, q, tk.ID); err != nil {
-		t.Fatal(err)
-	}
-	got, err := task.Get(ctx, q, tk.ID)
-	httpErr, ok := errors.AsType[web.HTTPError](err)
-	if !ok || httpErr.Status != http.StatusNotFound {
-		t.Fatalf("expected deleted task to be gone, got %v", err)
-	}
-	if got.ID != 0 {
-		t.Fatalf("deleted task returned data: %#v", got)
-	}
-}
-
 func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

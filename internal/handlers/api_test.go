@@ -658,6 +658,19 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/?project="+strconv.FormatInt(pid, 10) {
 		t.Fatalf("subproject delete redirect: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "task not found", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "task not found", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/subprojects/"+strconv.FormatInt(spID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "subproject not found", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/subprojects/"+strconv.FormatInt(spID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "subproject not found", "")
 }
 
 func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
@@ -887,6 +900,13 @@ func TestUIFormMutationRedirects(t *testing.T) {
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/" {
 		t.Fatalf("project delete: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+strconv.FormatInt(emptyID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "project not found", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/projects/"+strconv.FormatInt(emptyID, 10), nil))
+	assertAPIError(t, rr, http.StatusNotFound, "project not found", "")
 }
 
 func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
