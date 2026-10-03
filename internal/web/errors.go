@@ -2,7 +2,7 @@ package web
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"cad-development/internal/db"
@@ -96,7 +96,7 @@ func writeHTTPError(w http.ResponseWriter, httpErr HTTPError) {
 func writeComponentError(w http.ResponseWriter, r *http.Request, httpErr HTTPError, component Component) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := Render(w, r, httpErr.Status, component); err != nil {
-		log.Printf("render error response: %v", err)
+		slog.Error("render error response", "err", err)
 	}
 }
 
@@ -111,6 +111,6 @@ func HTTPErrorFrom(err error) HTTPError {
 	if httpErr, ok := errors.AsType[HTTPError](err); ok {
 		return normalizeHTTPError(httpErr)
 	}
-	log.Println(err)
+	slog.Error("unexpected error", "err", err)
 	return HTTPError{Status: http.StatusInternalServerError, Message: "internal error"}
 }

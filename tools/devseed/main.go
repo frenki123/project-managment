@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"time"
@@ -70,7 +71,7 @@ type week struct {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "seed:", err)
+		slog.Error("seed", "err", err)
 		os.Exit(1)
 	}
 }

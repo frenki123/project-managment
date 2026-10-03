@@ -6,12 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +26,19 @@ import (
 var version = "dev"
 
 func main() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
@@ -37,23 +51,27 @@ func main() {
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			log.Fatal(err)
+			slog.Error("get working directory", "err", err)
+			os.Exit(1)
 		}
 	}
 
 	dataDir := filepath.Join(root, "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		log.Fatal(err)
+		slog.Error("create data directory", "err", err)
+		os.Exit(1)
 	}
 
 	dbPath := filepath.Join(dataDir, "app.db")
 	migrations, err := fs.Sub(assets.FS, "sql/migrations")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("load migrations", "err", err)
+		os.Exit(1)
 	}
 	staticFS, err := fs.Sub(assets.FS, "static")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("load static files", "err", err)
+		os.Exit(1)
 	}
 	database, err := db.OpenDatabase(db.DatabaseConfig{
 		DSN:          dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate",
@@ -61,7 +79,8 @@ func main() {
 		MaxOpenConns: 4,
 	})
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("open database", "err", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -71,7 +90,8 @@ func main() {
 	}
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 1 || portNumber > 65535 {
-		log.Fatalf("invalid PORT %q", port)
+		slog.Error("invalid port", "port", port)
+		os.Exit(1)
 	}
 	addr := "127.0.0.1:" + port
 
@@ -79,7 +99,7 @@ func main() {
 	web.RegisterStatic(mux, staticFS)
 	handlers.Register(mux, database.Q)
 
-	log.Printf("listening on http://%s", addr)
+	slog.Info("listening", "addr", addr)
 	server := &http.Server{
 		Addr:                addr,
 		Handler:             web.Recover(mux),
@@ -96,17 +116,17 @@ func main() {
 	select {
 	case err := <-serveErr:
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("server error: %v", err)
+			slog.Error("server error", "err", err)
 		}
 	case <-stop.Done():
-		log.Printf("shutdown requested: %v", context.Cause(stop))
+		slog.Info("shutdown requested", "cause", context.Cause(stop))
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("server shutdown: %v", err)
+			slog.Error("server shutdown", "err", err)
 		}
 		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("server error: %v", err)
+			slog.Error("server error", "err", err)
 		}
 	}
 }

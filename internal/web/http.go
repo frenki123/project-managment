@@ -6,7 +6,7 @@ import (
 	json "encoding/json/v2"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,12 +40,12 @@ func PathID(r *http.Request, key string) (int64, error) {
 func JSON[T any](w http.ResponseWriter, status int, v T) {
 	var body bytes.Buffer
 	if err := json.MarshalWrite(&body, v); err != nil {
-		log.Printf("marshal JSON response: %v", err)
+		slog.Error("marshal JSON response", "err", err)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusInternalServerError)
 		if _, err := w.Write([]byte(`{"error":"internal error"}`)); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
-			log.Printf("write internal error response: %v", err)
+			slog.Error("write internal error response", "err", err)
 		}
 		return
 	}
@@ -53,7 +53,7 @@ func JSON[T any](w http.ResponseWriter, status int, v T) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	if _, err := w.Write(body.Bytes()); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
-		log.Printf("write JSON response: %v", err)
+		slog.Error("write JSON response", "err", err)
 	}
 }
 
@@ -167,7 +167,7 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 
 func writeRenderError(w http.ResponseWriter, r *http.Request, err error, fragment bool) {
 	if _, ok := errors.AsType[ResponseError](err); ok { //nolint:droppedvalue -- the error value itself is not needed, only whether it matches
-		log.Printf("write response: %v", err)
+		slog.Error("write response", "err", err)
 		return
 	}
 	if fragment {
