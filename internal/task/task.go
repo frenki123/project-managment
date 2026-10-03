@@ -319,11 +319,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteTask(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
-		if errors.Is(err, sql.ErrNoRows) {
+		rows, err := txq.DeleteTask(ctx, id)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
 			return web.Missing("task not found")
 		}
-		return err
+		return nil
 	})
 	return web.ReferencedConflict(err)
 }

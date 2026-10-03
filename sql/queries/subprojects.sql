@@ -64,7 +64,6 @@ UPDATE subprojects SET
 WHERE id = ?
 RETURNING id, project_id, name, total_hours;
 
--- name: DeleteSubproject :one
+-- name: DeleteSubproject :execrows
 DELETE FROM subprojects
-WHERE id = ?
-RETURNING id;
+WHERE id = ?;

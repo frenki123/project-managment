@@ -223,11 +223,14 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproje
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		_, err := txq.DeleteSubproject(ctx, id) //nolint:droppedvalue -- the deleted row id is not needed; sql.ErrNoRows is already mapped to missing
-		if errors.Is(err, sql.ErrNoRows) {
+		rows, err := txq.DeleteSubproject(ctx, id)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
 			return web.Missing("subproject not found")
 		}
-		return err
+		return nil
 	})
 	return web.ReferencedConflict(err)
 }

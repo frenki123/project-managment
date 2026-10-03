@@ -35,10 +35,9 @@ UPDATE projects SET
 WHERE id = ?
 RETURNING id, name, purchase_order_name, total_hours, start_date, end_date;
 
--- name: DeleteProject :one
+-- name: DeleteProject :execrows
 DELETE FROM projects
-WHERE id = ?
-RETURNING id;
+WHERE id = ?;
 
 -- name: ProjectNameConflict :one
 -- 409 when another project already has this name (case-insensitive)
