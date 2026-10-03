@@ -148,6 +148,7 @@ func ListByFilter(ctx context.Context, q *db.Queries, f Filter) ([]Task, error) 
 	if err != nil {
 		return nil, err
 	}
+	// Rows exist, so the filter is valid: the (project_id, subproject_id) FK guarantees an invalid filter matches nothing.
 	if len(list) > 0 {
 		return list, nil
 	}
