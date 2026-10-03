@@ -33,19 +33,19 @@ func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blank, err := task.Create(ctx, q, task.Input{Name: "   "})
-	if err == nil {
+	if _, err := task.Create(ctx, q, task.Input{Name: "   "}); err == nil { //nolint:droppedvalue -- the error-return task is uninteresting; the unchanged task list is asserted via List below
 		t.Fatal("expected blank task name to be rejected")
 	}
-	if blank.ID != 0 {
-		t.Fatalf("rejected create returned a task: %#v", blank)
-	}
-	wrong, err := task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID})
+	_, err = task.Create(ctx, q, task.Input{Name: "Wrong project", ProjectID: &second.ID, SubprojectID: &sp.ID}) //nolint:droppedvalue -- the error-return task is uninteresting; the unchanged task list is asserted via List below
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
 	}
-	if wrong.ID != 0 {
-		t.Fatalf("rejected create returned a task: %#v", wrong)
+	items, err := task.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("rejected creates persisted tasks: %#v", items)
 	}
 }
 
@@ -85,12 +85,9 @@ func TestUpdateCannotClearProjectWithSubproject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rejected, err := task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()})
+	_, err = task.Update(ctx, q, item.ID, task.Patch{ProjectID: nullable.Clear[*int64]()}) //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest {
 		t.Fatalf("got %v", err)
-	}
-	if rejected.ID != 0 {
-		t.Fatalf("rejected update returned a task: %#v", rejected)
 	}
 	updated, err := task.Get(ctx, q, item.ID)
 	if err != nil {

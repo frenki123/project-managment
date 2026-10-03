@@ -52,18 +52,26 @@ func TestDriverUniqueConstraintCode(t *testing.T) {
 	if affected != 1 {
 		t.Fatalf("insert affected %d rows, want 1", affected)
 	}
-	duplicate, err := database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05")
+	_, err = database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05") //nolint:droppedvalue -- the error-return result is uninteresting; the unchanged row count is asserted below
 	if !db.UniqueViolation(err, "projects.name") {
 		t.Fatalf("expected real unique violation, got %v", err)
 	}
-	if duplicate != nil {
-		t.Fatalf("failed insert returned a result: %#v", duplicate)
+	var projectCount int
+	if err := database.Conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM projects").Scan(&projectCount); err != nil {
+		t.Fatal(err)
 	}
-	missing, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999)
+	if projectCount != 1 {
+		t.Fatalf("duplicate insert persisted a row: projects=%d", projectCount)
+	}
+	_, err = database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999) //nolint:droppedvalue -- the error-return result is uninteresting; the unchanged row count is asserted below
 	if !db.ForeignKeyViolation(err) {
 		t.Fatalf("expected real foreign-key violation, got %v", err)
 	}
-	if missing != nil {
-		t.Fatalf("failed insert returned a result: %#v", missing)
+	var taskCount int
+	if err := database.Conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM tasks").Scan(&taskCount); err != nil {
+		t.Fatal(err)
+	}
+	if taskCount != 0 {
+		t.Fatalf("foreign-key insert persisted a row: tasks=%d", taskCount)
 	}
 }

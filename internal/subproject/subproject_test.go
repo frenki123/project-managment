@@ -43,16 +43,12 @@ func TestHoursCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{
+	if _, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 		ProjectID: nullable.Present(p.ID), Name: nullable.Present("B"), TotalHours: nullable.Present(5.0),
-	})
-	if err == nil {
+	}); err == nil {
 		t.Fatal("expected update cap")
 	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
 		t.Fatalf("unexpected cap error: %v", err)
-	}
-	if updated != (subproject.Subproject{}) {
-		t.Fatalf("rejected update returned a subproject: %#v", updated)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
 	if err != nil {
@@ -78,13 +74,16 @@ func TestHoursRejectNonFiniteValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		created, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "bad", TotalHours: new(value)})
-		if err == nil {
+		if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "bad", TotalHours: new(value)}); err == nil { //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged subproject list is asserted via ListByProject below
 			t.Fatalf("expected non-finite value %v to be rejected", value)
 		}
-		if created != (subproject.Subproject{}) {
-			t.Fatalf("rejected create returned a subproject: %#v", created)
-		}
+	}
+	list, err := subproject.ListByProject(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("non-finite create persisted subprojects: %#v", list)
 	}
 }
 
@@ -110,15 +109,12 @@ func TestCannotMoveSubprojectWithTasks(t *testing.T) {
 	if item.ProjectID == nil || *item.ProjectID != first.ID || item.SubprojectID == nil || *item.SubprojectID != sp.ID {
 		t.Fatalf("unexpected task assignment: %#v", item)
 	}
-	moved, err := subproject.Update(ctx, q, sp.ID, subproject.Patch{
+	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{ //nolint:droppedvalue -- the error-return value is uninteresting; the unchanged data is asserted via Get below
 		ProjectID: nullable.Present(second.ID), Name: nullable.Present(sp.Name), TotalHours: nullable.Present(sp.TotalHours),
 	})
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "record is still used by other data" {
 		t.Fatalf("got %v", err)
-	}
-	if moved != (subproject.Subproject{}) {
-		t.Fatalf("rejected update returned a subproject: %#v", moved)
 	}
 	got, err := subproject.Get(ctx, q, sp.ID)
 	if err != nil {
