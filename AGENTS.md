@@ -21,8 +21,8 @@ Build a local-first web app for project hour planning, time tracking, and progre
 - Never commit directly to `main`; always open a PR. Run `just check` before opening it.
 - Keep the shared UI, REST, and CLI contract documented in the README API Contract section when behavior changes.
 - `just check` = `test`, `build`, `lint` (golangci-lint, which bundles staticcheck and go vet).
-- Return only what callers need: pick the right sqlc annotation (`:one`, `:many`, `:execrows`, `:exec`) and keep function returns minimal so nothing is dropped. If a value is genuinely unneeded, justify it with `//nolint:<linter> // <reason>`; never fake a value for the linter.
-- Test the value and the error together in one test; prefer an honest reason comment over a fake zero-value assertion.
+- Return only what callers need and keep function returns minimal so nothing is dropped (see also: pick the right sqlc annotation — `:one`, `:many`, `:execrows`, `:exec`). Never fake a value to satisfy a linter.
+- Test the value and the error together; on an error path assert the real outcome (e.g. a follow-up `Get`/`List` proves the row is unchanged), not Go's zero-value return.
 
 # Go 1.27
 - Prefer `errors.AsType`, `new(expr)`, `t.Context()`, and `slices` helpers when they improve clarity.

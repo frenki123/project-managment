@@ -23,21 +23,21 @@ func TestHoursCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "A", TotalHours: new(6.0)})
-	if err != nil {
+	if _, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "A", TotalHours: new(6.0)}); err != nil {
 		t.Fatal(err)
 	}
-	if a.ProjectID != p.ID || a.Name != "A" || a.TotalHours != 6 {
-		t.Fatalf("unexpected created subproject: %#v", a)
-	}
-	excess, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(5.0)})
+	_, err = subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(5.0)})
 	if err == nil {
 		t.Fatal("expected hours cap")
 	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "subproject hours exceed project hours" {
 		t.Fatalf("unexpected cap error: %v", err)
 	}
-	if excess != (subproject.Subproject{}) {
-		t.Fatalf("rejected create returned a subproject: %#v", excess)
+	list, err := subproject.ListByProject(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("rejected create persisted a subproject: %#v", list)
 	}
 	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "B", TotalHours: new(4.0)})
 	if err != nil {
@@ -57,7 +57,7 @@ func TestHoursCap(t *testing.T) {
 	if got.TotalHours != 4 {
 		t.Fatalf("rejected update changed hours: %v", got.TotalHours)
 	}
-	list, err := subproject.ListByProject(ctx, q, p.ID)
+	list, err = subproject.ListByProject(ctx, q, p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
