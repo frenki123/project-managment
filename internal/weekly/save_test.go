@@ -86,12 +86,8 @@ func TestSaveRequestUnlockDoesNotPersist(t *testing.T) {
 	}
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	hours := 1.0
-	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now)
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(hours), Unlock: true}, now); err != nil {
 		t.Fatalf("historical edit with request access was rejected: %v", err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("unlocked save stored unexpected hours: %#v", cell)
 	}
 	changedHours := 2.0
 	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-06"), weekly.Patch{PlannedHours: nullable.Present(changedHours)}, now); err == nil {

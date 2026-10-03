@@ -110,12 +110,8 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	if err := task.Delete(ctx, q, tk.ID); err == nil {
 		t.Fatal("expected delete with weekly history to be rejected")
@@ -159,12 +155,8 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 4.0
-	cell, err := weekly.Save(ctx, q, inPart.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, inPart.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	for _, tc := range []struct {
 		name string

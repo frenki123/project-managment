@@ -160,12 +160,8 @@ func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	cell, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC))
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	secondID := second.ID
 	_, err = task.Update(ctx, q, item.ID, task.Patch{

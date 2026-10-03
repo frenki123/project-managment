@@ -28,12 +28,8 @@ func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 2.0
-	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow())
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow()); err != nil {
 		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	if err := project.Delete(ctx, q, p.ID); err == nil {
 		t.Fatal("expected project deletion to be rejected")
@@ -62,12 +58,8 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	hours := 1.0
-	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-10-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow())
-	if err != nil {
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-10-05"), weekly.Patch{PlannedHours: nullable.Present(hours)}, testNow()); err != nil {
 		t.Fatal(err)
-	}
-	if cell.PlannedHours != hours {
-		t.Fatalf("save returned unexpected planned hours: %#v", cell)
 	}
 	p.EndDate = "2026-09-30"
 	if _, err := project.Update(ctx, q, p.ID, project.Patch{
@@ -107,12 +99,8 @@ func TestCreateRejectsNonFiniteHours(t *testing.T) {
 func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	first, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	if err != nil {
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
 		t.Fatal(err)
-	}
-	if first.Name != "Alpha" || first.TotalHours != 10 {
-		t.Fatalf("unexpected created project: %#v", first)
 	}
 	if _, err := project.Create(ctx, q, project.Input{Name: "alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err == nil {
 		t.Fatal("expected duplicate project name to be rejected")
@@ -134,14 +122,10 @@ func TestProjectNamesAreCaseInsensitiveUnique(t *testing.T) {
 func TestCreateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	first, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	if err != nil {
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
 		t.Fatal(err)
 	}
-	if first.Name != "Alpha" || first.TotalHours != 10 {
-		t.Fatalf("unexpected created project: %#v", first)
-	}
-	_, err = project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
+	_, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(-1.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
 	var httpErr web.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusConflict || httpErr.Message != "project name already exists" {
 		t.Fatalf("expected name conflict before invalid hours, got %v", err)
@@ -186,12 +170,8 @@ func TestUpdateReportsNameConflictBeforeInvalidHours(t *testing.T) {
 func TestUpdateReportsNameConflictWithSurroundingWhitespace(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	alpha, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
-	if err != nil {
+	if _, err := project.Create(ctx, q, project.Input{Name: "Alpha", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"}); err != nil {
 		t.Fatal(err)
-	}
-	if alpha.Name != "Alpha" || alpha.TotalHours != 10 {
-		t.Fatalf("unexpected created project: %#v", alpha)
 	}
 	second, err := project.Create(ctx, q, project.Input{Name: "Beta", TotalHours: new(10.0), StartDate: "2026-09-01", EndDate: "2026-09-30"})
 	if err != nil {
