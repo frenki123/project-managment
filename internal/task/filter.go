@@ -21,6 +21,11 @@ type Filter struct {
 	Subproject *int64
 }
 
+const (
+	filterAll   = "all"
+	filterIdeas = "ideas"
+)
+
 type ResolvedFilter struct {
 	Filter
 	Project    *db.Project
@@ -28,8 +33,8 @@ type ResolvedFilter struct {
 }
 
 func ParseFilter(projectKey, subprojectValue string) (Filter, error) {
-	f := Filter{All: projectKey == "" || projectKey == "all"}
-	if projectKey == "ideas" {
+	f := Filter{All: projectKey == "" || projectKey == filterAll}
+	if projectKey == filterIdeas {
 		f.Ideas = true
 	}
 	if !f.All && !f.Ideas {
@@ -53,9 +58,9 @@ func ParseFilter(projectKey, subprojectValue string) (Filter, error) {
 }
 
 func FilterKey(f Filter) string {
-	project := "all"
+	project := filterAll
 	if f.Ideas {
-		project = "ideas"
+		project = filterIdeas
 	} else if !f.All {
 		project = strconv.FormatInt(f.ID, 10)
 	}

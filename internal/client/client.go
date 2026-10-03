@@ -87,23 +87,12 @@ func (c *Client) do[Out any](ctx context.Context, method, path string, body io.R
 		return fmt.Errorf("request %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
+	return readResponse(method, path, resp, output)
+}
+
+func readResponse[Out any](method, path string, resp *http.Response, output *Out) error {
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBody+1))
-		if err != nil {
-			return fmt.Errorf("read response: %w", err)
-		}
-		var payload struct {
-			Error  string `json:"error"`
-			Reason string `json:"reason"`
-		}
-		message := strings.TrimSpace(string(data))
-		if err := json.Unmarshal(data, &payload); err == nil && strings.TrimSpace(payload.Error) != "" {
-			message = strings.TrimSpace(payload.Error)
-		}
-		if len(message) > maxAPIErrorBody {
-			message = message[:maxAPIErrorBody] + "..."
-		}
-		return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message, Reason: strings.TrimSpace(payload.Reason)}
+		return readAPIError(method, path, resp)
 	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -125,6 +114,25 @@ func (c *Client) do[Out any](ctx context.Context, method, path string, body io.R
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
+}
+
+func readAPIError(method, path string, resp *http.Response) error {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBody+1))
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	var payload struct {
+		Error  string `json:"error"`
+		Reason string `json:"reason"`
+	}
+	message := strings.TrimSpace(string(data))
+	if err := json.Unmarshal(data, &payload); err == nil && strings.TrimSpace(payload.Error) != "" {
+		message = strings.TrimSpace(payload.Error)
+	}
+	if len(message) > maxAPIErrorBody {
+		message = message[:maxAPIErrorBody] + "..."
+	}
+	return &APIError{Method: method, Path: path, Status: resp.StatusCode, Message: message, Reason: strings.TrimSpace(payload.Reason)}
 }
 
 func (c *Client) Projects(ctx context.Context) (project.ProjectsResponse, error) {

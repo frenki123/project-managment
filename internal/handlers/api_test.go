@@ -35,36 +35,20 @@ func createProject(t *testing.T, mux *http.ServeMux, name string, start time.Tim
 	return proj.ID
 }
 
-func createTask(t *testing.T, mux *http.ServeMux, body []byte) int64 {
+func createResource(t *testing.T, mux *http.ServeMux, path, kind string, body []byte) int64 {
 	t.Helper()
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader(body)))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body)))
 	if rr.Code != http.StatusCreated {
-		t.Fatalf("create task: %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("create %s: %d %s", kind, rr.Code, rr.Body.String())
 	}
-	var tk struct {
+	var created struct {
 		ID int64 `json:"id"`
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	return tk.ID
-}
-
-func createSubproject(t *testing.T, mux *http.ServeMux, body []byte) int64 {
-	t.Helper()
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/subprojects", bytes.NewReader(body)))
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("create subproject: %d %s", rr.Code, rr.Body.String())
-	}
-	var sp struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &sp); err != nil {
-		t.Fatal(err)
-	}
-	return sp.ID
+	return created.ID
 }
 
 func putJSON(t *testing.T, mux *http.ServeMux, path, body string, want int) {
@@ -196,7 +180,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 	projID := createProject(t, mux, "Alpha", start)
 	tk := struct {
 		ID int64 `json:"id"`
-	}{ID: createTask(t, mux, []byte(`{"name":"Grid task","project_id":`+strconv.FormatInt(projID, 10)+`}`))}
+	}{ID: createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Grid task","project_id":`+strconv.FormatInt(projID, 10)+`}`))}
 
 	body := "planned_hours=8&spent_hours=3&progress=25&project=" + strconv.FormatInt(projID, 10)
 	r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
@@ -236,7 +220,7 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, -2, 0))
 	projectID := createProject(t, mux, "Historical UI", start)
-	taskID := createTask(t, mux, []byte(`{"name":"Historical task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Historical task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
 	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
 	post := func(cookie *http.Cookie) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString("planned_hours=4&project="+strconv.FormatInt(projectID, 10)))
@@ -285,7 +269,7 @@ func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projectID := createProject(t, mux, "Alpha", start)
-	taskID := createTask(t, mux, []byte(`{"name":"Original task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Original task","project_id":`+strconv.FormatInt(projectID, 10)+`}`))
 
 	r := httptest.NewRequest(http.MethodGet, "/tasks/"+strconv.FormatInt(taskID, 10)+"/edit", nil)
 	r.Header.Set("HX-Request", "true")
@@ -417,47 +401,34 @@ func TestSubprojectListUnknownProjectIsNotFound(t *testing.T) {
 	}
 }
 
-func TestSubprojectListKnownProjectWithoutSubprojectsIsEmpty(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
-	pid := createProject(t, mux, "Empty", start)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/subprojects?project_id="+strconv.FormatInt(pid, 10), nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("valid project with no subprojects should be 200: %d %s", rr.Code, rr.Body.String())
-	}
-	var out struct {
-		Subprojects []struct{} `json:"subprojects"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
-		t.Fatal(err)
-	}
-	if len(out.Subprojects) != 0 {
-		t.Fatalf("expected empty list, got %d", len(out.Subprojects))
-	}
-}
-
-func TestTaskListKnownProjectWithoutTasksIsEmpty(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
-	pid := createProject(t, mux, "Empty", start)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(pid, 10), nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("valid project with no tasks should be 200: %d %s", rr.Code, rr.Body.String())
-	}
-	var out struct {
-		Tasks []struct{} `json:"tasks"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
-		t.Fatal(err)
-	}
-	if len(out.Tasks) != 0 {
-		t.Fatalf("expected empty list, got %d", len(out.Tasks))
+func TestListKnownProjectWithoutEntriesIsEmpty(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		path string
+		key  string
+	}{
+		{name: "subprojects", path: "/api/v1/subprojects", key: "subprojects"},
+		{name: "tasks", path: "/api/v1/tasks", key: "tasks"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := testkit.Open(t)
+			mux := http.NewServeMux()
+			handlers.Register(mux, q)
+			start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+			pid := createProject(t, mux, "Empty", start)
+			rr := httptest.NewRecorder()
+			mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, tc.path+"?project_id="+strconv.FormatInt(pid, 10), nil))
+			if rr.Code != http.StatusOK {
+				t.Fatalf("valid project with no %s should be 200: %d %s", tc.name, rr.Code, rr.Body.String())
+			}
+			var out map[string][]struct{}
+			if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+				t.Fatal(err)
+			}
+			if len(out[tc.key]) != 0 {
+				t.Fatalf("expected empty %s list, got %d", tc.name, len(out[tc.key]))
+			}
+		})
 	}
 }
 
@@ -489,7 +460,7 @@ func TestJSONUnlockAppliesToOneWeeklyRequest(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &p); err != nil {
 		t.Fatal(err)
 	}
-	id := createTask(t, mux, []byte(`{"name":"History task","project_id":`+strconv.FormatInt(p.ID, 10)+`}`))
+	id := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"History task","project_id":`+strconv.FormatInt(p.ID, 10)+`}`))
 	path := func(week time.Time) string {
 		return "/api/v1/tasks/" + strconv.FormatInt(id, 10) + "/weeks/" + week.Format(time.DateOnly)
 	}
@@ -599,7 +570,7 @@ func TestEditTaskReassignConflictKeepsStoredProject(t *testing.T) {
 
 	tk := struct {
 		ID int64 `json:"id"`
-	}{ID: createTask(t, mux, []byte(`{"name":"Tracked","project_id":`+strconv.FormatInt(a, 10)+`}`))}
+	}{ID: createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Tracked","project_id":`+strconv.FormatInt(a, 10)+`}`))}
 
 	weekBody := []byte(`{"planned_hours":1}`)
 	rr := httptest.NewRecorder()
@@ -634,9 +605,9 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	pid := createProject(t, mux, "P", start)
 
 	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid, 10) + `,"name":"SP","total_hours":10}`)
-	spID := createSubproject(t, mux, spBody)
+	spID := createResource(t, mux, "/api/v1/subprojects", "subproject", spBody)
 
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10)+"/delete", nil))
@@ -679,7 +650,7 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	handlers.Register(mux, q)
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
 	putJSON(t, mux, path, `{"progress":30}`, http.StatusOK)
 	putJSON(t, mux, path, `{"progress":null}`, http.StatusOK)
@@ -695,7 +666,7 @@ func TestJSONRejectsClearProgressUnknownField(t *testing.T) {
 	handlers.Register(mux, q)
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
 	putJSON(t, mux, path, `{"progress":30}`, http.StatusOK)
 	putJSON(t, mux, path, `{"progress":30,"clear_progress":true}`, http.StatusBadRequest)
@@ -721,7 +692,7 @@ func TestJSONContractConsistency(t *testing.T) {
 	}
 
 	pid := createProject(t, mux, "P", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewReader([]byte(`{"progress":25}`))))
@@ -823,12 +794,12 @@ func TestJSONConflictReasonCodes(t *testing.T) {
 		return rr
 	}
 
-	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
+	ideaID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Idea"}`))
 	assertAPIError(t, request(http.MethodPut, weekPath(ideaID, start), `{"planned_hours":1}`),
 		http.StatusBadRequest, "ideas cannot be planned", "idea-task-not-assignable")
 
 	projID := createProject(t, mux, "Alpha", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`}`))
 	assertAPIError(t, request(http.MethodPut, weekPath(taskID, start.AddDate(0, 0, 35)), `{"planned_hours":1}`),
 		http.StatusBadRequest, "week is outside the project date range", "week-outside-project-bounds")
 
@@ -880,7 +851,7 @@ func TestUIFormMutationRedirects(t *testing.T) {
 		t.Fatalf("subproject create redirect id: %s", loc)
 	}
 
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
 	rr = postForm(t, mux, "/tasks/"+strconv.FormatInt(taskID, 10), "name=T2&project_id="+strconv.FormatInt(pid, 10)+"&subproject_id="+strconv.FormatInt(spID, 10))
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != spPrefix+strconv.FormatInt(spID, 10) {
 		t.Fatalf("task update: %d %s", rr.Code, rr.Header().Get("Location"))
@@ -915,7 +886,7 @@ func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
 	handlers.Register(mux, q)
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 
 	postWeek := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
@@ -956,7 +927,7 @@ func TestHTMLWeekEditRejectsInvalidDisplayContextBeforeSaving(t *testing.T) {
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "P", start)
 	other := createProject(t, mux, "Other", start)
-	taskID := createTask(t, mux, []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
 	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
 	for _, body := range []string{"planned_hours=5&project=bad", "planned_hours=5&project=" + strconv.FormatInt(other, 10)} {
 		r := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))
@@ -1015,13 +986,13 @@ func TestJSONListTaskFiltersMatchGrid(t *testing.T) {
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
-	createTask(t, mux, []byte(`{"name":"Idea"}`))
+	createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Idea"}`))
 	pid1 := createProject(t, mux, "P1", start)
 	pid2 := createProject(t, mux, "P2", start)
-	task1 := createTask(t, mux, []byte(`{"name":"In P1","project_id":`+strconv.FormatInt(pid1, 10)+`}`))
+	task1 := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"In P1","project_id":`+strconv.FormatInt(pid1, 10)+`}`))
 
 	spBody := []byte(`{"project_id":` + strconv.FormatInt(pid2, 10) + `,"name":"SP2","total_hours":10}`)
-	spID := createSubproject(t, mux, spBody)
+	spID := createResource(t, mux, "/api/v1/subprojects", "subproject", spBody)
 
 	getTasks := func(query string) []struct {
 		ID int64 `json:"id"`

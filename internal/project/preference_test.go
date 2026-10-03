@@ -13,7 +13,7 @@ func TestPreferredProjectIDUsesValidCookieOrFirstProject(t *testing.T) {
 		t.Helper()
 		r := httptest.NewRequest("GET", "/", nil)
 		if value != "" {
-			r.AddCookie(&http.Cookie{Name: LastProjectCookie, Value: value})
+			r.AddCookie(&http.Cookie{Name: LastProjectCookie, Value: value}) //nolint:gosec // test request cookie; Secure is not applicable to a localhost request cookie
 		}
 		if got := PreferredProjectID(r, ids); got != want {
 			t.Fatalf("%s: preferred project = %d, want %d", name, got, want)

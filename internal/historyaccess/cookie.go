@@ -22,7 +22,7 @@ func CookieValid(r *http.Request, now time.Time) bool {
 
 func SetCookie(w http.ResponseWriter, now time.Time) {
 	expires := now.Add(historicalEditingDuration)
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is omitted: localhost HTTP never transmits Secure cookies
 		Name:     HistoricalEditingCookieName,
 		Value:    strconv.FormatInt(expires.Unix(), 10),
 		Path:     "/",
@@ -34,7 +34,7 @@ func SetCookie(w http.ResponseWriter, now time.Time) {
 }
 
 func ClearCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is omitted: localhost HTTP never transmits Secure cookies
 		Name:     HistoricalEditingCookieName,
 		Value:    "",
 		Path:     "/",

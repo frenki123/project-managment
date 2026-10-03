@@ -19,15 +19,15 @@ func UniqueViolation(err error, column string) bool {
 	}
 	const prefix = "UNIQUE constraint failed:"
 	message := sqliteErr.Error()
-	index := strings.Index(message, prefix)
-	if index < 0 {
+	_, details, found := strings.Cut(message, prefix)
+	if !found {
 		return false
 	}
-	details := strings.TrimSpace(message[index+len(prefix):])
+	details = strings.TrimSpace(details)
 	if codeIndex := strings.Index(details, " ("); codeIndex >= 0 {
 		details = details[:codeIndex]
 	}
-	for _, failedColumn := range strings.Split(details, ",") {
+	for failedColumn := range strings.SplitSeq(details, ",") {
 		if strings.TrimSpace(failedColumn) == column {
 			return true
 		}

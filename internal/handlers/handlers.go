@@ -4,17 +4,17 @@ import (
 	"net/http"
 
 	"cad-development/internal/db"
-	charthandler "cad-development/internal/handlers/chart"
-	historyaccesshandler "cad-development/internal/handlers/historyaccess"
-	projecthandler "cad-development/internal/handlers/project"
-	subprojecthandler "cad-development/internal/handlers/subproject"
-	taskhandler "cad-development/internal/handlers/task"
+	charthdl "cad-development/internal/handlers/chart"
+	historyaccesshdl "cad-development/internal/handlers/historyaccess"
+	projecthdl "cad-development/internal/handlers/project"
+	subprojecthdl "cad-development/internal/handlers/subproject"
+	taskhdl "cad-development/internal/handlers/task"
 )
 
 func Register(mux *http.ServeMux, q *db.Queries) {
-	projecthandler.Register(mux, q)
-	subprojecthandler.Register(mux, q)
-	taskhandler.Register(mux, q)
-	historyaccesshandler.Register(mux, q)
-	charthandler.Register(mux, q)
+	projecthdl.Register(mux, q)
+	subprojecthdl.Register(mux, q)
+	taskhdl.Register(mux, q)
+	historyaccesshdl.Register(mux, q)
+	charthdl.Register(mux, q)
 }

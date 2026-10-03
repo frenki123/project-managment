@@ -142,6 +142,20 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, 
 	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(*projectID, 10))
 }
 
+func getCommand[V any](s *commandState, get func(context.Context, int64) (V, error), table func(io.Writer, []V) error) *cobra.Command {
+	return &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := idArg(args)
+		if err != nil {
+			return err
+		}
+		v, err := get(cmd.Context(), id)
+		if err != nil {
+			return err
+		}
+		return s.printer().print(v, func(w io.Writer) error { return table(w, []V{v}) })
+	}}
+}
+
 func deleteCommand(use, kind string, s *commandState, del func(context.Context, int64) error) *cobra.Command {
 	return &cobra.Command{Use: use + " <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := idArg(args)

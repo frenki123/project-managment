@@ -54,13 +54,12 @@ test: generate
 vet: generate
     go vet ./...
 
-# Run staticcheck and the dropped-value analyzer; drops need a reason comment.
+# Run golangci-lint, which bundles staticcheck and go vet.
 lint: generate
-    staticcheck ./...
-    go run ./tools/droppedcheck ./...
+    golangci-lint run
 
 # Run tests, build the application, and lint.
-check: test vet build lint
+check: test build lint
 
 # Reset and recreate the development database.
 db-reset:

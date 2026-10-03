@@ -216,39 +216,12 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err != nil {
 			return err
 		}
-		currentHours := current.TotalHours
-		in := Input{
-			Name:              patch.Name.Apply(current.Name),
-			PurchaseOrderName: patch.PurchaseOrderName.Apply(current.PurchaseOrderName),
-			TotalHours:        new(patch.TotalHours.Apply(currentHours)),
-			StartDate:         patch.StartDate.Apply(current.StartDate),
-			EndDate:           patch.EndDate.Apply(current.EndDate),
-		}
-		in.Name, err = validateName(in.Name)
+		in, err := applyPatch(current, patch)
 		if err != nil {
 			return err
 		}
-		conflict, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: id})
+		validated, err := checkUpdateConflicts(ctx, txq, id, in)
 		if err != nil {
-			return err
-		}
-		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
-			return err
-		}
-		validated, err := validateFields(in)
-		if err != nil {
-			return err
-		}
-		updateConflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
-			ProjectID:  id,
-			StartDate:  validated.StartDate,
-			EndDate:    validated.EndDate,
-			TotalHours: *validated.TotalHours,
-		})
-		if err != nil {
-			return err
-		}
-		if err := web.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
 			return err
 		}
 		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{ // the returned row cannot replace the post-update Get; only the error is needed
@@ -267,6 +240,46 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		return Project{}, err
 	}
 	return Get(ctx, q, id)
+}
+
+func applyPatch(current db.Project, patch Patch) (Input, error) {
+	in := Input{
+		Name:              patch.Name.Apply(current.Name),
+		PurchaseOrderName: patch.PurchaseOrderName.Apply(current.PurchaseOrderName),
+		TotalHours:        new(patch.TotalHours.Apply(current.TotalHours)),
+		StartDate:         patch.StartDate.Apply(current.StartDate),
+		EndDate:           patch.EndDate.Apply(current.EndDate),
+	}
+	var err error
+	in.Name, err = validateName(in.Name)
+	return in, err
+}
+
+func checkUpdateConflicts(ctx context.Context, txq *db.Queries, id int64, in Input) (Input, error) {
+	conflict, err := txq.ProjectNameConflict(ctx, db.ProjectNameConflictParams{Name: in.Name, ExceptID: id})
+	if err != nil {
+		return in, err
+	}
+	if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
+		return in, err
+	}
+	validated, err := validateFields(in)
+	if err != nil {
+		return in, err
+	}
+	updateConflict, err := txq.ProjectUpdateConflict(ctx, db.ProjectUpdateConflictParams{
+		ProjectID:  id,
+		StartDate:  validated.StartDate,
+		EndDate:    validated.EndDate,
+		TotalHours: *validated.TotalHours,
+	})
+	if err != nil {
+		return in, err
+	}
+	if err := web.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
+		return in, err
+	}
+	return validated, nil
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {

@@ -21,12 +21,12 @@ func TestTaskListsIncludeCalculatedTotals(t *testing.T) {
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	pid := createProject(t, mux, "Project", start)
 	projectID := strconv.FormatInt(pid, 10)
-	ideaID := createTask(t, mux, []byte(`{"name":"Idea"}`))
-	plainID := createTask(t, mux, []byte(`{"name":"Untracked","project_id":`+projectID+`}`))
+	ideaID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Idea"}`))
+	plainID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Untracked","project_id":`+projectID+`}`))
 
 	spBody := []byte(`{"name":"Part","project_id":` + projectID + `,"total_hours":10}`)
-	spID := createSubproject(t, mux, spBody)
-	trackedID := createTask(t, mux, []byte(`{"name":"Tracked","project_id":`+projectID+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
+	spID := createResource(t, mux, "/api/v1/subprojects", "subproject", spBody)
+	trackedID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Tracked","project_id":`+projectID+`,"subproject_id":`+strconv.FormatInt(spID, 10)+`}`))
 	for i, body := range []string{`{"planned_hours":8,"spent_hours":3,"progress":25}`, `{"planned_hours":2,"spent_hours":4}`} {
 		week := start.AddDate(0, 0, i*7).Format("2006-01-02")
 		rr := httptest.NewRecorder()

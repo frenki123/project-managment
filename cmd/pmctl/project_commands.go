@@ -17,17 +17,7 @@ func projectCommands(s *commandState) *cobra.Command {
 		}
 		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, v.Projects) })
 	}})
-	root.AddCommand(&cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := idArg(args)
-		if err != nil {
-			return err
-		}
-		v, err := s.client.Project(cmd.Context(), id)
-		if err != nil {
-			return err
-		}
-		return s.printer().print(v, func(w io.Writer) error { return projectTable(w, []project.Project{v}) })
-	}})
+	root.AddCommand(getCommand(s, s.client.Project, projectTable))
 	root.AddCommand(projectCommand("create", s, false), projectCommand("update <id>", s, true), deleteCommand("delete", "project", s, func(ctx context.Context, id int64) error { return s.client.DeleteProject(ctx, id) }))
 	return root
 }

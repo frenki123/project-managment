@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"cad-development/internal/db"
-	taskhandler "cad-development/internal/handlers/task"
+	taskhdl "cad-development/internal/handlers/task"
 	"cad-development/internal/historyaccess"
 	"cad-development/internal/task"
 	"cad-development/internal/web"
@@ -38,7 +38,7 @@ func setHistoryAccess(q *db.Queries) http.HandlerFunc {
 			historyaccess.ClearCookie(w)
 		}
 		if web.IsHTMX(r) {
-			taskhandler.RenderGrid(w, r, q, now, historicalEditingAllowed)
+			taskhdl.RenderGrid(w, r, q, now, historicalEditingAllowed)
 			return
 		}
 		web.Redirect(w, r, "/?"+task.FilterKey(filter))
