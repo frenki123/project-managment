@@ -44,7 +44,7 @@ func JSON[T any](w http.ResponseWriter, status int, v T) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.WriteHeader(http.StatusInternalServerError)
-		if _, err := w.Write([]byte(`{"error":"internal error"}`)); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
+		if _, err := w.Write([]byte(`{"error":"internal error"}`)); err != nil {
 			slog.Error("write internal error response", "err", err)
 		}
 		return
@@ -52,7 +52,7 @@ func JSON[T any](w http.ResponseWriter, status int, v T) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	if _, err := w.Write(body.Bytes()); err != nil { //nolint:droppedvalue -- Write returns the byte count, which is uninteresting here
+	if _, err := w.Write(body.Bytes()); err != nil {
 		slog.Error("write JSON response", "err", err)
 	}
 }
@@ -64,7 +64,7 @@ func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, v *T) error {
 		json.RejectUnknownMembers(true),
 		json.MatchCaseInsensitiveNames(true),
 	); err != nil {
-		if _, ok := errors.AsType[*http.MaxBytesError](err); ok { //nolint:droppedvalue -- the error value itself is not needed, only whether it matches
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return HTTPError{Status: http.StatusRequestEntityTooLarge, Message: "request body too large"}
 		}
 		return HTTPError{Status: http.StatusBadRequest, Message: "invalid json"}
@@ -158,7 +158,7 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	_, err := w.Write(body.Bytes()) //nolint:droppedvalue -- Write's byte count is uninteresting; the error is returned
+	_, err := w.Write(body.Bytes())
 	if err != nil {
 		return ResponseError{Err: err}
 	}
@@ -166,7 +166,7 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component Compon
 }
 
 func writeRenderError(w http.ResponseWriter, r *http.Request, err error, fragment bool) {
-	if _, ok := errors.AsType[ResponseError](err); ok { //nolint:droppedvalue -- the error value itself is not needed, only whether it matches
+	if _, ok := errors.AsType[ResponseError](err); ok {
 		slog.Error("write response", "err", err)
 		return
 	}

@@ -6,7 +6,6 @@ require (
 	github.com/a-h/templ v0.3.1020
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/spf13/cobra v1.10.1
-	golang.org/x/tools v0.48.0
 	modernc.org/sqlite v1.59.0
 )
 
@@ -21,7 +20,6 @@ require (
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/libc v1.75.7 // indirect

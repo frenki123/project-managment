@@ -298,7 +298,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 				return err
 			}
 		}
-		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{ //nolint:droppedvalue -- the returned row cannot replace the post-update Get; only the error is needed
+		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{ // the returned row cannot replace the post-update Get; only the error is needed
 			Name:                in.Name,
 			Description:         in.Description,
 			ImplementationNotes: in.ImplementationNotes,

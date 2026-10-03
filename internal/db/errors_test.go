@@ -52,7 +52,7 @@ func TestDriverUniqueConstraintCode(t *testing.T) {
 	if affected != 1 {
 		t.Fatalf("insert affected %d rows, want 1", affected)
 	}
-	_, err = database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05") //nolint:droppedvalue -- the error-return result is uninteresting; the unchanged row count is asserted below
+	_, err = database.Conn.ExecContext(ctx, `INSERT INTO projects (name, total_hours, start_date, end_date) VALUES (?, ?, ?, ?)`, "P", 1, "2026-01-05", "2026-01-05")
 	if !db.UniqueViolation(err, "projects.name") {
 		t.Fatalf("expected real unique violation, got %v", err)
 	}
@@ -63,7 +63,7 @@ func TestDriverUniqueConstraintCode(t *testing.T) {
 	if projectCount != 1 {
 		t.Fatalf("duplicate insert persisted a row: projects=%d", projectCount)
 	}
-	_, err = database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999) //nolint:droppedvalue -- the error-return result is uninteresting; the unchanged row count is asserted below
+	_, err = database.Conn.ExecContext(ctx, `INSERT INTO tasks (name, project_id) VALUES (?, ?)`, "T", 999)
 	if !db.ForeignKeyViolation(err) {
 		t.Fatalf("expected real foreign-key violation, got %v", err)
 	}

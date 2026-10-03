@@ -251,7 +251,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 		if err := web.HTTPErrorFromReason(int(updateConflict.Status), updateConflict.Reason); err != nil {
 			return err
 		}
-		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{ //nolint:droppedvalue -- the returned row cannot replace the post-update Get; only the error is needed
+		_, err = txq.UpdateProject(ctx, db.UpdateProjectParams{ // the returned row cannot replace the post-update Get; only the error is needed
 			Name: validated.Name, PurchaseOrderName: validated.PurchaseOrderName, TotalHours: *validated.TotalHours,
 			StartDate: validated.StartDate, EndDate: validated.EndDate, ID: id,
 		})
