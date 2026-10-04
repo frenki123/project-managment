@@ -41,8 +41,8 @@ func TestDeleteProjectRejectsWeeklyHistory(t *testing.T) {
 	if result.ProjectID == nil {
 		t.Fatal("rejected deletion changed task assignment")
 	}
-	if len(result.Weeks) != 1 {
-		t.Fatalf("expected weekly data to remain, got %d rows", len(result.Weeks))
+	if len(result.Weeks) == 0 || result.Weeks[0].PlannedHours != hours {
+		t.Fatalf("expected weekly data to remain, got %#v", result.Weeks)
 	}
 }
 

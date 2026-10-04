@@ -1,6 +1,7 @@
 package task_test
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"slices"
@@ -16,6 +17,49 @@ import (
 	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
+
+func TestLoadWeeksUsesProjectBoundedSeriesAndPreservesStoredProgress(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Bounded", TotalHours: new(10.0), StartDate: "2026-09-09", EndDate: "2026-09-22"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(40.0)}, time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Weeks) != 3 {
+		t.Fatalf("got %d project weeks, want 3: %#v", len(got.Weeks), got.Weeks)
+	}
+	if got.Weeks[0].StoredProgress == nil || *got.Weeks[0].StoredProgress != 40 || got.Weeks[1].StoredProgress != nil || got.Weeks[1].Progress == nil || *got.Weeks[1].Progress != 40 {
+		t.Fatalf("unexpected stored/effective progress: %#v", got.Weeks)
+	}
+}
+
+func TestMapWeekSeriesRejectsMalformedDates(t *testing.T) {
+	_, err := weekly.MapWeekSeries([]db.VTaskWeekSeries{{WeekStart: "not-a-date"}})
+	if err == nil {
+		t.Fatal("expected malformed week date to fail")
+	}
+}
+
+func TestMapWeekSeriesDistinguishesZeroStoredProgress(t *testing.T) {
+	rows, err := weekly.MapWeekSeries([]db.VTaskWeekSeries{{TaskID: 1, WeekStart: "2026-09-07", StoredProgress: sql.NullFloat64{Valid: true, Float64: 0}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].StoredProgress == nil || *rows[0].StoredProgress != 0 {
+		t.Fatalf("zero stored progress was lost: %#v", rows[0])
+	}
+}
 
 func TestCreateValidatesNameAndSubprojectProject(t *testing.T) {
 	ctx := t.Context()

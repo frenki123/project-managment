@@ -152,7 +152,13 @@ func TestCascadeProgressAndRelock(t *testing.T) {
 	if len(result.Weeks) < 2 {
 		t.Fatalf("expected at least 2 weeks, got %#v", result.Weeks)
 	}
-	if result.Weeks[1].Progress == nil || *result.Weeks[1].Progress != 50 {
+	var found bool
+	for _, week := range result.Weeks {
+		if week.WeekStart.String() == "2026-04-06" && week.Progress != nil && *week.Progress == 50 {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatalf("later progress should cascade to 50, got %#v", result.Weeks)
 	}
 	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-03-30"), weekly.Patch{Progress: nullable.Present(60.0)}, now); err == nil {
@@ -257,8 +263,10 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Weeks) != 0 {
-		t.Fatalf("invalid patches should not create weekly data, got %#v", result.Weeks)
+	for _, week := range result.Weeks {
+		if week.PlannedHours != 0 || week.SpentHours != 0 || week.StoredProgress != nil {
+			t.Fatalf("invalid patches should not create weekly data, got %#v", result.Weeks)
+		}
 	}
 }
 

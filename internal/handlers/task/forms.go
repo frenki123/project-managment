@@ -160,7 +160,12 @@ func editForm(q *db.Queries) http.HandlerFunc {
 			web.WriteFragmentError(w, r, err)
 			return
 		}
-		data, err := taskFormData(r, q, taskFormValues(t), len(t.Weeks) == 0, "")
+		conflict, err := q.TaskReassignConflict(r.Context(), id)
+		if err != nil {
+			web.WriteFragmentError(w, r, err)
+			return
+		}
+		data, err := taskFormData(r, q, taskFormValues(t), conflict.Status == 0, "")
 		if err != nil {
 			web.WriteFragmentError(w, r, err)
 			return
@@ -200,7 +205,8 @@ func renderTaskUpdateError(w http.ResponseWriter, r *http.Request, q *db.Queries
 		if panelErr == nil {
 			summary = &panel
 		}
-		canReassign = len(current.Weeks) == 0
+		conflict, conflictErr := q.TaskReassignConflict(r.Context(), id)
+		canReassign = conflictErr == nil && conflict.Status == 0
 		if !canReassign {
 			currentVals := taskFormValues(current)
 			vals.ProjectID, vals.SubprojectID = currentVals.ProjectID, currentVals.SubprojectID

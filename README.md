@@ -66,6 +66,10 @@ get HTML error views or fragments with the same status. Weekly updates are prese
 fields unchanged, `"progress": null` clears the stored value; any value at or below the carried
 one is not stored (the week keeps NULL and carries the value forward); only a value above it
 is stored. Effective progress is a running maximum, so stored progress is strictly increasing.
+Task detail responses return `weeks` from the canonical project-bounded series: every Monday from
+the project's start-week through its end-week, including zero planned/spent weeks. `progress` is the
+effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
+have no weeks.
 
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
 `project name already exists`. Deleting a referenced project, subproject, or task, or moving a

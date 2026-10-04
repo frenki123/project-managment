@@ -124,7 +124,10 @@ func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskI
 	if err != nil {
 		return Grid{}, err
 	}
-	var byTask map[int64][]db.VTaskWeekSeries
+	byTask, err := loadTaskSeries(ctx, q, resolved, taskID)
+	if err != nil {
+		return Grid{}, err
+	}
 	if taskID != 0 {
 		idx := -1
 		for i := range tasks {
@@ -135,21 +138,7 @@ func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskI
 		if idx < 0 {
 			return gc.grid, nil
 		}
-		series, err := q.ListTaskWeekSeriesByTask(ctx, taskID)
-		if err != nil {
-			return Grid{}, err
-		}
 		tasks = tasks[idx : idx+1]
-		byTask = map[int64][]db.VTaskWeekSeries{taskID: series}
-	} else {
-		rows, err := seriesRows(ctx, q, resolved)
-		if err != nil {
-			return Grid{}, err
-		}
-		byTask = make(map[int64][]db.VTaskWeekSeries)
-		for _, row := range rows {
-			byTask[row.TaskID] = append(byTask[row.TaskID], row)
-		}
 	}
 	grid, err := loadScopeSummary(ctx, q, resolved, gc.grid)
 	if err != nil {
@@ -161,6 +150,28 @@ func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskI
 	}
 	grid.Overrun = grid.PlannedHours > grid.BudgetHours
 	return grid, nil
+}
+
+func loadTaskSeries(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskID int64) (map[int64][]weekly.Cell, error) {
+	var rows []db.VTaskWeekSeries
+	var err error
+	if taskID != 0 {
+		rows, err = q.ListTaskWeekSeriesByTask(ctx, taskID)
+	} else {
+		rows, err = seriesRows(ctx, q, resolved)
+	}
+	if err != nil {
+		return nil, err
+	}
+	cells, err := weekly.MapWeekSeries(rows)
+	if err != nil {
+		return nil, err
+	}
+	byTask := make(map[int64][]weekly.Cell)
+	for _, cell := range cells {
+		byTask[cell.TaskID] = append(byTask[cell.TaskID], cell)
+	}
+	return byTask, nil
 }
 
 func seriesRows(ctx context.Context, q *db.Queries, resolved ResolvedFilter) ([]db.VTaskWeekSeries, error) {
@@ -311,20 +322,32 @@ func addWeekTotal(grid Grid, weekStart string, planned, spent float64) (Grid, er
 	return grid, nil
 }
 
-func buildTaskRows(tasks []Task, byTask map[int64][]db.VTaskWeekSeries, grid Grid, subNames map[int64]string, now time.Time, allowHistoricalEditing bool) ([]GridRow, error) {
+func buildTaskRows(tasks []Task, byTask map[int64][]weekly.Cell, grid Grid, subNames map[int64]string, now time.Time, allowHistoricalEditing bool) ([]GridRow, error) {
 	rows := make([]GridRow, 0, len(tasks))
 	for _, t := range tasks {
 		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}
-		// Series and totals weeks both derive from v_project_bounds, so they align by index.
-		for i, s := range byTask[t.ID] {
-			if i >= len(grid.Weeks) || s.WeekStart != grid.Weeks[i].Start.String() {
-				break
+		series := make(map[string]weekly.Cell, len(byTask[t.ID]))
+		for _, cell := range byTask[t.ID] {
+			series[cell.WeekStart.String()] = cell
+		}
+		for _, week := range grid.Weeks {
+			s, ok := series[week.Start.String()]
+			ws := week.Start
+			cell := GridCell{
+				WeekStart: ws,
+				Locked:    !allowHistoricalEditing && ws.IsLocked(now),
+				SavePath:  "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + ws.String(),
 			}
-			ws := grid.Weeks[i].Start
-			row.Cells = append(row.Cells, GridCell{WeekStart: ws, Planned: s.PlannedHours, Spent: s.SpentHours, Progress: s.EffectiveProgress, Stored: s.StoredProgress.Valid, Locked: !allowHistoricalEditing && ws.IsLocked(now), SavePath: "/tasks/" + strconv.FormatInt(t.ID, 10) + "/weeks/" + ws.String()})
+			if ok {
+				cell.Planned = s.PlannedHours
+				cell.Spent = s.SpentHours
+				cell.Progress = *s.Progress
+				cell.Stored = s.StoredProgress != nil
+			}
+			row.Cells = append(row.Cells, cell)
 		}
 		rows = append(rows, row)
 	}

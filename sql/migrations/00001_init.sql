@@ -88,20 +88,6 @@ SELECT
     CAST(date(p.end_date, '-' || ((strftime('%w', p.end_date) + 6) % 7) || ' days') AS TEXT) AS last_week
 FROM projects p;
 
-CREATE VIEW v_task_week_effective AS
-SELECT
-    tw.task_id,
-    tw.week_start,
-    tw.planned_hours,
-    tw.spent_hours,
-    tw.progress,
-    CAST(COALESCE(MAX(tw.progress) OVER (
-        PARTITION BY tw.task_id
-        ORDER BY tw.week_start
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ), 0) AS REAL) AS effective_progress
-FROM task_weeks tw;
-
 CREATE VIEW v_task_week_series AS
 WITH RECURSIVE weeks AS (
     SELECT t.id AS task_id, b.first_week AS week_start, b.last_week
@@ -130,7 +116,6 @@ LEFT JOIN task_weeks tw
 
 -- +goose Down
 DROP VIEW IF EXISTS v_task_week_series;
-DROP VIEW IF EXISTS v_task_week_effective;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;
 DROP VIEW IF EXISTS v_task_totals;
