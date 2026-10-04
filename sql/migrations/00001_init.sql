@@ -27,10 +27,62 @@ CREATE TABLE tasks (
     priority TEXT NOT NULL DEFAULT '',
     project_id INTEGER REFERENCES projects (id),
     subproject_id INTEGER REFERENCES subprojects (id),
+    manual_status TEXT,
     CHECK (subproject_id IS NULL OR project_id IS NOT NULL),
     FOREIGN KEY (project_id, subproject_id)
         REFERENCES subprojects (project_id, id)
 );
+
+CREATE TABLE stages (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    position INTEGER NOT NULL UNIQUE,
+    color TEXT NOT NULL DEFAULT '',
+    auto_reachable INTEGER NOT NULL DEFAULT 1 CHECK (auto_reachable IN (0, 1)),
+    progress_threshold REAL NOT NULL CHECK (progress_threshold >= 0 AND progress_threshold <= 100)
+);
+
+INSERT INTO stages (name, position, color, auto_reachable, progress_threshold) VALUES
+    ('Planned', 1, '#607d8b', 1, 0),
+    ('In progress', 2, '#2196f3', 1, 1),
+    ('In review', 3, '#ff9800', 1, 80),
+    ('Done', 4, '#4caf50', 1, 100);
+
+-- +goose StatementBegin
+CREATE TRIGGER trg_stages_insert_pin
+AFTER INSERT ON stages
+BEGIN
+    SELECT RAISE(ABORT, 'first stage must start at 0% and last stage must end at 100%')
+    WHERE (
+        (SELECT progress_threshold FROM stages ORDER BY position ASC LIMIT 1) <> 0
+        OR (SELECT progress_threshold FROM stages ORDER BY position DESC LIMIT 1) <> 100
+    );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER trg_stages_update_pin
+AFTER UPDATE ON stages
+BEGIN
+    SELECT RAISE(ABORT, 'first stage must start at 0% and last stage must end at 100%')
+    WHERE (
+        (SELECT progress_threshold FROM stages ORDER BY position ASC LIMIT 1) <> 0
+        OR (SELECT progress_threshold FROM stages ORDER BY position DESC LIMIT 1) <> 100
+    );
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER trg_stages_delete_pin
+AFTER DELETE ON stages
+BEGIN
+    SELECT RAISE(ABORT, 'first stage must start at 0% and last stage must end at 100%')
+    WHERE (
+        (SELECT progress_threshold FROM stages ORDER BY position ASC LIMIT 1) <> 0
+        OR (SELECT progress_threshold FROM stages ORDER BY position DESC LIMIT 1) <> 100
+    );
+END;
+-- +goose StatementEnd
 
 CREATE TABLE task_weeks (
     task_id INTEGER NOT NULL REFERENCES tasks (id),
@@ -51,15 +103,32 @@ CREATE INDEX idx_task_weeks_week_start ON task_weeks (week_start);
 
 CREATE VIEW v_task_totals AS
 SELECT
-    t.id AS task_id,
-    t.project_id,
-    t.subproject_id,
-    CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
-    CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
-    CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
-FROM tasks t
-LEFT JOIN task_weeks tw ON tw.task_id = t.id
-GROUP BY t.id;
+    tt.task_id,
+    tt.project_id,
+    tt.subproject_id,
+    tt.manual_status,
+    tt.planned_hours,
+    tt.spent_hours,
+    tt.progress,
+    COALESCE(tt.manual_status, (
+        SELECT s.name FROM stages s
+        WHERE s.auto_reachable = 1 AND s.progress_threshold <= tt.progress
+        ORDER BY s.progress_threshold DESC, s.position DESC
+        LIMIT 1
+    )) AS stage
+FROM (
+    SELECT
+        t.id AS task_id,
+        t.project_id,
+        t.subproject_id,
+        t.manual_status,
+        CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
+        CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
+        CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
+    FROM tasks t
+    LEFT JOIN task_weeks tw ON tw.task_id = t.id
+    GROUP BY t.id
+) tt;
 
 CREATE VIEW v_project_totals AS
 SELECT
@@ -115,6 +184,10 @@ LEFT JOIN task_weeks tw
    AND tw.week_start = w.week_start;
 
 -- +goose Down
+DROP TRIGGER IF EXISTS trg_stages_delete_pin;
+DROP TRIGGER IF EXISTS trg_stages_update_pin;
+DROP TRIGGER IF EXISTS trg_stages_insert_pin;
+DROP TABLE IF EXISTS stages;
 DROP VIEW IF EXISTS v_task_week_series;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;

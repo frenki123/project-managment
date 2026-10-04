@@ -254,6 +254,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			Department:          in.Department,
 			Developers:          in.Developers,
 			Priority:            in.Priority,
+			ManualStatus:        current.ManualStatus,
 			ProjectID:           nullable.Int64(in.ProjectID),
 			SubprojectID:        nullable.Int64(in.SubprojectID),
 			ID:                  id,
