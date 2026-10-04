@@ -38,7 +38,8 @@ one S-curve per project.
   filters are name- or ID-based, names win if both given. POST creates use empty values for
   omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
   fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
-  `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress); historical
+  `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress, `--note <text>`
+  sets the weekly note, `--note null` clears it); historical
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
   a reassignment with weekly data returns `409` only when that field was explicitly changed.
@@ -68,6 +69,11 @@ get HTML error views or fragments with the same status. Weekly updates are prese
 fields unchanged, `"progress": null` clears the stored value; any value at or below the carried
 one is not stored (the week keeps NULL and carries the value forward); only a value above it
 is stored. Effective progress is a running maximum, so stored progress is strictly increasing.
+Weekly updates also accept a `note`, presence-driven the same way: `"note": "..."` sets it,
+`"note": ""` or `"note": null` clears it, and it follows the same historical month-lock rules
+as hours (`unlock: true` escapes for that request). Week/cell responses and task-detail `weeks[]`
+include `"note"` (empty string when none). The workboard shows a dot marker on noted weeks and
+the task detail panel lists weekly notes.
 Task detail responses return `weeks` from the canonical project-bounded series: every Monday from
 the project's start-week through its end-week, including zero planned/spent weeks. `progress` is the
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
@@ -153,7 +159,7 @@ pmctl projects list
 pmctl tasks list --project "Project Alpha"
 pmctl tasks create --name "Implement API" --project-id 5 --priority high
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
-pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
+pmctl update-task-week 12 2026-09-21 --planned-hours 8 --note "blocked on drawings" --unlock
 ```
 
 ## Layout
