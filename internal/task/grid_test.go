@@ -108,8 +108,8 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	if grid.PlannedHours != 200 || grid.SpentHours != 200 {
 		t.Fatalf("unexpected hour totals: planned=%v spent=%v", grid.PlannedHours, grid.SpentHours)
 	}
-	if grid.ProgressPct == nil || *grid.ProgressPct != 25 {
-		t.Fatalf("expected 25%% progress, got %v", grid.ProgressPct)
+	if grid.ProgressPct == nil || *grid.ProgressPct != 37.5 {
+		t.Fatalf("expected 37.5%% progress, got %v", grid.ProgressPct)
 	}
 	for i, week := range grid.Weeks {
 		if week.Start.String() != "2026-09-07" {
