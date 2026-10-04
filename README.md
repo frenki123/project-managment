@@ -42,6 +42,8 @@ one S-curve per project.
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
   a reassignment with weekly data returns `409` only when that field was explicitly changed.
+  `tasks update` accepts `--status <stage>` to pin the task stage manually; `--status null`
+  derives it again from progress.
 
 ## API Contract
 
@@ -68,6 +70,10 @@ get HTML error views or fragments with the same status. Weekly updates are prese
 fields unchanged, `"progress": null` clears the stored value; any value at or below the carried
 one is not stored (the week keeps NULL and carries the value forward); only a value above it
 is stored. Effective progress is a running maximum, so stored progress is strictly increasing.
+Task `status` is the resolved stage: derived from cumulative progress through the configurable
+`stages` table (defaults: Planned, In progress, In review, Done) unless a `manual_status` is set.
+`manual_status` is NULL by default (automatic); setting it pins the stage, and the UI marks it as
+manual; `null` restores the derived stage, and omitting it on PUT preserves the current value.
 Task detail responses return `weeks` from the canonical project-bounded series: every Monday from
 the project's start-week through its end-week, including zero planned/spent weeks. `progress` is the
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
@@ -153,6 +159,7 @@ pmctl projects list
 pmctl tasks list --project "Project Alpha"
 pmctl tasks create --name "Implement API" --project-id 5 --priority high
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
+pmctl tasks update 12 --status "In review"     # pin a stage; --status null derives it again
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ```
 

@@ -34,6 +34,10 @@ func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
 		Priority:            stringOpt(cmd, "priority", f.priority),
 		ProjectID:           opt(cmd, "project-id", &f.projectID),
 		SubprojectID:        opt(cmd, "subproject-id", &f.subprojectID),
+		ManualStatus:        opt(cmd, "status", &f.status),
+	}
+	if cmd.Flags().Changed("status") && f.status == "null" {
+		in.ManualStatus = nullable.Clear[*string]()
 	}
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nullable.Clear[*int64](), nullable.Clear[*int64]()
