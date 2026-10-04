@@ -26,6 +26,7 @@ type TaskFormValues struct {
 	Department          string
 	Developers          string
 	Priority            string
+	ManualEstimate      string
 	ProjectID           string
 	SubprojectID        string
 }

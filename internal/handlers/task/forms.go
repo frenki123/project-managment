@@ -23,6 +23,10 @@ func formInput(r *http.Request) (task.Input, error) {
 	if err != nil {
 		return task.Input{}, err
 	}
+	manualEstimate, err := web.FormFloatChecked(r, "manual_estimate")
+	if err != nil {
+		return task.Input{}, err
+	}
 	return task.Input{
 		Name:                vals.Name,
 		Description:         vals.Description,
@@ -30,6 +34,7 @@ func formInput(r *http.Request) (task.Input, error) {
 		Department:          vals.Department,
 		Developers:          vals.Developers,
 		Priority:            vals.Priority,
+		ManualEstimate:      manualEstimate,
 		ProjectID:           projectID,
 		SubprojectID:        subprojectID,
 	}, nil
@@ -43,6 +48,7 @@ func formValues(r *http.Request) views.TaskFormValues {
 		Department:          r.FormValue("department"),
 		Developers:          r.FormValue("developers"),
 		Priority:            r.FormValue("priority"),
+		ManualEstimate:      r.FormValue("manual_estimate"),
 		ProjectID:           r.FormValue("project_id"),
 		SubprojectID:        r.FormValue("subproject_id"),
 	}
@@ -56,6 +62,9 @@ func taskFormValues(t task.Task) views.TaskFormValues {
 		Department:          t.Department,
 		Developers:          t.Developers,
 		Priority:            t.Priority,
+	}
+	if t.ManualEstimate != nil {
+		vals.ManualEstimate = strconv.FormatFloat(*t.ManualEstimate, 'f', -1, 64)
 	}
 	if t.ProjectID != nil {
 		vals.ProjectID = strconv.FormatInt(*t.ProjectID, 10)
