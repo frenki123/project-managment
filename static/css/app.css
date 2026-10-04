@@ -151,6 +151,10 @@ body.modal-open { overflow: hidden; }
 .panel-details dd { margin: 0; font-size: 0.85rem; }
 .panel-actions { gap: 1rem; margin-top: 1.5rem; }
 .panel-actions form { margin: 0; }
+.week-timeline { display: flex; flex-direction: column; gap: 0.5rem; }
+.week-row { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.35rem 0.5rem; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); }
+.week-row strong { font-size: 0.8rem; }
+.week-note-text { font-size: 0.85rem; }
 
 .form-grid { display: grid; gap: 0 0.5rem; }
 .form-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }

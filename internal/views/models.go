@@ -3,6 +3,7 @@ package views
 import (
 	"cad-development/internal/project"
 	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 )
 
 type TaskFormData struct {
@@ -73,6 +74,7 @@ type TaskPanelData struct {
 	Error      string
 	EditPath   string
 	DeletePath string
+	Weeks      []weekly.Cell
 }
 
 type ChartPageData struct {

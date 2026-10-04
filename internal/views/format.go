@@ -25,6 +25,23 @@ func percent(v float64) string {
 	return strconv.FormatFloat(math.Floor(v), 'f', 0, 64)
 }
 
+func hasNotes(weeks []weekly.Cell) bool {
+	for _, cell := range weeks {
+		if cell.Note != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func weekLabel(w weekly.WeekStart) string {
+	info, err := w.Info()
+	if err != nil {
+		return w.String()
+	}
+	return "W" + strconv.Itoa(info.Number) + " · " + info.Date
+}
+
 func overrunClass(overrun bool) string {
 	if overrun {
 		return "overrun"

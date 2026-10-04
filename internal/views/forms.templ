@@ -196,6 +196,18 @@ templ TaskPanel(data TaskPanelData) {
 		if data.Notes != "" {
 			<section class="panel-section"><h3>Implementation notes</h3><p>{ data.Notes }</p></section>
 		}
+		if hasNotes(data.Weeks) {
+			<section class="panel-section"><h3>Weekly notes</h3><div class="week-timeline">
+				for _, cell := range data.Weeks {
+					if cell.Note != "" {
+						<div class="week-row">
+							<strong>{ weekLabel(cell.WeekStart) }</strong>
+							<div class="week-note-text">{ cell.Note }</div>
+						</div>
+					}
+				}
+			</div></section>
+		}
 		<div class="panel-actions"><button type="button" class="linkish" hx-get={ templ.URL(data.EditPath) } hx-target="#modal-root" hx-swap="innerHTML">Edit task</button>@DeleteForm(data.DeletePath, "Delete this task?", "Delete")</div>
 	}
 }
