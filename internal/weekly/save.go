@@ -19,11 +19,12 @@ type Patch struct {
 }
 
 type Cell struct {
-	TaskID       int64     `json:"task_id"`
-	WeekStart    WeekStart `json:"week_start"`
-	PlannedHours float64   `json:"planned_hours"`
-	SpentHours   float64   `json:"spent_hours"`
-	Progress     *float64  `json:"progress"`
+	TaskID         int64     `json:"task_id"`
+	WeekStart      WeekStart `json:"week_start"`
+	PlannedHours   float64   `json:"planned_hours"`
+	SpentHours     float64   `json:"spent_hours"`
+	Progress       *float64  `json:"progress"`
+	StoredProgress *float64  `json:"stored_progress"`
 }
 
 func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
@@ -135,11 +136,16 @@ func validProgress(value float64) error {
 }
 
 func toCell(week db.TaskWeek, weekStart WeekStart, progress *float64) Cell {
+	var stored *float64
+	if week.Progress.Valid {
+		stored = new(week.Progress.Float64)
+	}
 	return Cell{
-		TaskID:       week.TaskID,
-		WeekStart:    weekStart,
-		PlannedHours: week.PlannedHours,
-		SpentHours:   week.SpentHours,
-		Progress:     progress,
+		TaskID:         week.TaskID,
+		WeekStart:      weekStart,
+		PlannedHours:   week.PlannedHours,
+		SpentHours:     week.SpentHours,
+		Progress:       progress,
+		StoredProgress: stored,
 	}
 }

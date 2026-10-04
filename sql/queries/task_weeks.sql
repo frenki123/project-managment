@@ -2,11 +2,6 @@
 SELECT task_id, week_start, planned_hours, spent_hours, progress
 FROM task_weeks WHERE task_id = ? AND week_start = ?;
 
--- name: ListTaskWeeksByTask :many
-SELECT task_id, week_start, planned_hours, spent_hours, progress,
-       CAST(effective_progress AS REAL) AS effective_progress
-FROM v_task_week_effective WHERE task_id = ? ORDER BY week_start;
-
 -- name: GetTaskTotals :one
 SELECT CAST(planned_hours AS REAL) AS planned_hours,
        CAST(spent_hours AS REAL) AS spent_hours,

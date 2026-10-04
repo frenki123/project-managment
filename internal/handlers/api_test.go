@@ -256,8 +256,8 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 	if rr := post(historicalCookie); rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "historical editing is not enabled") {
 		t.Fatalf("historical edit with cookie: %d %s", rr.Code, rr.Body.String())
 	}
-	weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
-	if err != nil || len(weeks) != 1 || weeks[0].PlannedHours != 4 {
+	weeks, err := q.ListTaskWeekSeriesByTask(t.Context(), taskID)
+	if err != nil || len(weeks) == 0 || weeks[0].PlannedHours != 4 {
 		t.Fatalf("historical edit was not saved: %#v %v", weeks, err)
 	}
 }
@@ -712,14 +712,28 @@ func TestJSONContractConsistency(t *testing.T) {
 	}
 	var got struct {
 		Weeks []struct {
-			Progress float64 `json:"progress"`
+			WeekStart      string   `json:"week_start"`
+			PlannedHours   float64  `json:"planned_hours"`
+			SpentHours     float64  `json:"spent_hours"`
+			Progress       float64  `json:"progress"`
+			StoredProgress *float64 `json:"stored_progress"`
 		} `json:"weeks"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Weeks) != 2 || got.Weeks[0].Progress != 25 || got.Weeks[1].Progress != 25 {
-		t.Fatalf("expected carried progress in weeks: %#v", got.Weeks)
+	if len(got.Weeks) != 5 {
+		t.Fatalf("expected all project-bounded weeks, got %#v", got.Weeks)
+	}
+	expectedPlanned := []float64{0, 1, 0, 0, 0}
+	for i, week := range got.Weeks {
+		expectedWeek := start.AddDate(0, 0, i*7).Format("2006-01-02")
+		if week.WeekStart != expectedWeek || week.PlannedHours != expectedPlanned[i] || week.SpentHours != 0 || week.Progress != 25 {
+			t.Fatalf("unexpected week %d: %#v", i, week)
+		}
+	}
+	if got.Weeks[0].StoredProgress == nil || *got.Weeks[0].StoredProgress != 25 || got.Weeks[1].StoredProgress != nil {
+		t.Fatalf("stored/effective progress distinction lost: %#v", got.Weeks)
 	}
 
 	putBody := []byte(`{"name":"Renamed","project_id":` + strconv.FormatInt(pid, 10) + `}`)
@@ -938,9 +952,9 @@ func TestHTMLWeekEditRejectsInvalidDisplayContextBeforeSaving(t *testing.T) {
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("%q: expected 400, got %d %s", body, rr.Code, rr.Body.String())
 		}
-		weeks, err := q.ListTaskWeeksByTask(t.Context(), taskID)
-		if err != nil || len(weeks) != 0 {
-			t.Fatalf("%q: write despite invalid view: %v %v", body, weeks, err)
+		week, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+		if err == nil || week.PlannedHours != 0 {
+			t.Fatalf("%q: write despite invalid view: %v %v", body, week, err)
 		}
 	}
 }

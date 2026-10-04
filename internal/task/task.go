@@ -166,7 +166,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	weeks, err := q.ListTaskWeeksByTask(ctx, id)
+	weeks, err := LoadWeeks(ctx, q, id)
 	if err != nil {
 		return Task{}, err
 	}
@@ -174,21 +174,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
 	out.Status = Status(out.Progress)
-	out.Weeks = make([]weekly.Cell, 0, len(weeks))
-	for _, w := range weeks {
-		ws, err := weekly.Parse(w.WeekStart)
-		if err != nil {
-			return Task{}, err
-		}
-		c := weekly.Cell{
-			TaskID:       w.TaskID,
-			WeekStart:    ws,
-			PlannedHours: w.PlannedHours,
-			SpentHours:   w.SpentHours,
-		}
-		c.Progress = new(w.EffectiveProgress)
-		out.Weeks = append(out.Weeks, c)
-	}
+	out.Weeks = weeks
 	return out, nil
 }
 
