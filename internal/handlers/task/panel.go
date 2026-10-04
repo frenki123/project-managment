@@ -3,9 +3,11 @@ package taskhandler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"cad-development/internal/db"
 	"cad-development/internal/handlers/shared"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -60,13 +62,21 @@ func taskPanelData(r *http.Request, q *db.Queries, t task.Task) (views.TaskPanel
 	return views.TaskPanelData{
 		Task:       row,
 		Department: t.Department,
-		Developers: t.Developers,
+		Developers: joinedNames(t.Developers),
 		Priority:   t.Priority,
 		Notes:      t.ImplementationNotes,
 		Desc:       t.Description,
 		EditPath:   "/tasks/" + id + "/edit",
 		DeletePath: "/tasks/" + id + "/delete",
 	}, nil
+}
+
+func joinedNames(people []person.Ref) string {
+	names := make([]string, 0, len(people))
+	for _, p := range people {
+		names = append(names, p.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 func taskPanelError(data views.TaskPanelData, message string) views.TaskPanelData {

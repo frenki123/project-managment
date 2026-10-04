@@ -3,9 +3,11 @@ package shared
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"cad-development/internal/db"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 	"cad-development/internal/web"
@@ -30,6 +32,19 @@ func ProjectOptions(r *http.Request, q *db.Queries, selected *int64) ([]task.Opt
 	out := make([]task.Option, 0, len(projects))
 	for _, p := range projects {
 		out = append(out, task.Option{Value: strconv.FormatInt(p.ID, 10), Label: p.Name, Selected: selected != nil && *selected == p.ID})
+	}
+	return out, nil
+}
+
+// PersonOptions lists all people for a task form developer picker.
+func PersonOptions(r *http.Request, q *db.Queries, selected []int64) ([]task.Option, error) {
+	people, err := person.List(r.Context(), q)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]task.Option, 0, len(people))
+	for _, p := range people {
+		out = append(out, task.Option{Value: strconv.FormatInt(p.ID, 10), Label: p.Name, Selected: slices.Contains(selected, p.ID)})
 	}
 	return out, nil
 }

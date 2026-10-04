@@ -25,7 +25,8 @@ one S-curve per project.
 - **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
 - **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
 - **People**: named developers with a weekly capacity default (40 h); per-week availability overrides
-  (holiday, part-time, training) take precedence over the default capacity for that week.
+  (holiday, part-time, training) take precedence over the default capacity for that week. Tasks pick
+  their developers from people instead of free text.
 - **Progress rules**: effective progress is a running maximum and never decreases. An empty week
   carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
 - **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
@@ -62,7 +63,7 @@ The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, 
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
 `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
 `subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`
-(people). Validation errors without a SQL-backed reason omit the key.
+(people, including task developer ids). Validation errors without a SQL-backed reason omit the key.
 The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
 `reason` appears only when the API provides one.
 
@@ -76,6 +77,13 @@ the project's start-week through its end-week, including zero planned/spent week
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
 have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
 monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
+
+Task developers are real people. Creates send `developer_ids`; reads resolve them into a
+`developers` array of `{"id","name"}` objects (empty array when none). Updates are presence-driven:
+an omitted `developer_ids` preserves the current developers, while `"developer_ids": []` or
+`"developer_ids": null` both clear them and `"developer_ids": [<ids>]` replaces the set. Unknown
+person ids return `404` with `person-not-found`; duplicate ids return `400 duplicate developer`;
+reassigning developers never conflicts with weekly data.
 
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
 `project name already exists`. Deleting a referenced project, subproject, or task, or moving a
@@ -163,8 +171,9 @@ The CLI targets the local server by default and can use `CAD_API_URL` or `--url`
 ```sh
 pmctl projects list
 pmctl tasks list --project "Project Alpha"
-pmctl tasks create --name "Implement API" --project-id 5 --priority high
-pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
+pmctl tasks create --name "Implement API" --project-id 5 --priority high --developer-id 3 --developer-id 7
+pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1 --developer-id 3
+pmctl tasks update 12 --clear-developers
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 pmctl people create --name "Ada" --weekly-capacity 32
 pmctl people overrides set 3 2026-09-07 --capacity 20

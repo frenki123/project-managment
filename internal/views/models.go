@@ -14,6 +14,7 @@ type TaskFormData struct {
 	DetailPath   string
 	Projects     []task.Option
 	Subprojects  []task.Option
+	People       []task.Option
 	CanReassign  bool
 	ReassignNote string
 	Error        string
@@ -25,7 +26,7 @@ type TaskFormValues struct {
 	Description         string
 	ImplementationNotes string
 	Department          string
-	Developers          string
+	DeveloperIDs        []string
 	Priority            string
 	ProjectID           string
 	SubprojectID        string

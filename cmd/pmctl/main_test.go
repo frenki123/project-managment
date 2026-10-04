@@ -205,11 +205,62 @@ func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
 		t.Fatal(err)
 	}
-	if input.Name != "" || input.Description != "" || input.ImplementationNotes != "" || input.Department != "" || input.Developers != "" || input.Priority != "high" {
+	if input.Name != "" || input.Description != "" || input.ImplementationNotes != "" || input.Department != "" || input.Priority != "high" {
 		t.Fatalf("unexpected task fields: %+v", input)
+	}
+	if input.DeveloperIDs != nil {
+		t.Fatalf("unexpected developer ids: %+v", input.DeveloperIDs)
 	}
 	if input.ProjectID != nil || input.SubprojectID != nil {
 		t.Fatalf("unexpected task assignment: %+v", input)
+	}
+}
+
+func TestTaskCreateSendsDeveloperIDs(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/tasks" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","developers":[]}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "tasks", "create", "--name", "X", "--developer-id", "3", "--developer-id", "5"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"developer_ids":[3,5]`) {
+		t.Fatalf("unexpected task body: %s", body)
+	}
+}
+
+func TestTaskUpdateClearDevelopers(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/tasks/4" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":4,"name":"X","developers":[]}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "tasks", "update", "4", "--clear-developers"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"developer_ids":null`) {
+		t.Fatalf("unexpected patch body: %s", body)
 	}
 }
 
@@ -351,6 +402,32 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 	}
 	if input.TotalHours == nil || *input.TotalHours != 120 {
 		t.Fatalf("unexpected project total hours: %+v", input.TotalHours)
+	}
+}
+
+func TestGetCommandUsesInitializedClient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/projects/1" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"Alpha","purchase_order_name":"PO-1","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`)
+	}))
+	defer server.Close()
+	out := &bytes.Buffer{}
+	state := &commandState{apiURL: server.URL, out: out, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"projects", "get", "1"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got project.Project
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != 1 || got.Name != "Alpha" {
+		t.Fatalf("unexpected project: %#v", got)
 	}
 }
 

@@ -30,7 +30,7 @@ func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
 		Description:         stringOpt(cmd, "description", f.description),
 		ImplementationNotes: stringOpt(cmd, "implementation-notes", f.notes),
 		Department:          stringOpt(cmd, "department", f.department),
-		Developers:          stringOpt(cmd, "developers", f.developers),
+		DeveloperIDs:        developerIDsOpt(cmd, f),
 		Priority:            stringOpt(cmd, "priority", f.priority),
 		ProjectID:           opt(cmd, "project-id", &f.projectID),
 		SubprojectID:        opt(cmd, "subproject-id", &f.subprojectID),
@@ -39,6 +39,16 @@ func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
 		in.ProjectID, in.SubprojectID = nullable.Clear[*int64](), nullable.Clear[*int64]()
 	}
 	return in
+}
+
+func developerIDsOpt(cmd *cobra.Command, f taskFlags) nullable.Optional[[]int64] {
+	if f.clearDevelopers {
+		return nullable.Clear[[]int64]()
+	}
+	if cmd.Flags().Changed("developer-id") {
+		return nullable.Present(f.developerIDs)
+	}
+	return nullable.Optional[[]int64]{}
 }
 
 func weekPatchFromFlags(cmd *cobra.Command, planned, spent float64, progress string, unlock bool) (weekly.Patch, error) {

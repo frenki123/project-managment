@@ -4,27 +4,26 @@ INSERT INTO tasks (
     description,
     implementation_notes,
     department,
-    developers,
     priority,
     project_id,
     subproject_id
-) VALUES (?, ?, ?, ?, ?, ?,
+) VALUES (?, ?, ?, ?, ?,
     COALESCE(CAST(sqlc.narg(project_id) AS INTEGER), (
         SELECT project_id FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)
     )),
     CAST(sqlc.narg(subproject_id) AS INTEGER))
-RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
+RETURNING id, name, description, implementation_notes, department, priority, project_id, subproject_id;
 
 -- name: GetTask :one
-SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
+SELECT id, name, description, implementation_notes, department, priority, project_id, subproject_id
 FROM tasks WHERE id = ?;
 
 -- name: ListIdeaTasks :many
-SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
+SELECT id, name, description, implementation_notes, department, priority, project_id, subproject_id
 FROM tasks WHERE project_id IS NULL ORDER BY name COLLATE NOCASE, id;
 
 -- name: ListTasksScoped :many
-SELECT id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id
+SELECT id, name, description, implementation_notes, department, priority, project_id, subproject_id
 FROM tasks
 WHERE (CAST(sqlc.narg(project_id) AS INTEGER) IS NULL OR project_id = CAST(sqlc.narg(project_id) AS INTEGER))
   AND (CAST(sqlc.narg(subproject_id) AS INTEGER) IS NULL OR subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER))
@@ -42,14 +41,13 @@ UPDATE tasks SET
     description = ?,
     implementation_notes = ?,
     department = ?,
-    developers = ?,
     priority = ?,
     project_id = COALESCE(CAST(sqlc.narg(project_id) AS INTEGER), (
         SELECT project_id FROM subprojects WHERE id = CAST(sqlc.narg(subproject_id) AS INTEGER)
     )),
     subproject_id = CAST(sqlc.narg(subproject_id) AS INTEGER)
 WHERE tasks.id = sqlc.arg(id)
-RETURNING id, name, description, implementation_notes, department, developers, priority, project_id, subproject_id;
+RETURNING id, name, description, implementation_notes, department, priority, project_id, subproject_id;
 
 -- name: DeleteTask :execrows
 DELETE FROM tasks

@@ -18,6 +18,11 @@ type Person struct {
 	WeeklyCapacity float64 `json:"weekly_capacity"`
 }
 
+type Ref struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 type Input struct {
 	Name           string   `json:"name"`
 	WeeklyCapacity *float64 `json:"weekly_capacity"`

@@ -97,7 +97,15 @@ templ TaskIdentitySection(data TaskFormData) {
 templ TaskOwnershipSection(data TaskFormData) {
 	<section class="panel-section"><h3>Ownership</h3><div class="form-grid form-grid-three">
 		<label>Department<input type="text" name="department" value={ data.Task.Department }/></label>
-		<label>Developers<input type="text" name="developers" value={ data.Task.Developers }/></label>
+		<label>Developers
+			if len(data.People) == 0 {
+				<small class="form-hint">No people yet — create people first.</small>
+			} else {
+				for _, o := range data.People {
+					<label><input type="checkbox" name="developer_ids" value={ o.Value } checked?={ o.Selected }/> { o.Label }</label>
+				}
+			}
+		</label>
 		<label>Priority<input type="text" name="priority" value={ data.Task.Priority }/></label>
 	</div></section>
 }

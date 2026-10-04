@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"cad-development/internal/client"
 	"cad-development/internal/person"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,7 @@ func personCommands(s *commandState) *cobra.Command {
 		}
 		return writeJSON(s.out, v)
 	}})
-	root.AddCommand(getCommand(s, s.client.Person))
+	root.AddCommand(getCommand(s, (*client.Client).Person))
 	root.AddCommand(personCommand("create", s, false), personCommand("update <id>", s, true), deleteCommand("delete", "person", s, func(ctx context.Context, id int64) error { return s.client.DeletePerson(ctx, id) }))
 	root.AddCommand(personOverridesCommands(s))
 	return root
