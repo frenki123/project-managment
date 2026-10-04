@@ -27,14 +27,15 @@ body.modal-open { overflow: hidden; }
 }
 
 .app-header {
-	justify-content: space-between;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
 	gap: 1rem;
-	padding: 0.45rem 0.75rem;
+	padding: 0.45rem max(1rem, 2vw);
 	border-bottom: 1px solid var(--pico-muted-border-color);
 }
 
 .brand { font-weight: 700; text-decoration: none; }
-.primary-nav { gap: 0.85rem; margin-right: auto; margin-left: 2rem; }
+.primary-nav { gap: 0.85rem; margin-left: 2rem; }
 .header-actions { gap: 0.85rem; }
 .primary-nav a { color: var(--pico-muted-color); text-decoration: none; }
 .primary-nav a.active { color: var(--pico-color); font-weight: 700; }
@@ -56,7 +57,7 @@ body.modal-open { overflow: hidden; }
 }
 
 .workspace { height: calc(100vh - 3.2rem); }
-.grid-main { --column-header-top: 3.5rem; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 0.75rem 1rem 1rem; }
+.grid-main { --column-header-top: 3.5rem; box-sizing: border-box; min-width: 0; height: 100%; overflow-x: hidden; overflow-y: auto; padding: 0.75rem max(1rem, 2vw) 1rem; }
 .grid-main.ideas { --column-header-top: 0rem; }
 
 .project-header { justify-content: space-between; gap: 2rem; padding: 0.25rem 0 0.75rem; }
@@ -164,7 +165,7 @@ body.modal-open { overflow: hidden; }
 .delete-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--pico-muted-border-color); }
 .delete-actions :is(form, button) { margin: 0; }
 
-.table-scroll { max-height: calc(100vh - 14rem); overflow-x: auto; overflow-y: auto; }
+.table-scroll { min-height: calc(100% - 11rem); max-height: calc(100vh - 14rem); overflow: auto; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); background: var(--pico-card-background-color); }
 .week-table { width: max-content; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 0.72rem; white-space: nowrap; }
 .week-table th,
 .week-table td { box-sizing: border-box; border: 1px solid var(--pico-muted-border-color); padding: 0.15rem 0.25rem; background: var(--pico-background-color); }
