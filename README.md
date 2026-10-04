@@ -33,12 +33,12 @@ one S-curve per project.
 - **Task detail**: click a row to open a side panel with all totals plus an edit button.
 - **Filters**: project (or "Ideas") and optional subproject filter; last project remembered in a cookie.
 - **JSON API** under `/api/v1` mirroring the UI, for scripts, CLIs, and LLM agents.
-- **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the default;
-  add `--table` for compact output. `pmctl tasks list` returns all tasks by default; project
+- **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the only output
+  format. `pmctl tasks list` returns all tasks by default; project
   filters are name- or ID-based, names win if both given. POST creates use empty values for
   omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
   fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
-  `--spent-hours`, `--progress <hours>`, `--progress null` clears stored progress); historical
+  `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress); historical
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
   a reassignment with weekly data returns `409` only when that field was explicitly changed.
@@ -60,6 +60,8 @@ The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, 
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
 and `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
 `subproject-hours-exceed-project` (project/subproject). Validation errors without a SQL-backed reason omit the key.
+The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
+`reason` appears only when the API provides one.
 
 API requests always receive JSON, even when HTMX headers are present; browser and HTMX requests
 get HTML error views or fragments with the same status. Weekly updates are presence-driven: absent
@@ -147,7 +149,7 @@ PORT=9000 ./server-linux-amd64      # or pick another port
 The CLI targets the local server by default and can use `CAD_API_URL` or `--url` for another API:
 
 ```sh
-pmctl projects list --table
+pmctl projects list
 pmctl tasks list --project "Project Alpha"
 pmctl tasks create --name "Implement API" --project-id 5 --priority high
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
