@@ -126,6 +126,21 @@ func FormFloatValue(r *http.Request, name string) (float64, bool, error) {
 	return f, true, nil
 }
 
+func FormFloatChecked(r *http.Request, name string) (*float64, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid form"}
+	}
+	s := strings.TrimSpace(r.FormValue(name))
+	if s == "" {
+		return nil, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil, HTTPError{Status: http.StatusBadRequest, Message: "invalid " + fieldName(name)}
+	}
+	return new(f), nil
+}
+
 func FormFloatRequired(r *http.Request, name string) (float64, error) {
 	value, present, err := FormFloatValue(r, name)
 	if err != nil {
@@ -146,6 +161,8 @@ func fieldName(name string) string {
 		return "subproject"
 	case "total_hours":
 		return "total hours"
+	case "manual_estimate":
+		return "manual estimate"
 	}
 	return name
 }

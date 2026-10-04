@@ -25,6 +25,7 @@ CREATE TABLE tasks (
     department TEXT NOT NULL DEFAULT '',
     developers TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT '',
+    manual_estimate REAL CHECK (manual_estimate IS NULL OR manual_estimate >= 0),
     project_id INTEGER REFERENCES projects (id),
     subproject_id INTEGER REFERENCES subprojects (id),
     CHECK (subproject_id IS NULL OR project_id IS NOT NULL),
@@ -54,9 +55,11 @@ SELECT
     t.id AS task_id,
     t.project_id,
     t.subproject_id,
+    t.manual_estimate,
     CAST(COALESCE(SUM(tw.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tw.spent_hours), 0) AS REAL) AS spent_hours,
-    CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress
+    CAST(COALESCE(MAX(tw.progress), 0) AS REAL) AS progress,
+    CAST(COALESCE(t.manual_estimate, SUM(tw.planned_hours), 0) AS REAL) AS estimate
 FROM tasks t
 LEFT JOIN task_weeks tw ON tw.task_id = t.id
 GROUP BY t.id;
@@ -71,12 +74,10 @@ SELECT
     p.end_date,
     CAST(COALESCE(SUM(tt.planned_hours), 0) AS REAL) AS planned_hours,
     CAST(COALESCE(SUM(tt.spent_hours), 0) AS REAL) AS spent_hours,
-    CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
+    CAST(CASE WHEN SUM(tt.estimate) > 0
+        THEN COALESCE(SUM(tt.estimate * tt.progress / 100.0), 0) / SUM(tt.estimate) * 100.0
         ELSE 0 END AS REAL) AS progress,
-    CAST(CAST(CASE WHEN p.total_hours > 0
-        THEN COALESCE(SUM(tt.planned_hours * tt.progress / p.total_hours), 0)
-        ELSE 0 END AS REAL) * p.total_hours / 100.0 AS REAL) AS earned_hours
+    CAST(COALESCE(SUM(tt.estimate * tt.progress / 100.0), 0) AS REAL) AS earned_hours
 FROM projects p
 LEFT JOIN v_task_totals tt ON tt.project_id = p.id
 GROUP BY p.id;

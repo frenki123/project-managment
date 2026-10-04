@@ -82,6 +82,7 @@ templ TaskFormPanel(data TaskFormData) {
 templ TaskFormEditor(data TaskFormData) {
 	@ResourceForm(data.Action) {
 		@TaskIdentitySection(data)
+		@TaskEstimateSection(data)
 		@TaskOwnershipSection(data)
 		@TaskDescriptionSection(data)
 		@TaskNotesSection(data)
@@ -92,6 +93,13 @@ templ TaskFormEditor(data TaskFormData) {
 
 templ TaskIdentitySection(data TaskFormData) {
 	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Task.Name } required/></label></section>
+}
+
+templ TaskEstimateSection(data TaskFormData) {
+	<section class="panel-section"><h3>Estimate</h3>
+		<label>Manual estimate<input type="number" step="any" min="0" name="manual_estimate" value={ data.Task.ManualEstimate } placeholder="Automatic"/></label>
+		<small class="form-hint">Leave empty to track the plan automatically; the estimate then equals the total planned hours.</small>
+	</section>
 }
 
 templ TaskOwnershipSection(data TaskFormData) {

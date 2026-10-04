@@ -214,7 +214,7 @@ templ WeekTotalContent(total task.GridWeekTotal) {
 }
 
 templ TaskGridRow(row task.GridRow, kind task.ViewKind) {
-	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row">
+	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class={ "task-row" + overPlannedClass(row.OverPlanned) }>
 		<td class="sticky c0">
 			<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#modal-root" hx-swap="innerHTML">{ row.Name }</button>
 		</td>
@@ -238,7 +238,13 @@ templ TaskGridRow(row task.GridRow, kind task.ViewKind) {
 
 templ TaskSummary(row task.GridRow) {
 	<dl class="task-summary">
+		<div><dt>Estimate</dt><dd>{ hours(row.Estimate) } h
+			if row.AutoEstimate {
+				<span class="auto-marker">auto</span>
+			}
+		</dd></div>
 		<div><dt>Planned</dt><dd>{ hours(row.TotalHours) } h</dd></div>
+		<div><dt>Gap</dt><dd class={ overrunClass(row.OverPlanned) }>{ gapHours(row.TotalHours, row.Estimate) }</dd></div>
 		<div><dt>Spent</dt><dd>{ hours(row.SpentHours) } h</dd></div>
 		<div><dt>Progress</dt><dd>{ percent(row.Progress) }%</dd></div>
 	</dl>

@@ -60,6 +60,20 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, `<dl class="task-summary">`) || !strings.Contains(project, "<dt>Planned</dt><dd>0 h</dd>") || !strings.Contains(project, "<dt>Progress</dt><dd>0%</dd>") {
 		t.Fatalf("project grid is missing task status: %s", project)
 	}
+	estimated := renderGrid(t, task.Grid{
+		Kind: task.ViewProject,
+		Rows: []task.GridRow{
+			{Name: "Auto", Estimate: 45, AutoEstimate: true, TotalHours: 45, Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}},
+			{Name: "Over", Estimate: 30, OverPlanned: true, TotalHours: 45, Cells: []task.GridCell{{SavePath: "/tasks/2/weeks/2026-01-05"}}},
+		},
+		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
+	})
+	if !strings.Contains(estimated, "<dt>Estimate</dt><dd>45 h") || !strings.Contains(estimated, `class="auto-marker"`) || !strings.Contains(estimated, ">0 h</dd>") {
+		t.Fatalf("project grid is missing estimate row, auto marker, or auto gap: %s", estimated)
+	}
+	if !strings.Contains(estimated, `class="task-row over-planned"`) || !strings.Contains(estimated, `<dd class="overrun">+15 h</dd>`) {
+		t.Fatalf("project grid is missing over-planned tint or gap: %s", estimated)
+	}
 	for _, label := range []string{"Plan", "Spent"} {
 		if !strings.Contains(project, ">"+label+"<") {
 			t.Fatalf("project footer is missing %q: %s", label, project)

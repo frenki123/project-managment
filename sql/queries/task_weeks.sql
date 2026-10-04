@@ -5,7 +5,8 @@ FROM task_weeks WHERE task_id = ? AND week_start = ?;
 -- name: GetTaskTotals :one
 SELECT CAST(planned_hours AS REAL) AS planned_hours,
        CAST(spent_hours AS REAL) AS spent_hours,
-       CAST(progress AS REAL) AS progress
+       CAST(progress AS REAL) AS progress,
+       CAST(estimate AS REAL) AS estimate
 FROM v_task_totals
 WHERE task_id = ?;
 
@@ -120,7 +121,7 @@ WITH weekly AS (
     SELECT ts.week_start,
            SUM(ts.planned_hours) AS planned_hours,
            SUM(ts.spent_hours) AS spent_hours,
-           SUM(tt.planned_hours * ts.effective_progress / 100.0) AS earned_hours
+           SUM(tt.estimate * ts.effective_progress / 100.0) AS earned_hours
     FROM v_task_week_series ts
     JOIN v_task_totals tt ON tt.task_id = ts.task_id
     WHERE ts.task_id IN (SELECT id FROM tasks WHERE project_id = CAST(sqlc.arg(project_id) AS INTEGER))

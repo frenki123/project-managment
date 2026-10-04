@@ -907,6 +907,56 @@ func TestUIFormMutationRedirects(t *testing.T) {
 	assertAPIError(t, rr, http.StatusNotFound, "project not found", "")
 }
 
+func TestHTMLManualEstimateRoundTrip(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	pid := createProject(t, mux, "Estimate UI", start)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	updatePath := "/tasks/" + strconv.FormatInt(taskID, 10)
+
+	get := func() (manualEstimate *float64, estimate float64) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("get task: %d %s", rr.Code, rr.Body.String())
+		}
+		var got struct {
+			ManualEstimate *float64 `json:"manual_estimate"`
+			Estimate       float64  `json:"estimate"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got.ManualEstimate, got.Estimate
+	}
+
+	base := "name=T&project_id=" + strconv.FormatInt(pid, 10)
+	if rr := postForm(t, mux, updatePath, base+"&manual_estimate=12"); rr.Code != http.StatusSeeOther {
+		t.Fatalf("set manual estimate: %d %s", rr.Code, rr.Body.String())
+	}
+	if manualEstimate, estimate := get(); manualEstimate == nil || *manualEstimate != 12 || estimate != 12 {
+		t.Fatalf("manual estimate 12 not persisted: manual=%v estimate=%v", manualEstimate, estimate)
+	}
+
+	if rr := postForm(t, mux, updatePath, base+"&manual_estimate="); rr.Code != http.StatusSeeOther {
+		t.Fatalf("clear manual estimate: %d %s", rr.Code, rr.Body.String())
+	}
+	if manualEstimate, estimate := get(); manualEstimate != nil || estimate != 0 {
+		t.Fatalf("blank manual estimate should return to automatic: manual=%v estimate=%v", manualEstimate, estimate)
+	}
+
+	rr := postForm(t, mux, updatePath, base+"&manual_estimate=abc")
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid manual estimate") {
+		t.Fatalf("expected 400 with invalid manual estimate, got %d %s", rr.Code, rr.Body.String())
+	}
+	if manualEstimate, _ := get(); manualEstimate != nil {
+		t.Fatalf("invalid attempt changed stored manual estimate: %v", manualEstimate)
+	}
+}
+
 func TestHTMLWeekEditErrorsRenderInline(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

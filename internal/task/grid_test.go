@@ -108,8 +108,8 @@ func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
 	if grid.PlannedHours != 200 || grid.SpentHours != 200 {
 		t.Fatalf("unexpected hour totals: planned=%v spent=%v", grid.PlannedHours, grid.SpentHours)
 	}
-	if grid.ProgressPct == nil || *grid.ProgressPct != 25 {
-		t.Fatalf("expected 25%% progress, got %v", grid.ProgressPct)
+	if grid.ProgressPct == nil || *grid.ProgressPct != 37.5 {
+		t.Fatalf("expected 37.5%% progress, got %v", grid.ProgressPct)
 	}
 	for i, week := range grid.Weeks {
 		if week.Start.String() != "2026-09-07" {
@@ -262,6 +262,57 @@ func TestGridRejectsSubprojectFromAnotherProject(t *testing.T) {
 	}
 	if grid.Kind != task.ViewAll || len(grid.Rows) != 0 {
 		t.Fatalf("rejected grid load returned grid data: %#v", grid)
+	}
+}
+
+func TestGridMarksOverPlannedTasks(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{
+		Name: "Estimates", TotalHours: new(300.0), StartDate: "2026-09-01", EndDate: "2026-10-31",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := p.ID
+	item, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &projectID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, item.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(20.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	load := func() task.GridRow {
+		t.Helper()
+		grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(grid.Rows) != 1 {
+			t.Fatalf("expected one grid row: %#v", grid.Rows)
+		}
+		return grid.Rows[0]
+	}
+	row := load()
+	if !row.AutoEstimate || row.Estimate != 20 || row.OverPlanned {
+		t.Fatalf("auto estimate should track planned hours: %#v", row)
+	}
+	manual := 10.0
+	if _, err := task.Update(ctx, q, item.ID, task.Patch{ManualEstimate: nullable.Present(&manual)}); err != nil {
+		t.Fatal(err)
+	}
+	row = load()
+	if row.AutoEstimate || row.Estimate != 10 || !row.OverPlanned {
+		t.Fatalf("manual estimate below planned hours should flag over-planned: %#v", row)
+	}
+	manual = 30.0
+	if _, err := task.Update(ctx, q, item.ID, task.Patch{ManualEstimate: nullable.Present(&manual)}); err != nil {
+		t.Fatal(err)
+	}
+	row = load()
+	if row.AutoEstimate || row.Estimate != 30 || row.OverPlanned {
+		t.Fatalf("manual estimate above planned hours should not flag over-planned: %#v", row)
 	}
 }
 
