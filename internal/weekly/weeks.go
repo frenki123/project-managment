@@ -44,6 +44,16 @@ func (w WeekStart) IsLocked(now time.Time) bool {
 	return w.t.Year() < now.Year() || w.t.Year() == now.Year() && w.t.Month() < now.Month()
 }
 
+// IsCurrent reports whether now falls in the same ISO year and week as w.
+func (w WeekStart) IsCurrent(now time.Time) bool {
+	if w.t.IsZero() {
+		return false
+	}
+	wYear, wWeek := w.t.ISOWeek()
+	nowYear, nowWeek := now.ISOWeek()
+	return wYear == nowYear && wWeek == nowWeek
+}
+
 func (w WeekStart) Info() (WeekInfo, error) {
 	if w.t.IsZero() {
 		return WeekInfo{}, web.Invalid("week_start must be a Monday")
