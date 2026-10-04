@@ -233,3 +233,93 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		}
 	}
 }
+
+func TestManualEstimateLifecycle(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Estimate", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{PlannedHours: nullable.Present(10.0)}, time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Estimate != 10 || got.ManualEstimate != nil || got.TotalHours != 10 {
+		t.Fatalf("auto estimate before manual override: %#v", got)
+	}
+	manual := 25.0
+	if _, err := task.Update(ctx, q, tk.ID, task.Patch{ManualEstimate: nullable.Present(&manual)}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ManualEstimate == nil || *got.ManualEstimate != 25 || got.Estimate != 25 || got.TotalHours != 10 {
+		t.Fatalf("manual estimate did not override auto: %#v", got)
+	}
+	if _, err := task.Update(ctx, q, tk.ID, task.Patch{Name: nullable.Present("Renamed")}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ManualEstimate == nil || *got.ManualEstimate != 25 {
+		t.Fatalf("unrelated edit cleared manual estimate: %#v", got)
+	}
+	if _, err := task.Update(ctx, q, tk.ID, task.Patch{ManualEstimate: nullable.Clear[*float64]()}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ManualEstimate != nil || got.Estimate != 10 {
+		t.Fatalf("cleared estimate did not fall back to auto: %#v", got)
+	}
+}
+
+func TestManualEstimateValidation(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Estimate", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.Create(ctx, q, task.Input{Name: "Negative", ProjectID: &p.ID, ManualEstimate: new(-1.0)})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "estimate cannot be negative" {
+		t.Fatalf("got %v", err)
+	}
+	items, err := task.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("rejected create persisted a task: %#v", items)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Manual", ProjectID: &p.ID, ManualEstimate: new(10.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	negative := -5.0
+	_, err = task.Update(ctx, q, tk.ID, task.Patch{ManualEstimate: nullable.Present(&negative)})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "estimate cannot be negative" {
+		t.Fatalf("got %v", err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ManualEstimate == nil || *got.ManualEstimate != 10 {
+		t.Fatalf("rejected update changed manual estimate: %#v", got)
+	}
+}

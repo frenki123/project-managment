@@ -20,6 +20,8 @@ type Task struct {
 	Department          string        `json:"department"`
 	Developers          string        `json:"developers"`
 	Priority            string        `json:"priority"`
+	ManualEstimate      *float64      `json:"manual_estimate"`
+	Estimate            float64       `json:"estimate,omitempty"`
 	ProjectID           *int64        `json:"project_id"`
 	SubprojectID        *int64        `json:"subproject_id"`
 	TotalHours          float64       `json:"total_hours,omitempty"`
@@ -44,25 +46,27 @@ func Status(progress float64) string {
 }
 
 type Input struct {
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	ImplementationNotes string `json:"implementation_notes"`
-	Department          string `json:"department"`
-	Developers          string `json:"developers"`
-	Priority            string `json:"priority"`
-	ProjectID           *int64 `json:"project_id"`
-	SubprojectID        *int64 `json:"subproject_id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	ImplementationNotes string   `json:"implementation_notes"`
+	Department          string   `json:"department"`
+	Developers          string   `json:"developers"`
+	Priority            string   `json:"priority"`
+	ManualEstimate      *float64 `json:"manual_estimate"`
+	ProjectID           *int64   `json:"project_id"`
+	SubprojectID        *int64   `json:"subproject_id"`
 }
 
 type Patch struct {
-	Name                nullable.Optional[string] `json:"name,omitzero"`
-	Description         nullable.Optional[string] `json:"description,omitzero"`
-	ImplementationNotes nullable.Optional[string] `json:"implementation_notes,omitzero"`
-	Department          nullable.Optional[string] `json:"department,omitzero"`
-	Developers          nullable.Optional[string] `json:"developers,omitzero"`
-	Priority            nullable.Optional[string] `json:"priority,omitzero"`
-	ProjectID           nullable.Optional[*int64] `json:"project_id,omitzero"`
-	SubprojectID        nullable.Optional[*int64] `json:"subproject_id,omitzero"`
+	Name                nullable.Optional[string]   `json:"name,omitzero"`
+	Description         nullable.Optional[string]   `json:"description,omitzero"`
+	ImplementationNotes nullable.Optional[string]   `json:"implementation_notes,omitzero"`
+	Department          nullable.Optional[string]   `json:"department,omitzero"`
+	Developers          nullable.Optional[string]   `json:"developers,omitzero"`
+	Priority            nullable.Optional[string]   `json:"priority,omitzero"`
+	ManualEstimate      nullable.Optional[*float64] `json:"manual_estimate,omitzero"`
+	ProjectID           nullable.Optional[*int64]   `json:"project_id,omitzero"`
+	SubprojectID        nullable.Optional[*int64]   `json:"subproject_id,omitzero"`
 }
 
 func PatchFromInput(in Input) Patch {
@@ -73,6 +77,7 @@ func PatchFromInput(in Input) Patch {
 		Department:          nullable.Present(in.Department),
 		Developers:          nullable.Present(in.Developers),
 		Priority:            nullable.Present(in.Priority),
+		ManualEstimate:      nullable.Present(in.ManualEstimate),
 		ProjectID:           nullable.Present(in.ProjectID),
 		SubprojectID:        nullable.Present(in.SubprojectID),
 	}
@@ -92,6 +97,7 @@ func FromDB(t db.Task) Task {
 		Developers:          t.Developers,
 		Priority:            t.Priority,
 	}
+	out.ManualEstimate = nullable.Float64Pointer(t.ManualEstimate)
 	out.ProjectID = nullable.Int64Pointer(t.ProjectID)
 	out.SubprojectID = nullable.Int64Pointer(t.SubprojectID)
 	return out
@@ -104,6 +110,9 @@ func validate(in Input) (Input, error) {
 	in.Department = strings.TrimSpace(in.Department)
 	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
+	if in.ManualEstimate != nil && !web.NonNegativeFinite(*in.ManualEstimate) {
+		return in, web.Invalid("estimate cannot be negative")
+	}
 	if in.Name == "" {
 		return in, web.Invalid("name is required")
 	}
@@ -139,6 +148,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 			Department:          validated.Department,
 			Developers:          validated.Developers,
 			Priority:            validated.Priority,
+			ManualEstimate:      nullable.Float64(validated.ManualEstimate),
 			ProjectID:           nullable.Int64(validated.ProjectID),
 			SubprojectID:        nullable.Int64(validated.SubprojectID),
 		})
@@ -174,6 +184,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
 	out.Status = Status(out.Progress)
+	out.Estimate = totals.Estimate
 	out.Weeks = weeks
 	return out, nil
 }
@@ -225,6 +236,8 @@ func mergeTotals(rows []db.Task, totals []db.VTaskTotal) []Task {
 		t := FromDB(row)
 		total := byID[t.ID]
 		t.TotalHours, t.SpentHours, t.Progress, t.Status = total.PlannedHours, total.SpentHours, total.Progress, Status(total.Progress)
+		t.ManualEstimate = nullable.Float64Pointer(total.ManualEstimate)
+		t.Estimate = total.Estimate
 		out = append(out, t)
 	}
 	return out
@@ -254,6 +267,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			Department:          in.Department,
 			Developers:          in.Developers,
 			Priority:            in.Priority,
+			ManualEstimate:      nullable.Float64(in.ManualEstimate),
 			ProjectID:           nullable.Int64(in.ProjectID),
 			SubprojectID:        nullable.Int64(in.SubprojectID),
 			ID:                  id,
@@ -271,8 +285,9 @@ func mergeInput(current db.Task, patch Patch) Input {
 		Name: current.Name, Description: current.Description,
 		ImplementationNotes: current.ImplementationNotes, Department: current.Department,
 		Developers: current.Developers, Priority: current.Priority,
-		ProjectID:    nullable.Int64Pointer(current.ProjectID),
-		SubprojectID: nullable.Int64Pointer(current.SubprojectID),
+		ManualEstimate: nullable.Float64Pointer(current.ManualEstimate),
+		ProjectID:      nullable.Int64Pointer(current.ProjectID),
+		SubprojectID:   nullable.Int64Pointer(current.SubprojectID),
 	}
 	return Input{
 		Name:                patch.Name.Apply(currentInput.Name),
@@ -281,6 +296,7 @@ func mergeInput(current db.Task, patch Patch) Input {
 		Department:          patch.Department.Apply(currentInput.Department),
 		Developers:          patch.Developers.Apply(currentInput.Developers),
 		Priority:            patch.Priority.Apply(currentInput.Priority),
+		ManualEstimate:      patch.ManualEstimate.Apply(currentInput.ManualEstimate),
 		ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
 		SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
 	}
