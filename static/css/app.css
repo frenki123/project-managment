@@ -106,6 +106,21 @@ body.modal-open { overflow: hidden; }
 .historical-editing-allowed .workboard-toolbar { background: color-mix(in srgb, var(--pico-del-color) 8%, transparent); }
 .historical-editing-allowed .historical-editing-status { color: var(--pico-del-color); font-weight: 700; }
 .historical-editing-allowed .week-table thead th { border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-muted-border-color)); }
+.workboard-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.jump-week {
+	margin: 0;
+	padding: 0.35rem 0.55rem;
+	font-size: 0.75rem;
+	border: 1px solid var(--pico-primary);
+	border-radius: var(--pico-border-radius);
+	background: none;
+	color: var(--pico-primary);
+	cursor: pointer;
+}
 
 .totals {
 	display: grid;
@@ -225,6 +240,12 @@ body.modal-open { overflow: hidden; }
 .week-cell input:hover:not(:disabled) { border-color: var(--pico-primary); }
 .week-cell input:focus { position: relative; z-index: 2; box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--pico-primary) 28%, transparent); }
 .week-cell input:disabled { cursor: not-allowed; background: color-mix(in srgb, var(--pico-muted-border-color) 35%, transparent); }
+.week-table .week-past { background: color-mix(in srgb, var(--pico-muted-border-color) 28%, var(--pico-background-color)); }
+.week-table .week-current { background: color-mix(in srgb, var(--pico-primary) 10%, var(--pico-background-color)); }
+.week-table thead .week-current { background: color-mix(in srgb, var(--pico-primary) 16%, var(--pico-background-color)); }
+.week-table thead .week-current span { color: var(--pico-primary); font-weight: 700; }
+.week-table tbody tr:hover td.week-current { background: color-mix(in srgb, var(--pico-primary) 18%, var(--pico-background-color)); }
+.week-table tbody tr:hover td.week-past { background: color-mix(in srgb, var(--pico-muted-border-color) 34%, var(--pico-background-color)); }
 .cell-error { margin-bottom: 0.2rem; color: var(--pico-del-color); white-space: normal; }
 .linkish { padding: 0; border: 0; background: none; color: var(--pico-primary); font: inherit; text-decoration: underline; cursor: pointer; }
 .overrun { color: var(--pico-del-color); font-weight: 700; }

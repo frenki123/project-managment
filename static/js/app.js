@@ -99,6 +99,30 @@
 		if (event.target.id === "modal-backdrop") closeModal();
 	});
 
+	document.addEventListener("click", (event) => {
+		const trigger = event.target.closest(".jump-week");
+		if (!trigger) return;
+		const scroll = document.querySelector(".table-scroll");
+		const target = trigger.dataset.currentWeek;
+		if (!scroll || !target) return;
+		const columns = [...scroll.querySelectorAll("[data-week]")];
+		if (!columns.length) return;
+		const sticky = scroll.querySelector(".week-table th.c4");
+		let inset = 8;
+		if (sticky) {
+			inset += sticky.getBoundingClientRect().right - scroll.getBoundingClientRect().left;
+		}
+		const current = columns.find((column) => column.dataset.week === target);
+		if (current) {
+			const left = current.getBoundingClientRect().left - scroll.getBoundingClientRect().left - inset;
+			scroll.scrollLeft += left;
+		} else if (target < columns[0].dataset.week) {
+			scroll.scrollLeft = 0;
+		} else {
+			scroll.scrollLeft = scroll.scrollWidth;
+		}
+	});
+
 	document.addEventListener("keydown", (event) => {
 		const modal = document.getElementById("modal-root");
 		if (event.key === "Escape" && modal?.hasChildNodes()) {
