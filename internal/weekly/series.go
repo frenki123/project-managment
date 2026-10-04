@@ -14,6 +14,7 @@ func MapWeekSeries(rows []db.VTaskWeekSeries) ([]Cell, error) {
 			TaskID: row.TaskID, WeekStart: weekStart,
 			PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
 			Progress: new(row.EffectiveProgress),
+			Note:     row.Note,
 		}
 		if row.StoredProgress.Valid {
 			cell.StoredProgress = new(row.StoredProgress.Float64)

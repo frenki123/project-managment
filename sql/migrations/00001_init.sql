@@ -38,6 +38,7 @@ CREATE TABLE task_weeks (
     planned_hours REAL NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
     spent_hours REAL NOT NULL DEFAULT 0 CHECK (spent_hours >= 0),
     progress REAL CHECK (progress IS NULL OR (progress >= 0 AND progress <= 100)),
+    note TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (task_id, week_start)
 );
 
@@ -108,7 +109,8 @@ SELECT
         PARTITION BY w.task_id
         ORDER BY w.week_start
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ), 0) AS REAL) AS effective_progress
+    ), 0) AS REAL) AS effective_progress,
+    COALESCE(tw.note, '') AS note
 FROM weeks w
 LEFT JOIN task_weeks tw
     ON tw.task_id = w.task_id
