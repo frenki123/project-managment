@@ -53,16 +53,19 @@ type Option struct {
 }
 
 type GridRow struct {
-	ID          int64
-	Name        string
-	ProjectName string
-	Subproject  string
-	TotalHours  float64
-	SpentHours  float64
-	Progress    float64
-	Status      string
-	DetailPath  string
-	Cells       []GridCell
+	ID           int64
+	Name         string
+	ProjectName  string
+	Subproject   string
+	TotalHours   float64
+	SpentHours   float64
+	Progress     float64
+	Estimate     float64
+	AutoEstimate bool
+	OverPlanned  bool
+	Status       string
+	DetailPath   string
+	Cells        []GridCell
 }
 
 type GridCell struct {
@@ -229,6 +232,13 @@ func buildGridBase(ctx context.Context, q *db.Queries, resolved ResolvedFilter, 
 	return gc, nil
 }
 
+func rowEstimate(t Task) (estimate float64, auto, overPlanned bool) {
+	estimate = t.Estimate
+	auto = t.ManualEstimate == nil
+	overPlanned = t.ManualEstimate != nil && t.TotalHours > *t.ManualEstimate
+	return estimate, auto, overPlanned
+}
+
 func loadAllRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, error) {
 	tasks, err := List(ctx, q)
 	if err != nil {
@@ -248,7 +258,8 @@ func loadAllRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, erro
 	}
 	grid := gc.grid
 	for _, t := range tasks {
-		row := GridRow{ID: t.ID, Name: t.Name, Status: t.Status, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
+		estimate, auto, over := rowEstimate(t)
+		row := GridRow{ID: t.ID, Name: t.Name, Estimate: estimate, AutoEstimate: auto, OverPlanned: over, Status: t.Status, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.ProjectID != nil {
 			row.ProjectName = projectNames[*t.ProjectID]
 		}
@@ -326,7 +337,8 @@ func addWeekTotal(grid Grid, weekStart string, planned, spent float64) (Grid, er
 func buildTaskRows(tasks []Task, byTask map[int64][]weekly.Cell, grid Grid, subNames map[int64]string, now time.Time, allowHistoricalEditing bool) ([]GridRow, error) {
 	rows := make([]GridRow, 0, len(tasks))
 	for _, t := range tasks {
-		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
+		estimate, auto, over := rowEstimate(t)
+		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, Estimate: estimate, AutoEstimate: auto, OverPlanned: over, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}

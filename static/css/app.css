@@ -169,6 +169,7 @@ body.modal-open { overflow: hidden; }
 .week-table { width: max-content; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 0.72rem; white-space: nowrap; }
 .week-table th,
 .week-table td { box-sizing: border-box; border: 1px solid var(--pico-muted-border-color); padding: 0.15rem 0.25rem; background: var(--pico-background-color); }
+.week-table tbody tr.over-planned td { background: color-mix(in srgb, var(--pico-del-color) 8%, var(--pico-background-color)); }
 .week-table tbody tr:hover td { background: color-mix(in srgb, var(--pico-primary) 7%, var(--pico-background-color)); }
 .week-table .sticky { position: sticky; z-index: 1; }
 .week-table thead .sticky { top: 0; z-index: 2; }
@@ -231,6 +232,7 @@ body.modal-open { overflow: hidden; }
 .error { color: var(--pico-del-color); }
 .carried-progress { border-left: 3px dotted var(--pico-muted-color); }
 .stored-progress { border-left: 3px solid var(--pico-primary); }
+.auto-marker { margin-left: 0.35rem; padding: 0 0.2rem; border: 1px solid var(--pico-muted-border-color); border-radius: 0.25rem; color: var(--pico-muted-color); font-size: 0.6rem; text-transform: uppercase; }
 
 .toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; max-width: 28rem; padding: 0.75rem 1rem; border: 1px solid var(--pico-del-color); border-radius: 0.25rem; background: var(--pico-background-color); color: var(--pico-del-color); }
 .chart-page { padding: 0.75rem 1rem 1rem; }

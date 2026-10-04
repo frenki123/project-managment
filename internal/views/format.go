@@ -32,6 +32,21 @@ func overrunClass(overrun bool) string {
 	return ""
 }
 
+func overPlannedClass(over bool) string {
+	if over {
+		return " over-planned"
+	}
+	return ""
+}
+
+func gapHours(plan, estimate float64) string {
+	gap := plan - estimate
+	if gap > 0 {
+		return "+" + hours(gap) + " h"
+	}
+	return hours(gap) + " h"
+}
+
 func progressClass(stored bool) string {
 	if stored {
 		return "stored-progress"
