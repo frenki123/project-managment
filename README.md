@@ -196,8 +196,11 @@ pmctl tasks create --name "Implement API" --project-id 5 --priority high --devel
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1 --developer-id 3
 pmctl tasks update 12 --clear-developers
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
+pmctl people list
 pmctl people create --name "Ada" --weekly-capacity 32
 pmctl people overrides set 3 2026-09-07 --capacity 20
+pmctl update-task-week-developer 12 2026-09-21 3 --planned-hours 5 --spent-hours 2
+pmctl clear-task-week-developer 12 2026-09-21 3
 ```
 
 ## Layout
