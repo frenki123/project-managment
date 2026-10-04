@@ -54,8 +54,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 
 		planned := patch.PlannedHours.ValueOr(contextRow.PlannedHours)
 		spent := patch.SpentHours.ValueOr(contextRow.SpentHours)
-		stored, store, carried := resolveProgress(patch, contextRow)
-		row, err := txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
+		stored, store := resolveProgress(patch, contextRow)
+		_, err = txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
 			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: stored,
 		})
 		if err != nil {
@@ -70,10 +70,27 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 		}
-		result = toCell(row, weekStart, effectiveProgress(carried, row.Progress))
-		return nil
+		result, err = canonicalCell(ctx, txq, taskID, weekStart)
+		return err
 	})
 	return result, err
+}
+
+func canonicalCell(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart) (Cell, error) {
+	series, err := q.ListTaskWeekSeriesByTask(ctx, taskID)
+	if err != nil {
+		return Cell{}, err
+	}
+	cells, err := MapWeekSeries(series)
+	if err != nil {
+		return Cell{}, err
+	}
+	for _, cell := range cells {
+		if cell.WeekStart == weekStart {
+			return cell, nil
+		}
+	}
+	return Cell{}, errors.New("saved week missing from canonical series")
 }
 
 func validatePatch(patch Patch) error {
@@ -98,8 +115,8 @@ func validatePatch(patch Patch) error {
 	return nil
 }
 
-func resolveProgress(patch Patch, contextRow db.WeekWriteContextRow) (stored sql.NullFloat64, store bool, carried float64) {
-	carried = contextRow.PreviousProgress
+func resolveProgress(patch Patch, contextRow db.WeekWriteContextRow) (stored sql.NullFloat64, store bool) {
+	carried := contextRow.PreviousProgress
 	currentEffective := carried
 	if p := nullable.Float64Pointer(contextRow.Progress); p != nil {
 		currentEffective = max(carried, *p)
@@ -111,14 +128,7 @@ func resolveProgress(patch Patch, contextRow db.WeekWriteContextRow) (stored sql
 	} else if patch.Progress.Present && patch.Progress.Value == nil {
 		stored = sql.NullFloat64{}
 	}
-	return stored, store, carried
-}
-
-func effectiveProgress(carried float64, stored sql.NullFloat64) *float64 {
-	if p := nullable.Float64Pointer(stored); p != nil {
-		return p
-	}
-	return new(carried)
+	return stored, store
 }
 
 func validHours(value float64) error {
@@ -133,19 +143,4 @@ func validProgress(value float64) error {
 		return web.Invalid("progress must be between 0 and 100")
 	}
 	return nil
-}
-
-func toCell(week db.TaskWeek, weekStart WeekStart, progress *float64) Cell {
-	var stored *float64
-	if week.Progress.Valid {
-		stored = new(week.Progress.Float64)
-	}
-	return Cell{
-		TaskID:         week.TaskID,
-		WeekStart:      weekStart,
-		PlannedHours:   week.PlannedHours,
-		SpentHours:     week.SpentHours,
-		Progress:       progress,
-		StoredProgress: stored,
-	}
 }
