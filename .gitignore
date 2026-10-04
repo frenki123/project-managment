@@ -16,6 +16,8 @@ data/
 *.db
 *.db-wal
 *.db-shm
+/pmctl
+/server
 
 # sqlc generated (run `just generate`)
 internal/db/db.go

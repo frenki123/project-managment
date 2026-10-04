@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 
 	"github.com/spf13/cobra"
 )
@@ -26,7 +25,7 @@ func curveCommand(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return curveTable(w, v) })
+		return writeJSON(s.out, v)
 	}}
 	c.Flags().StringVar(&projectName, "project", "", "project name")
 	c.Flags().Int64Var(&projectID, "project-id", 0, "project ID")

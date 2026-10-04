@@ -1,8 +1,6 @@
 package main
 
 import (
-	"io"
-
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +21,7 @@ func updateWeekCommand(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return weekTable(w, v) })
+		return writeJSON(s.out, v)
 	}}
 	c.Flags().Float64Var(&planned, "planned-hours", 0, "planned hours")
 	c.Flags().Float64Var(&spent, "spent-hours", 0, "spent hours")

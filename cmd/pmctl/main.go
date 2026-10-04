@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +17,6 @@ import (
 
 type commandState struct {
 	apiURL      string
-	table       bool
 	out, errOut io.Writer
 	client      *client.Client
 }
@@ -41,14 +39,12 @@ func main() {
 func writeError(w io.Writer, err error) {
 	payload := result{Error: err.Error()}
 	if apiErr, ok := errors.AsType[*client.APIError](err); ok {
-		payload.Status = &apiErr.Status
+		payload.Status = apiErr.Status
+		payload.Reason = apiErr.Reason
 	}
-	data, marshalErr := json.Marshal(payload)
-	if marshalErr != nil {
+	if err := writeJSON(w, payload); err != nil {
 		fmt.Fprintln(w, err)
-		return
 	}
-	fmt.Fprintln(w, string(data))
 }
 
 func newRoot(s *commandState) *cobra.Command {
@@ -61,13 +57,8 @@ func newRoot(s *commandState) *cobra.Command {
 		return nil
 	}}
 	root.PersistentFlags().StringVar(&s.apiURL, "url", s.apiURL, "REST API base URL")
-	root.PersistentFlags().BoolVar(&s.table, "table", false, "print compact human-readable tables")
 	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), updateWeekCommand(s), curveCommand(s))
 	return root
-}
-
-func (s *commandState) printer() printer {
-	return printer{json: s.out, table: s.out, useTable: s.table}
 }
 
 func idArg(args []string) (int64, error) {
@@ -142,7 +133,7 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, 
 	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(*projectID, 10))
 }
 
-func getCommand[V any](s *commandState, get func(context.Context, int64) (V, error), table func(io.Writer, []V) error) *cobra.Command {
+func getCommand[V any](s *commandState, get func(context.Context, int64) (V, error)) *cobra.Command {
 	return &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := idArg(args)
 		if err != nil {
@@ -152,7 +143,7 @@ func getCommand[V any](s *commandState, get func(context.Context, int64) (V, err
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return table(w, []V{v}) })
+		return writeJSON(s.out, v)
 	}}
 }
 
@@ -165,6 +156,6 @@ func deleteCommand(use, kind string, s *commandState, del func(context.Context, 
 		if err := del(cmd.Context(), id); err != nil {
 			return err
 		}
-		return s.printer().deleted(kind, id)
+		return writeDeleted(s.out, kind, id)
 	}}
 }
