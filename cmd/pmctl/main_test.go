@@ -212,6 +212,57 @@ func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	}
 }
 
+func TestTaskUpdateStatusFlagSetsAndClearsManualStatus(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/tasks/7" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		bodies = append(bodies, string(data))
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":7}`)
+	}))
+	defer server.Close()
+
+	if err := runCommand(t, server, "tasks", "update", "7", "--status", "In review"); err != nil {
+		t.Fatal(err)
+	}
+	var patch task.Patch
+	if err := json.Unmarshal([]byte(bodies[0]), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if patch.ManualStatus.Value == nil || **patch.ManualStatus.Value != "In review" {
+		t.Fatalf("manual_status not set: %s", bodies[0])
+	}
+
+	if err := runCommand(t, server, "tasks", "update", "7", "--status", "null"); err != nil {
+		t.Fatal(err)
+	}
+	patch = task.Patch{}
+	if err := json.Unmarshal([]byte(bodies[1]), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if !patch.ManualStatus.Present || patch.ManualStatus.Value != nil {
+		t.Fatalf("manual_status not cleared: %s", bodies[1])
+	}
+
+	if err := runCommand(t, server, "tasks", "update", "7", "--priority", "high"); err != nil {
+		t.Fatal(err)
+	}
+	patch = task.Patch{}
+	if err := json.Unmarshal([]byte(bodies[2]), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if patch.ManualStatus.Present {
+		t.Fatalf("manual_status present without --status: %s", bodies[2])
+	}
+}
+
 func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
 	var flags taskFlags
 	command := &cobra.Command{}
@@ -222,6 +273,41 @@ func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
 	in := taskInput(command, flags)
 	if in.ProjectID == nil || *in.ProjectID != 5 || in.SubprojectID != nil {
 		t.Fatalf("unexpected assignment: %+v", in)
+	}
+}
+
+func TestTaskInputStatusFlagSetsManualStatusOnCreate(t *testing.T) {
+	var flags taskFlags
+	command := &cobra.Command{}
+	flags.addFlags(command)
+	if err := command.ParseFlags([]string{"--status", "In review"}); err != nil {
+		t.Fatal(err)
+	}
+	in := taskInput(command, flags)
+	if in.ManualStatus == nil || *in.ManualStatus != "In review" {
+		t.Fatalf("manual status not set: %+v", in)
+	}
+
+	flags = taskFlags{}
+	command = &cobra.Command{}
+	flags.addFlags(command)
+	if err := command.ParseFlags([]string{"--status", "null"}); err != nil {
+		t.Fatal(err)
+	}
+	in = taskInput(command, flags)
+	if in.ManualStatus != nil {
+		t.Fatalf("manual status not cleared: %+v", in)
+	}
+
+	flags = taskFlags{}
+	command = &cobra.Command{}
+	flags.addFlags(command)
+	if err := command.ParseFlags(nil); err != nil {
+		t.Fatal(err)
+	}
+	in = taskInput(command, flags)
+	if in.ManualStatus != nil {
+		t.Fatalf("manual status present without --status: %+v", in)
 	}
 }
 

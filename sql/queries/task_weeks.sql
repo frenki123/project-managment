@@ -3,7 +3,9 @@ SELECT task_id, week_start, planned_hours, spent_hours, progress
 FROM task_weeks WHERE task_id = ? AND week_start = ?;
 
 -- name: GetTaskTotals :one
-SELECT CAST(planned_hours AS REAL) AS planned_hours,
+SELECT manual_status,
+       stage,
+       CAST(planned_hours AS REAL) AS planned_hours,
        CAST(spent_hours AS REAL) AS spent_hours,
        CAST(progress AS REAL) AS progress
 FROM v_task_totals

@@ -26,43 +26,32 @@ type Task struct {
 	SpentHours          float64       `json:"spent_hours,omitempty"`
 	Progress            float64       `json:"progress,omitempty"`
 	Status              string        `json:"status"`
+	ManualStatus        *string       `json:"manual_status,omitempty"`
 	Weeks               []weekly.Cell `json:"weeks,omitempty"`
 }
 
-// Status returns the task status derived from its cumulative progress.
-func Status(progress float64) string {
-	switch {
-	case progress <= 0:
-		return "Planned"
-	case progress < 80:
-		return "Development"
-	case progress < 100:
-		return "Internal Testing"
-	default:
-		return "Deployment"
-	}
-}
-
 type Input struct {
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	ImplementationNotes string `json:"implementation_notes"`
-	Department          string `json:"department"`
-	Developers          string `json:"developers"`
-	Priority            string `json:"priority"`
-	ProjectID           *int64 `json:"project_id"`
-	SubprojectID        *int64 `json:"subproject_id"`
+	Name                string  `json:"name"`
+	Description         string  `json:"description"`
+	ImplementationNotes string  `json:"implementation_notes"`
+	Department          string  `json:"department"`
+	Developers          string  `json:"developers"`
+	Priority            string  `json:"priority"`
+	ProjectID           *int64  `json:"project_id"`
+	SubprojectID        *int64  `json:"subproject_id"`
+	ManualStatus        *string `json:"manual_status,omitempty"`
 }
 
 type Patch struct {
-	Name                nullable.Optional[string] `json:"name,omitzero"`
-	Description         nullable.Optional[string] `json:"description,omitzero"`
-	ImplementationNotes nullable.Optional[string] `json:"implementation_notes,omitzero"`
-	Department          nullable.Optional[string] `json:"department,omitzero"`
-	Developers          nullable.Optional[string] `json:"developers,omitzero"`
-	Priority            nullable.Optional[string] `json:"priority,omitzero"`
-	ProjectID           nullable.Optional[*int64] `json:"project_id,omitzero"`
-	SubprojectID        nullable.Optional[*int64] `json:"subproject_id,omitzero"`
+	Name                nullable.Optional[string]  `json:"name,omitzero"`
+	Description         nullable.Optional[string]  `json:"description,omitzero"`
+	ImplementationNotes nullable.Optional[string]  `json:"implementation_notes,omitzero"`
+	Department          nullable.Optional[string]  `json:"department,omitzero"`
+	Developers          nullable.Optional[string]  `json:"developers,omitzero"`
+	Priority            nullable.Optional[string]  `json:"priority,omitzero"`
+	ProjectID           nullable.Optional[*int64]  `json:"project_id,omitzero"`
+	SubprojectID        nullable.Optional[*int64]  `json:"subproject_id,omitzero"`
+	ManualStatus        nullable.Optional[*string] `json:"manual_status,omitzero"`
 }
 
 func PatchFromInput(in Input) Patch {
@@ -75,6 +64,7 @@ func PatchFromInput(in Input) Patch {
 		Priority:            nullable.Present(in.Priority),
 		ProjectID:           nullable.Present(in.ProjectID),
 		SubprojectID:        nullable.Present(in.SubprojectID),
+		ManualStatus:        nullable.Present(in.ManualStatus),
 	}
 }
 
@@ -94,6 +84,7 @@ func FromDB(t db.Task) Task {
 	}
 	out.ProjectID = nullable.Int64Pointer(t.ProjectID)
 	out.SubprojectID = nullable.Int64Pointer(t.SubprojectID)
+	out.ManualStatus = nullable.StringPointer(t.ManualStatus)
 	return out
 }
 
@@ -104,6 +95,12 @@ func validate(in Input) (Input, error) {
 	in.Department = strings.TrimSpace(in.Department)
 	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
+	if in.ManualStatus != nil {
+		*in.ManualStatus = strings.TrimSpace(*in.ManualStatus)
+		if *in.ManualStatus == "" {
+			in.ManualStatus = nil
+		}
+	}
 	if in.Name == "" {
 		return in, web.Invalid("name is required")
 	}
@@ -141,6 +138,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 			Priority:            validated.Priority,
 			ProjectID:           nullable.Int64(validated.ProjectID),
 			SubprojectID:        nullable.Int64(validated.SubprojectID),
+			ManualStatus:        nullable.String(validated.ManualStatus),
 		})
 		if err == nil {
 			id = row.ID
@@ -173,7 +171,7 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	out.TotalHours = totals.PlannedHours
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
-	out.Status = Status(out.Progress)
+	out.Status = totals.Stage.String
 	out.Weeks = weeks
 	return out, nil
 }
@@ -224,7 +222,8 @@ func mergeTotals(rows []db.Task, totals []db.VTaskTotal) []Task {
 	for _, row := range rows {
 		t := FromDB(row)
 		total := byID[t.ID]
-		t.TotalHours, t.SpentHours, t.Progress, t.Status = total.PlannedHours, total.SpentHours, total.Progress, Status(total.Progress)
+		t.TotalHours, t.SpentHours, t.Progress = total.PlannedHours, total.SpentHours, total.Progress
+		t.Status = total.Stage.String
 		out = append(out, t)
 	}
 	return out
@@ -254,6 +253,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			Department:          in.Department,
 			Developers:          in.Developers,
 			Priority:            in.Priority,
+			ManualStatus:        nullable.String(in.ManualStatus),
 			ProjectID:           nullable.Int64(in.ProjectID),
 			SubprojectID:        nullable.Int64(in.SubprojectID),
 			ID:                  id,
@@ -273,6 +273,7 @@ func mergeInput(current db.Task, patch Patch) Input {
 		Developers: current.Developers, Priority: current.Priority,
 		ProjectID:    nullable.Int64Pointer(current.ProjectID),
 		SubprojectID: nullable.Int64Pointer(current.SubprojectID),
+		ManualStatus: nullable.StringPointer(current.ManualStatus),
 	}
 	return Input{
 		Name:                patch.Name.Apply(currentInput.Name),
@@ -283,6 +284,7 @@ func mergeInput(current db.Task, patch Patch) Input {
 		Priority:            patch.Priority.Apply(currentInput.Priority),
 		ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
 		SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
+		ManualStatus:        patch.ManualStatus.Apply(currentInput.ManualStatus),
 	}
 }
 

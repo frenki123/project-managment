@@ -38,9 +38,9 @@ func taskCommands(s *commandState) *cobra.Command {
 }
 
 type taskFlags struct {
-	name, description, notes, department, developers, priority string
-	projectID, subprojectID                                    int64
-	ideas                                                      bool
+	name, description, notes, department, developers, priority, status string
+	projectID, subprojectID                                            int64
+	ideas                                                              bool
 }
 
 func (f *taskFlags) addFlags(c *cobra.Command) {
@@ -50,6 +50,7 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().StringVar(&f.department, "department", "", "relevant department")
 	c.Flags().StringVar(&f.developers, "developers", "", "developer or developers")
 	c.Flags().StringVar(&f.priority, "priority", "", "task priority")
+	c.Flags().StringVar(&f.status, "status", "", "set the manual stage (\"null\" derives it automatically)")
 	c.Flags().Int64Var(&f.projectID, "project-id", 0, "project ID")
 	c.Flags().Int64Var(&f.subprojectID, "subproject-id", 0, "subproject ID")
 	c.Flags().BoolVar(&f.ideas, "ideas", false, "leave the task unassigned")
@@ -61,6 +62,9 @@ func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
 		Department: f.department, Developers: f.developers, Priority: f.priority,
 		ProjectID:    opt(cmd, "project-id", f.projectID).Value,
 		SubprojectID: opt(cmd, "subproject-id", f.subprojectID).Value,
+	}
+	if f.status != "" && f.status != "null" {
+		in.ManualStatus = &f.status
 	}
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nil, nil

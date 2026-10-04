@@ -29,3 +29,17 @@ func Float64Pointer(value sql.NullFloat64) *float64 {
 	}
 	return new(value.Float64)
 }
+
+func String(value *string) sql.NullString {
+	if value == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *value, Valid: true}
+}
+
+func StringPointer(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	return new(value.String)
+}

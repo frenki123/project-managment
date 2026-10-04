@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,5 +108,74 @@ func TestTaskListRejectsIdeasWithSubproject(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?ideas=true&subproject_id=5", nil))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("ideas with subproject should be 400: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestTaskFormManualStatusRoundTrip(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	projID := createProject(t, mux, "Alpha", start)
+	projectID := strconv.FormatInt(projID, 10)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Staged","project_id":`+projectID+`,"manual_status":"In review"}`))
+	idStr := strconv.FormatInt(taskID, 10)
+
+	r := httptest.NewRequest(http.MethodGet, "/tasks/"+idStr+"/edit", nil)
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="manual_status"`) || !strings.Contains(rr.Body.String(), `value="In review" selected`) {
+		t.Fatalf("stage select must preselect the manual stage: %d %s", rr.Code, rr.Body.String())
+	}
+
+	values := url.Values{
+		"name":                 {"Staged"},
+		"description":          {""},
+		"implementation_notes": {""},
+		"department":           {""},
+		"developers":           {""},
+		"priority":             {""},
+		"project_id":           {projectID},
+		"subproject_id":        {""},
+		"manual_status":        {"In review"},
+	}
+	r = httptest.NewRequest(http.MethodPost, "/tasks/"+idStr, strings.NewReader(values.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("task update status: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+idStr, nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"manual_status":"In review"`) || !strings.Contains(rr.Body.String(), `"status":"In review"`) {
+		t.Fatalf("form POST did not persist the manual pin: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestTaskFormKeepsStageMissingFromStagesTable(t *testing.T) {
+	database := testkit.OpenDatabase(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, database.Q)
+
+	if _, err := database.Conn.Exec("UPDATE stages SET name = 'Under review' WHERE name = 'In review'"); err != nil {
+		t.Fatal(err)
+	}
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	projID := createProject(t, mux, "Alpha", start)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Staged","project_id":`+strconv.FormatInt(projID, 10)+`,"manual_status":"In review"}`))
+
+	r := httptest.NewRequest(http.MethodGet, "/tasks/"+strconv.FormatInt(taskID, 10)+"/edit", nil)
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("edit fragment: %d %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `value="In review" selected`) || !strings.Contains(rr.Body.String(), `value="Under review"`) {
+		t.Fatalf("stage select must preserve a manual value that is no longer a stage: %s", rr.Body.String())
 	}
 }

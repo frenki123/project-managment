@@ -3,6 +3,7 @@ package taskhandler
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"cad-development/internal/db"
@@ -23,6 +24,10 @@ func formInput(r *http.Request) (task.Input, error) {
 	if err != nil {
 		return task.Input{}, err
 	}
+	var manualStatus *string
+	if vals.ManualStatus != "" {
+		manualStatus = &vals.ManualStatus
+	}
 	return task.Input{
 		Name:                vals.Name,
 		Description:         vals.Description,
@@ -32,6 +37,7 @@ func formInput(r *http.Request) (task.Input, error) {
 		Priority:            vals.Priority,
 		ProjectID:           projectID,
 		SubprojectID:        subprojectID,
+		ManualStatus:        manualStatus,
 	}, nil
 }
 
@@ -45,6 +51,7 @@ func formValues(r *http.Request) views.TaskFormValues {
 		Priority:            r.FormValue("priority"),
 		ProjectID:           r.FormValue("project_id"),
 		SubprojectID:        r.FormValue("subproject_id"),
+		ManualStatus:        r.FormValue("manual_status"),
 	}
 }
 
@@ -62,6 +69,9 @@ func taskFormValues(t task.Task) views.TaskFormValues {
 	}
 	if t.SubprojectID != nil {
 		vals.SubprojectID = strconv.FormatInt(*t.SubprojectID, 10)
+	}
+	if t.ManualStatus != nil {
+		vals.ManualStatus = *t.ManualStatus
 	}
 	return vals
 }
@@ -101,10 +111,22 @@ func taskFormData(r *http.Request, q *db.Queries, vals views.TaskFormValues, can
 	if err != nil {
 		return views.TaskFormData{}, err
 	}
+	stages, err := q.ListStages(r.Context())
+	if err != nil {
+		return views.TaskFormData{}, err
+	}
+	stageOptions := make([]task.Option, 0, len(stages))
+	for _, s := range stages {
+		stageOptions = append(stageOptions, task.Option{Value: s.Name, Label: s.Name, Selected: s.Name == vals.ManualStatus})
+	}
+	if vals.ManualStatus != "" && !slices.ContainsFunc(stages, func(s db.Stage) bool { return s.Name == vals.ManualStatus }) {
+		stageOptions = append([]task.Option{{Value: vals.ManualStatus, Label: vals.ManualStatus, Selected: true}}, stageOptions...)
+	}
 	return views.TaskFormData{
 		Task:         vals,
 		Projects:     po,
 		Subprojects:  so,
+		Stages:       stageOptions,
 		CanReassign:  canReassign,
 		ReassignNote: "Project and subproject cannot be changed after weekly data is entered.",
 		Error:        errMsg,

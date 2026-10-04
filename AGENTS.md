@@ -68,6 +68,13 @@ The basic data is a list of tasks with static data plus weekly hours and progres
 - Total planned hours per week and cumulative
 - Total hours spent/actual per task, per week, and cumulative
 - Task progress per week - max value entered for progress
+### Stage model
+A task's resolved `status` (stage) is either `manual_status` — a manually pinned stage — or is derived
+from cumulative progress via the configurable `stages` table (name, position, color, auto_reachable,
+progress_threshold). The first stage is pinned at 0% and the last at 100%; stages with
+`auto_reachable = false` are manual-only, reachable only through `manual_status`, with pinning
+enforced by triggers. A manually set stage is marked in the UI; clearing `manual_status` restores
+the derived stage.
 
 ## Project
 Projects are first-class, not implied by a period. A task does not need a project; such tasks are ideas that are not assigned to any project yet.

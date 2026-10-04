@@ -32,7 +32,7 @@ func TestGridClass(t *testing.T) {
 }
 
 func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
-	row := task.GridRow{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development"}
+	row := task.GridRow{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "In progress"}
 	ideas := renderGrid(t, task.Grid{Kind: task.ViewIdeas, Rows: []task.GridRow{row}})
 	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") {
 		t.Fatalf("unexpected ideas grid: %s", ideas)
@@ -46,10 +46,10 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 
 	project := renderGrid(t, task.Grid{
 		Kind:  task.ViewProject,
-		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
+		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "In progress", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
 		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
 	})
-	for _, label := range []string{"Status", "Summary", "W1"} {
+	for _, label := range []string{"Stage", "Summary", "W1"} {
 		if !strings.Contains(project, label) {
 			t.Fatalf("project grid is missing %q: %s", label, project)
 		}
@@ -57,7 +57,7 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if strings.Count(project, `<col class="`) != 6 || !strings.Contains(project, `colspan="5" class="sticky c0"`) {
 		t.Fatalf("project grid has unexpected fixed/footer structure: %s", project)
 	}
-	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, `<dl class="task-summary">`) || !strings.Contains(project, "<dt>Planned</dt><dd>0 h</dd>") || !strings.Contains(project, "<dt>Progress</dt><dd>0%</dd>") {
+	if !strings.Contains(project, ">In progress") || !strings.Contains(project, `<dl class="task-summary">`) || !strings.Contains(project, "<dt>Planned</dt><dd>0 h</dd>") || !strings.Contains(project, "<dt>Progress</dt><dd>0%</dd>") {
 		t.Fatalf("project grid is missing task status: %s", project)
 	}
 	for _, label := range []string{"Plan", "Spent"} {
@@ -78,6 +78,22 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}}})
 	if strings.Contains(subproject, ">Earned<") {
 		t.Fatalf("subproject footer should not render earned values: %s", subproject)
+	}
+}
+
+func TestGridRendersManualStageMarker(t *testing.T) {
+	rows := []task.GridRow{
+		{ID: 1, Name: "Manual", ProjectName: "Project", Subproject: "Subproject", Status: "In progress", Manual: true, Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}},
+		{ID: 2, Name: "Derived", ProjectName: "Project", Subproject: "Subproject", Status: "In progress", Manual: false, Cells: []task.GridCell{{SavePath: "/tasks/2/weeks/2026-01-05"}}},
+	}
+	grid := renderGrid(t, task.Grid{Kind: task.ViewProject, Rows: rows, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}}})
+	if got := strings.Count(grid, `<span class="stage-manual" title="Stage set manually">manual</span>`); got != 1 {
+		t.Fatalf("manual stage marker count = %d, want 1 (manual row only): %s", got, grid)
+	}
+	marker := strings.Index(grid, `<span class="stage-manual"`)
+	second := strings.Index(grid, `<tr id="task-row-2"`)
+	if marker < 0 || second < 0 || marker >= second {
+		t.Fatalf("manual stage marker must be inside the first (manual) row, before row 2: marker=%d, row-2=%d: %s", marker, second, grid)
 	}
 }
 
