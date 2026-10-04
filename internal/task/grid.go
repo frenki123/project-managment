@@ -153,13 +153,14 @@ func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskI
 }
 
 func loadTaskSeries(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskID int64) (map[int64][]weekly.Cell, error) {
-	var rows []db.VTaskWeekSeries
-	var err error
 	if taskID != 0 {
-		rows, err = q.ListTaskWeekSeriesByTask(ctx, taskID)
-	} else {
-		rows, err = seriesRows(ctx, q, resolved)
+		cells, err := LoadWeeks(ctx, q, taskID)
+		if err != nil {
+			return nil, err
+		}
+		return map[int64][]weekly.Cell{taskID: cells}, nil
 	}
+	rows, err := seriesRows(ctx, q, resolved)
 	if err != nil {
 		return nil, err
 	}

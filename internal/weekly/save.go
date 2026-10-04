@@ -70,27 +70,26 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 		}
-		result, err = canonicalCell(ctx, txq, taskID, weekStart)
-		return err
+		result = savedCell(taskID, weekStart, planned, spent, stored, contextRow.PreviousProgress)
+		return nil
 	})
 	return result, err
 }
 
-func canonicalCell(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart) (Cell, error) {
-	series, err := q.ListTaskWeekSeriesByTask(ctx, taskID)
-	if err != nil {
-		return Cell{}, err
+func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored sql.NullFloat64, previous float64) Cell {
+	effective := previous
+	if stored.Valid {
+		effective = max(effective, stored.Float64)
 	}
-	cells, err := MapWeekSeries(series)
-	if err != nil {
-		return Cell{}, err
+	cell := Cell{
+		TaskID: taskID, WeekStart: weekStart,
+		PlannedHours: planned, SpentHours: spent,
+		Progress: new(effective),
 	}
-	for _, cell := range cells {
-		if cell.WeekStart == weekStart {
-			return cell, nil
-		}
+	if stored.Valid {
+		cell.StoredProgress = new(stored.Float64)
 	}
-	return Cell{}, errors.New("saved week missing from canonical series")
+	return cell
 }
 
 func validatePatch(patch Patch) error {
