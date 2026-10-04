@@ -37,7 +37,9 @@ one S-curve per project.
   format. `pmctl tasks list` returns all tasks by default; project
   filters are name- or ID-based, names win if both given. POST creates use empty values for
   omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
-  fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
+  fields, zero sets numeric fields. Task create/update accept `--manual-estimate <hours>`;
+  `--manual-estimate null` returns to the automatic sum of weekly planned hours. Weekly updates
+  set only the flags passed (`--planned-hours`,
   `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress); historical
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
@@ -71,7 +73,10 @@ is stored. Effective progress is a running maximum, so stored progress is strict
 Task detail responses return `weeks` from the canonical project-bounded series: every Monday from
 the project's start-week through its end-week, including zero planned/spent weeks. `progress` is the
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
-have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
+have no weeks. Task responses also include `manual_estimate` (null = automatic) and `estimate` (the
+manual value, or the total planned hours when automatic; omitted when 0). PUT `manual_estimate` is
+presence-driven: absent preserves the current value, `null` returns to automatic. The workboard,
+REST API, and `pmctl` CLI consume this same canonical series; future
 monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
 
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
@@ -153,6 +158,7 @@ pmctl projects list
 pmctl tasks list --project "Project Alpha"
 pmctl tasks create --name "Implement API" --project-id 5 --priority high
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
+pmctl tasks update 12 --manual-estimate 40
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 ```
 

@@ -127,10 +127,12 @@ We will try to make "spreadsheet-like" inputs as much as possible. Fallback to f
 - validate that sum of subproject hours per project is not more than total project hours
 
 ### Weight factor / Earned value calculation
-- Task weight factor = task_hours / project_total_hours
+- Task estimate = a manual_estimate when set, otherwise the sum of the task's weekly planned hours (automatic). Re-estimating means setting the manual estimate; re-planning never changes it.
+- Task weight factor = task estimate / sum of all task estimates in the project
 - Idea tasks (no project assigned) have no weight factor and are excluded from any project-level S-curve/earned-value calculation
-- Project progress (%) = sum(task weight factor × task progress) for all tasks in the project
-- Project progress (h) = Project progress (%) × project_total_hours
+- Earned hours = sum(task estimate × task progress) for all tasks in the project (progress as a fraction)
+- Project progress (%) = earned hours ÷ sum of all task estimates × 100
+- Planning over budget is a separate check: a project is over budget when its planned hours exceed its total hours; a task is over-planned when a manual estimate is set and its planned hours exceed that estimate.
 
 ### Table data:
 Filtered by project and/or subproject. Rows are tasks, columns are weeks calculated from project start and end date.

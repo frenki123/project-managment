@@ -38,9 +38,9 @@ func taskCommands(s *commandState) *cobra.Command {
 }
 
 type taskFlags struct {
-	name, description, notes, department, developers, priority string
-	projectID, subprojectID                                    int64
-	ideas                                                      bool
+	name, description, notes, department, developers, priority, manualEstimate string
+	projectID, subprojectID                                                    int64
+	ideas                                                                      bool
 }
 
 func (f *taskFlags) addFlags(c *cobra.Command) {
@@ -50,12 +50,13 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().StringVar(&f.department, "department", "", "relevant department")
 	c.Flags().StringVar(&f.developers, "developers", "", "developer or developers")
 	c.Flags().StringVar(&f.priority, "priority", "", "task priority")
+	c.Flags().StringVar(&f.manualEstimate, "manual-estimate", "", "manual estimate in hours (\"null\" returns to automatic)")
 	c.Flags().Int64Var(&f.projectID, "project-id", 0, "project ID")
 	c.Flags().Int64Var(&f.subprojectID, "subproject-id", 0, "subproject ID")
 	c.Flags().BoolVar(&f.ideas, "ideas", false, "leave the task unassigned")
 }
 
-func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
+func taskInput(cmd *cobra.Command, f taskFlags) (task.Input, error) {
 	in := task.Input{
 		Name: f.name, Description: f.description, ImplementationNotes: f.notes,
 		Department: f.department, Developers: f.developers, Priority: f.priority,
@@ -65,7 +66,12 @@ func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nil, nil
 	}
-	return in
+	manual, err := manualEstimateOpt(cmd, f.manualEstimate)
+	if err != nil {
+		return in, err
+	}
+	in.ManualEstimate = manual.ValueOr(nil)
+	return in, nil
 }
 
 func taskCommand(use string, s *commandState, update bool) *cobra.Command {
@@ -74,14 +80,22 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		var v task.Task
 		var err error
 		if update {
-			in := taskPatchFromFlags(cmd, f)
+			var in task.Patch
+			in, err = taskPatchFromFlags(cmd, f)
+			if err != nil {
+				return err
+			}
 			id, e := idArg(args)
 			if e != nil {
 				return e
 			}
 			v, err = s.client.UpdateTask(cmd.Context(), id, in)
 		} else {
-			in := taskInput(cmd, f)
+			var in task.Input
+			in, err = taskInput(cmd, f)
+			if err != nil {
+				return err
+			}
 			v, err = s.client.CreateTask(cmd.Context(), in)
 		}
 		if err != nil {

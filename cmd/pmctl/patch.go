@@ -24,7 +24,21 @@ func stringOpt(cmd *cobra.Command, name, value string) nullable.Optional[string]
 	return nullable.Clear[string]()
 }
 
-func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
+func manualEstimateOpt(cmd *cobra.Command, raw string) (nullable.Optional[*float64], error) {
+	if !cmd.Flags().Changed("manual-estimate") {
+		return nullable.Optional[*float64]{}, nil
+	}
+	if raw == "null" {
+		return nullable.Clear[*float64](), nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return nullable.Optional[*float64]{}, fmt.Errorf("invalid manual estimate %q: expected a number or \"null\"", raw)
+	}
+	return nullable.Present(&v), nil
+}
+
+func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) (task.Patch, error) {
 	in := task.Patch{
 		Name:                stringOpt(cmd, "name", f.name),
 		Description:         stringOpt(cmd, "description", f.description),
@@ -38,7 +52,9 @@ func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
 	if f.ideas && !cmd.Flags().Changed("project-id") && !cmd.Flags().Changed("subproject-id") {
 		in.ProjectID, in.SubprojectID = nullable.Clear[*int64](), nullable.Clear[*int64]()
 	}
-	return in
+	var err error
+	in.ManualEstimate, err = manualEstimateOpt(cmd, f.manualEstimate)
+	return in, err
 }
 
 func weekPatchFromFlags(cmd *cobra.Command, planned, spent float64, progress string, unlock bool) (weekly.Patch, error) {

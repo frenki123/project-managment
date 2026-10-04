@@ -219,7 +219,10 @@ func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
 	if err := command.ParseFlags([]string{"--project-id", "5", "--ideas"}); err != nil {
 		t.Fatal(err)
 	}
-	in := taskInput(command, flags)
+	in, err := taskInput(command, flags)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if in.ProjectID == nil || *in.ProjectID != 5 || in.SubprojectID != nil {
 		t.Fatalf("unexpected assignment: %+v", in)
 	}
@@ -232,12 +235,58 @@ func TestTaskPatchSupportsNullAndIdeas(t *testing.T) {
 	if err := command.ParseFlags([]string{"--description", "null", "--ideas"}); err != nil {
 		t.Fatal(err)
 	}
-	patch := taskPatchFromFlags(command, flags)
+	patch, err := taskPatchFromFlags(command, flags)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !patch.Description.Present || patch.Description.Value != nil {
 		t.Fatalf("description was not cleared: %#v", patch.Description)
 	}
 	if !patch.ProjectID.Present || patch.ProjectID.Value != nil || !patch.SubprojectID.Present || patch.SubprojectID.Value != nil {
 		t.Fatalf("ideas did not clear assignments: project=%#v subproject=%#v", patch.ProjectID, patch.SubprojectID)
+	}
+}
+
+func TestTaskManualEstimateFlag(t *testing.T) {
+	var createBody, updateBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/tasks":
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read request body: %v", err)
+			}
+			createBody = string(data)
+			w.WriteHeader(http.StatusCreated)
+			writeBody(t, w, `{"id":1}`)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v1/tasks/4":
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read request body: %v", err)
+			}
+			updateBody = string(data)
+			writeBody(t, w, `{"id":4}`)
+		default:
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "tasks", "create", "--name", "T", "--manual-estimate", "12"); err != nil {
+		t.Fatal(err)
+	}
+	var input task.Input
+	if err := json.Unmarshal([]byte(createBody), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.ManualEstimate == nil || *input.ManualEstimate != 12 {
+		t.Fatalf("manual estimate missing from create request: %s", createBody)
+	}
+	if err := runCommand(t, server, "tasks", "update", "4", "--manual-estimate", "null"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(updateBody, `"manual_estimate":null`) {
+		t.Fatalf("manual estimate not cleared in update request: %s", updateBody)
 	}
 }
 
