@@ -86,6 +86,7 @@ templ TaskFormEditor(data TaskFormData) {
 		@TaskDescriptionSection(data)
 		@TaskNotesSection(data)
 		@TaskAssignmentSection(data)
+		@TaskStageSection(data)
 		@ResourceActions(data.DetailPath != "", "Create task", data.DetailPath)
 	}
 }
@@ -134,6 +135,18 @@ templ TaskAssignmentSection(data TaskFormData) {
 	if !data.CanReassign {
 		<small>{ data.ReassignNote }</small>
 	}
+	</section>
+}
+
+templ TaskStageSection(data TaskFormData) {
+	<section class="panel-section"><h3>Stage</h3>
+		<label>Stage<select name="manual_status">
+			<option value="" selected?={ data.Task.ManualStatus == "" }>Auto (derived from progress)</option>
+			for _, o := range data.Stages {
+				<option value={ o.Value } selected?={ o.Selected }>{ o.Label }</option>
+			}
+		</select></label>
+		<small class="form-hint">The stage is normally derived from progress; picking one pins it manually.</small>
 	</section>
 }
 
@@ -214,7 +227,11 @@ templ TaskPanelSummary(data TaskPanelData) {
 	<section class="panel-section panel-highlight">
 		<h3>Progress</h3>
 		<strong>{ percent(data.Task.Progress) }%</strong>
-		<small>{ data.Task.Status }</small>
+		<small>{ data.Task.Status }
+			if data.Task.Manual {
+				<span class="stage-manual" title="Stage set manually">manual</span>
+			}
+		</small>
 	</section>
 	<section class="panel-section">
 		<h3>Task totals</h3>

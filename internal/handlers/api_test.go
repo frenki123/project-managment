@@ -171,6 +171,64 @@ func TestJSONTaskAndWeek(t *testing.T) {
 
 }
 
+func TestJSONTaskManualStatusWire(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	projID := createProject(t, mux, "Alpha", start)
+	path := func(id int64) string { return "/api/v1/tasks/" + strconv.FormatInt(id, 10) }
+	weekPath := func(id int64, week time.Time) string { return path(id) + "/weeks/" + week.Format(time.DateOnly) }
+
+	get := func(id int64) (struct {
+		Name         string  `json:"name"`
+		Status       string  `json:"status"`
+		ManualStatus *string `json:"manual_status"`
+	}, string) {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path(id), nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("get task: %d %s", rr.Code, rr.Body.String())
+		}
+		var got struct {
+			Name         string  `json:"name"`
+			Status       string  `json:"status"`
+			ManualStatus *string `json:"manual_status"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got, rr.Body.String()
+	}
+
+	id := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`,"manual_status":"In review"}`))
+	got, _ := get(id)
+	if got.ManualStatus == nil || *got.ManualStatus != "In review" || got.Status != "In review" {
+		t.Fatalf("create with manual_status = %#v, want pin In review", got)
+	}
+
+	putJSON(t, mux, path(id), `{"manual_status":null}`, http.StatusOK)
+	got, body := get(id)
+	if got.ManualStatus != nil || strings.Contains(body, `"manual_status"`) || got.Status != "Planned" {
+		t.Fatalf("full-replace clear should drop the pin and fall back to derived: %#v %s", got, body)
+	}
+
+	putJSON(t, mux, path(id), `{"manual_status":"In review"}`, http.StatusOK)
+	putJSON(t, mux, path(id), `{"name":"Renamed"}`, http.StatusOK)
+	got, _ = get(id)
+	if got.Name != "Renamed" || got.ManualStatus == nil || *got.ManualStatus != "In review" || got.Status != "In review" {
+		t.Fatalf("partial rename lost the manual pin: %#v", got)
+	}
+
+	putJSON(t, mux, weekPath(id, start), `{"progress":25}`, http.StatusOK)
+	got, _ = get(id)
+	if got.ManualStatus == nil || *got.ManualStatus != "In review" || got.Status != "In review" {
+		t.Fatalf("manual pin must override derived In progress: %#v", got)
+	}
+}
+
 func TestHTMLWeekEditPersists(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

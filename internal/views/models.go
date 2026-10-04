@@ -13,6 +13,7 @@ type TaskFormData struct {
 	DetailPath   string
 	Projects     []task.Option
 	Subprojects  []task.Option
+	Stages       []task.Option
 	CanReassign  bool
 	ReassignNote string
 	Error        string
@@ -28,6 +29,7 @@ type TaskFormValues struct {
 	Priority            string
 	ProjectID           string
 	SubprojectID        string
+	ManualStatus        string
 }
 
 type ProjectFormData struct {
