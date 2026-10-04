@@ -132,7 +132,7 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 || got.Status != "Development" {
+	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 || got.Status != "In progress" {
 		t.Fatalf("got %#v", got)
 	}
 

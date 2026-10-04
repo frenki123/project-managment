@@ -233,3 +233,120 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskStageAutoResolution(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Staged", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-10-05"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	assertStatus := func(want string) {
+		t.Helper()
+		got, err := task.Get(ctx, q, tk.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != want {
+			t.Fatalf("status = %q, want %q", got.Status, want)
+		}
+	}
+	assertStatus("Planned")
+	for _, step := range []struct {
+		week     string
+		progress float64
+		want     string
+	}{
+		{"2026-09-07", 50, "In progress"},
+		{"2026-09-14", 90, "In review"},
+		{"2026-09-21", 100, "Done"},
+	} {
+		if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, step.week), weekly.Patch{Progress: nullable.Present(step.progress)}, now); err != nil {
+			t.Fatal(err)
+		}
+		assertStatus(step.want)
+	}
+}
+
+func TestTaskManualStatusOverrideAndReset(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Manual", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(50.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "In progress" {
+		t.Fatalf("derived status = %q, want %q", got.Status, "In progress")
+	}
+	updated, err := task.Update(ctx, q, tk.ID, task.Patch{ManualStatus: nullable.Present(new("On hold"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ManualStatus == nil || *updated.ManualStatus != "On hold" || updated.Status != "On hold" {
+		t.Fatalf("manual override = %#v, status = %q, want On hold", updated.ManualStatus, updated.Status)
+	}
+	updated, err = task.Update(ctx, q, tk.ID, task.Patch{ManualStatus: nullable.Clear[*string]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ManualStatus != nil || updated.Status != "In progress" {
+		t.Fatalf("after reset manual = %#v, status = %q, want derived In progress", updated.ManualStatus, updated.Status)
+	}
+}
+
+func TestTaskManualOnlyStageNotReachedByProgress(t *testing.T) {
+	database := testkit.OpenDatabase(t)
+	q := database.Q
+	ctx := t.Context()
+	// 'Done' stays the max stage (position 10, threshold 100), so a manual-only
+	// middle stage may carry any threshold without breaking the pins.
+	if _, err := database.Conn.Exec("UPDATE stages SET position = 10 WHERE name = 'Done'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Conn.Exec("INSERT INTO stages (name, position, color, auto_reachable, progress_threshold) VALUES ('Blocked', 5, '', 0, 90)"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Create(ctx, q, project.Input{Name: "Blocked", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(100.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "Done" {
+		t.Fatalf("100%% progress resolved to %q, want %q (manual-only stage must not be auto-reachable)", got.Status, "Done")
+	}
+	updated, err := task.Update(ctx, q, tk.ID, task.Patch{ManualStatus: nullable.Present(new("Blocked"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ManualStatus == nil || *updated.ManualStatus != "Blocked" || updated.Status != "Blocked" {
+		t.Fatalf("manual move = %#v, status = %q, want Blocked", updated.ManualStatus, updated.Status)
+	}
+}

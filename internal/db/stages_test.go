@@ -236,3 +236,43 @@ func TestTaskTotalsStageResolution(t *testing.T) {
 		}
 	})
 }
+
+func TestTaskTotalsStageFallsBackToLowestAutoReachable(t *testing.T) {
+	database := testkit.OpenDatabase(t)
+	ctx := context.Background()
+
+	// 'Planned' becomes manual-only, so 0% progress matches no auto_reachable
+	// stage; the derived stage must fall back to the lowest auto_reachable one.
+	if _, err := database.Conn.Exec("UPDATE stages SET auto_reachable = 0 WHERE name = 'Planned'"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := database.Conn.Exec(
+		"INSERT INTO projects (name, purchase_order_name, total_hours, start_date, end_date) VALUES ('Fallback project', '', 100, '2026-01-05', '2026-02-01')",
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Conn.Exec("INSERT INTO tasks (name, project_id) VALUES ('Task', 1)"); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := database.Conn.QueryRow("SELECT id FROM tasks WHERE name = 'Task'").Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Conn.Exec(
+		"INSERT INTO task_weeks (task_id, week_start, planned_hours, spent_hours, progress) VALUES (?, '2026-01-05', 10, 0, 0)",
+		id,
+	); err != nil {
+		t.Fatal(err)
+	}
+	row, err := database.Q.GetTaskTotals(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.ManualStatus.Valid {
+		t.Fatalf("manual_status = %q, want NULL", row.ManualStatus.String)
+	}
+	if !row.Stage.Valid || row.Stage.String != "In progress" {
+		t.Fatalf("stage = %#v, want derived fallback 'In progress'", row.Stage)
+	}
+}

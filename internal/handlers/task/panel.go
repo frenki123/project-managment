@@ -41,6 +41,7 @@ func taskPanelData(r *http.Request, q *db.Queries, t task.Task) (views.TaskPanel
 		SpentHours: t.SpentHours,
 		Progress:   t.Progress,
 		Status:     t.Status,
+		Manual:     t.ManualStatus != nil,
 	}
 	if t.ProjectID != nil {
 		p, err := project.Get(r.Context(), q, *t.ProjectID)

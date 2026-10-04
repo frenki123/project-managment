@@ -61,6 +61,7 @@ type GridRow struct {
 	SpentHours  float64
 	Progress    float64
 	Status      string
+	Manual      bool
 	DetailPath  string
 	Cells       []GridCell
 }
@@ -248,7 +249,7 @@ func loadAllRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, erro
 	}
 	grid := gc.grid
 	for _, t := range tasks {
-		row := GridRow{ID: t.ID, Name: t.Name, Status: t.Status, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
+		row := GridRow{ID: t.ID, Name: t.Name, Status: t.Status, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Manual: t.ManualStatus != nil, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.ProjectID != nil {
 			row.ProjectName = projectNames[*t.ProjectID]
 		}
@@ -267,7 +268,7 @@ func loadIdeaRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, err
 	}
 	grid := gc.grid
 	for _, t := range tasks {
-		grid.Rows = append(grid.Rows, GridRow{ID: t.ID, Name: t.Name, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)})
+		grid.Rows = append(grid.Rows, GridRow{ID: t.ID, Name: t.Name, Manual: t.ManualStatus != nil, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)})
 	}
 	return grid, nil
 }
@@ -326,7 +327,7 @@ func addWeekTotal(grid Grid, weekStart string, planned, spent float64) (Grid, er
 func buildTaskRows(tasks []Task, byTask map[int64][]weekly.Cell, grid Grid, subNames map[int64]string, now time.Time, allowHistoricalEditing bool) ([]GridRow, error) {
 	rows := make([]GridRow, 0, len(tasks))
 	for _, t := range tasks {
-		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
+		row := GridRow{ID: t.ID, Name: t.Name, ProjectName: grid.ProjectName, TotalHours: t.TotalHours, SpentHours: t.SpentHours, Progress: t.Progress, Status: t.Status, Manual: t.ManualStatus != nil, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)}
 		if t.SubprojectID != nil {
 			row.Subproject = subNames[*t.SubprojectID]
 		}

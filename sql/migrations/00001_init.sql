@@ -115,6 +115,11 @@ SELECT
         WHERE s.auto_reachable = 1 AND s.progress_threshold <= tt.progress
         ORDER BY s.progress_threshold DESC, s.position DESC
         LIMIT 1
+    ), (
+        SELECT s.name FROM stages s
+        WHERE s.auto_reachable = 1
+        ORDER BY s.progress_threshold ASC, s.position ASC
+        LIMIT 1
     )) AS stage
 FROM (
     SELECT

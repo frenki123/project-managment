@@ -1,29 +1,6 @@
 package views
 
-import (
-	"testing"
-
-	"cad-development/internal/task"
-)
-
-func TestTaskStatus(t *testing.T) {
-	cases := []struct {
-		progress float64
-		want     string
-	}{
-		{0, "Planned"},
-		{1, "Development"},
-		{79, "Development"},
-		{80, "Internal Testing"},
-		{99, "Internal Testing"},
-		{100, "Deployment"},
-	}
-	for _, c := range cases {
-		if got := task.Status(c.progress); got != c.want {
-			t.Errorf("task.Status(%v) = %q, want %q", c.progress, got, c.want)
-		}
-	}
-}
+import "testing"
 
 func TestHours(t *testing.T) {
 	cases := []struct {
