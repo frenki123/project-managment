@@ -23,7 +23,3 @@ func writeJSON(w io.Writer, v any) error {
 	_, err = fmt.Fprintln(w, string(data))
 	return err
 }
-
-func writeDeleted(w io.Writer, kind string, id int64) error {
-	return writeJSON(w, result{Deleted: true, ID: id, Type: kind})
-}
