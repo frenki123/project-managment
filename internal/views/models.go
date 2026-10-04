@@ -4,6 +4,7 @@ import (
 	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 )
 
 type TaskFormData struct {
@@ -92,6 +93,7 @@ type TaskPanelData struct {
 	Priority   string
 	Notes      string
 	Desc       string
+	Weeks      []weekly.Cell
 	Error      string
 	EditPath   string
 	DeletePath string

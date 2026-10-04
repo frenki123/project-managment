@@ -217,6 +217,17 @@ func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in w
 	var v weekly.Cell
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d/weeks/%s", id, url.PathEscape(week)), in, &v)
 }
+func (c *Client) UpdateTaskWeekDeveloper(ctx context.Context, taskID int64, week string, personID int64, in weekly.AttributionPatch) (weekly.DeveloperAllocation, error) {
+	var v weekly.DeveloperAllocation
+	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d/weeks/%s/developers/%d", taskID, url.PathEscape(week), personID), in, &v)
+}
+func (c *Client) ClearTaskWeekDeveloper(ctx context.Context, taskID int64, week string, personID int64, unlock bool) error {
+	path := fmt.Sprintf("/api/v1/tasks/%d/weeks/%s/developers/%d", taskID, url.PathEscape(week), personID)
+	if unlock {
+		path += "?unlock=true"
+	}
+	return c.DoNoBody(ctx, http.MethodDelete, path, (*struct{})(nil))
+}
 func (c *Client) SCurve(ctx context.Context, id int64) (project.SCurve, error) {
 	var v project.SCurve
 	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d/s-curve", id), &v)

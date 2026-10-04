@@ -264,6 +264,51 @@ func TestTaskUpdateClearDevelopers(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskWeekDeveloperSendsPatch(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/tasks/4/weeks/2026-09-07/developers/9" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"person_id":9,"name":"Ada","planned_hours":8,"spent_hours":3}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "update-task-week-developer", "4", "2026-09-07", "9", "--planned-hours", "8", "--spent-hours", "3"); err != nil {
+		t.Fatal(err)
+	}
+	var patch weekly.AttributionPatch
+	if err := json.Unmarshal([]byte(body), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if patch.PlannedHours != 8 || patch.SpentHours != 3 || patch.Unlock {
+		t.Fatalf("unexpected patch: %+v", patch)
+	}
+}
+
+func TestClearTaskWeekDeveloperSendsDelete(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path+"?"+r.URL.RawQuery)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "clear-task-week-developer", "4", "2026-09-07", "9", "--unlock"); err != nil {
+		t.Fatal(err)
+	}
+	want := "DELETE /api/v1/tasks/4/weeks/2026-09-07/developers/9?unlock=true"
+	if strings.Join(calls, "\n") != want {
+		t.Fatalf("calls = %v, want %v", calls, want)
+	}
+}
+
 func TestTaskInputAssignmentOverridesIdeas(t *testing.T) {
 	var flags taskFlags
 	command := &cobra.Command{}

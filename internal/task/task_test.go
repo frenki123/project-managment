@@ -422,3 +422,41 @@ func TestDeletePersonReferencedByTaskIsConflict(t *testing.T) {
 		t.Fatalf("rejected delete removed the person: %#v", got)
 	}
 }
+
+func TestGetIncludesWeekAttributions(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID, DeveloperIDs: []int64{dev.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	planned, spent := 8.0, 3.0
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent)}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, week := range got.Weeks {
+		if week.WeekStart.String() == "2026-01-05" {
+			found = true
+			if len(week.Attributions) != 1 || week.Attributions[0].PersonID != dev.ID || week.Attributions[0].Name != "Ada" || week.Attributions[0].PlannedHours != planned || week.Attributions[0].SpentHours != spent {
+				t.Fatalf("unexpected attributions: %#v", week.Attributions)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing attributed week: %#v", got.Weeks)
+	}
+}

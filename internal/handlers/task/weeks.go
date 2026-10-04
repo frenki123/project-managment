@@ -41,6 +41,61 @@ func weekJSON(q *db.Queries) http.HandlerFunc {
 	}
 }
 
+func attributionJSON(q *db.Queries) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := shared.PathID(w, r)
+		if !ok {
+			return
+		}
+		personID, err := web.PathID(r, "personId")
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		var patch weekly.AttributionPatch
+		if err := web.DecodeJSON(w, r, &patch); err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		ws, err := weekly.Parse(r.PathValue("weekStart"))
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		allocation, err := weekly.SaveAttribution(r.Context(), q, id, ws, personID, patch, time.Now())
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		web.JSON(w, http.StatusOK, allocation)
+	}
+}
+
+func clearAttributionJSON(q *db.Queries) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := shared.PathID(w, r)
+		if !ok {
+			return
+		}
+		personID, err := web.PathID(r, "personId")
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		ws, err := weekly.Parse(r.PathValue("weekStart"))
+		if err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		unlock := r.URL.Query().Get("unlock") == "true"
+		if err := weekly.ClearAttribution(r.Context(), q, id, ws, personID, unlock, time.Now()); err != nil {
+			web.WriteError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func weekHTML(q *db.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		currentTime := time.Now()

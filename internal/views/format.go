@@ -71,3 +71,12 @@ func distinctMonths(weeks []weekly.WeekInfo) []MonthGroup {
 	}
 	return groups
 }
+
+func hasAttributions(weeks []weekly.Cell) bool {
+	for _, week := range weeks {
+		if len(week.Attributions) > 0 {
+			return true
+		}
+	}
+	return false
+}

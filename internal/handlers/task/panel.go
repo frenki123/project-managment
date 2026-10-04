@@ -66,6 +66,7 @@ func taskPanelData(r *http.Request, q *db.Queries, t task.Task) (views.TaskPanel
 		Priority:   t.Priority,
 		Notes:      t.ImplementationNotes,
 		Desc:       t.Description,
+		Weeks:      t.Weeks,
 		EditPath:   "/tasks/" + id + "/edit",
 		DeletePath: "/tasks/" + id + "/delete",
 	}, nil

@@ -11,6 +11,7 @@ import (
 	"cad-development/internal/db"
 	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 	"cad-development/internal/web"
@@ -370,4 +371,240 @@ func newProjectTask(t *testing.T, total float64, start, end string) (*db.Queries
 		t.Fatal(err)
 	}
 	return q, p.ID, tk.ID
+}
+
+func newTaskWithDeveloper(t *testing.T, start, end string) (*db.Queries, int64, int64) {
+	t.Helper()
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: start, EndDate: end})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID, DeveloperIDs: []int64{dev.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return q, tk.ID, dev.ID
+}
+
+func TestSaveAutoAttributesNewWeekToFirstDeveloper(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	planned, spent := 8.0, 3.0
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-04-27"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent), Unlock: true}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cell.Attributions) != 1 || cell.Attributions[0].PersonID != devID || cell.Attributions[0].Name != "Ada" || cell.Attributions[0].PlannedHours != planned || cell.Attributions[0].SpentHours != spent {
+		t.Fatalf("unexpected attributions: %#v", cell.Attributions)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-04-27"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("attribution row missing: %#v %v", rows, err)
+	}
+	if rows[0].PersonID != devID || rows[0].PlannedHours != planned || rows[0].SpentHours != spent {
+		t.Fatalf("unexpected attribution row: %#v", rows[0])
+	}
+}
+
+func TestSaveDoesNotAutoAttributeWithoutDevelopers(t *testing.T) {
+	ctx := t.Context()
+	q, _, tkID := newProjectTask(t, 100.0, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(8.0)}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cell.Attributions) != 0 {
+		t.Fatalf("unexpected attributions: %#v", cell.Attributions)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("unexpected attribution rows: %#v %v", rows, err)
+	}
+}
+
+func TestSaveDoesNotRebalanceExistingAttribution(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	week := testkit.MustWeek(t, "2026-01-05")
+	if _, err := weekly.Save(ctx, q, tkID, week, weekly.Patch{PlannedHours: nullable.Present(8.0), SpentHours: nullable.Present(3.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, week, weekly.Patch{PlannedHours: nullable.Present(10.0), SpentHours: nullable.Present(5.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("unexpected attribution rows: %#v %v", rows, err)
+	}
+	if rows[0].PersonID != devID || rows[0].PlannedHours != 8 || rows[0].SpentHours != 3 {
+		t.Fatalf("second save rebalanced the attribution: %#v", rows[0])
+	}
+}
+
+func TestSaveDoesNotResurrectAttributionAfterDelete(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	week := testkit.MustWeek(t, "2026-01-05")
+	if _, err := weekly.Save(ctx, q, tkID, week, weekly.Patch{PlannedHours: nullable.Present(8.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := weekly.ClearAttribution(ctx, q, tkID, week, devID, false, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.Save(ctx, q, tkID, week, weekly.Patch{PlannedHours: nullable.Present(10.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("attribution resurrected after delete: %#v %v", rows, err)
+	}
+}
+
+func TestSaveAttributionLockAndErrors(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := person.Create(ctx, q, person.Input{Name: "Grace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID, DeveloperIDs: []int64{dev.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	locked := testkit.MustWeek(t, "2026-04-27")
+	if _, err := weekly.SaveAttribution(ctx, q, tk.ID, locked, dev.ID, weekly.AttributionPatch{PlannedHours: 5, SpentHours: 2}, now); err == nil {
+		t.Fatal("expected locked historical attribution to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusForbidden {
+		t.Fatalf("unexpected lock error: %v", err)
+	}
+	allocation, err := weekly.SaveAttribution(ctx, q, tk.ID, locked, dev.ID, weekly.AttributionPatch{PlannedHours: 5, SpentHours: 2, Unlock: true}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allocation.PersonID != dev.ID || allocation.Name != "Ada" || allocation.PlannedHours != 5 || allocation.SpentHours != 2 {
+		t.Fatalf("unexpected allocation: %#v", allocation)
+	}
+	if _, err := weekly.SaveAttribution(ctx, q, tk.ID, locked, 999, weekly.AttributionPatch{PlannedHours: 1, Unlock: true}, now); err == nil {
+		t.Fatal("expected unknown person to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Reason != "person-not-found" {
+		t.Fatalf("unexpected unknown person error: %v", err)
+	}
+	if _, err := weekly.SaveAttribution(ctx, q, tk.ID, locked, other.ID, weekly.AttributionPatch{PlannedHours: 1, Unlock: true}, now); err == nil {
+		t.Fatal("expected person not on task to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Reason != "person-not-on-task" {
+		t.Fatalf("unexpected person-not-on-task error: %v", err)
+	}
+	idea, err := task.Create(ctx, q, task.Input{Name: "Idea", DeveloperIDs: []int64{dev.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.SaveAttribution(ctx, q, idea.ID, testkit.MustWeek(t, "2026-05-04"), dev.ID, weekly.AttributionPatch{PlannedHours: 1}, now); err == nil {
+		t.Fatal("expected idea task attribution to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Reason != "idea-task-not-assignable" {
+		t.Fatalf("unexpected idea error: %v", err)
+	}
+}
+
+func TestClearAttribution(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	week := testkit.MustWeek(t, "2026-01-05")
+	if _, err := weekly.SaveAttribution(ctx, q, tkID, week, devID, weekly.AttributionPatch{PlannedHours: 5, SpentHours: 2}, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := weekly.ClearAttribution(ctx, q, tkID, week, devID, false, now); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("allocation still present after clear: %#v %v", rows, err)
+	}
+	if err := weekly.ClearAttribution(ctx, q, tkID, week, devID, false, now); err == nil {
+		t.Fatal("expected second clear to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Message != "allocation not found" {
+		t.Fatalf("unexpected clear error: %v", err)
+	}
+}
+
+func TestSaveProgressOnlyDoesNotAutoAttribute(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, _ := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{Progress: nullable.Present(40.0)}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cell.Attributions) != 0 {
+		t.Fatalf("unexpected attributions: %#v", cell.Attributions)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("progress-only save created attribution rows: %#v %v", rows, err)
+	}
+}
+
+func TestClearAttributionAfterDeveloperRemoved(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	week := testkit.MustWeek(t, "2026-01-05")
+	if _, err := weekly.SaveAttribution(ctx, q, tkID, week, devID, weekly.AttributionPatch{PlannedHours: 5, SpentHours: 2}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Update(ctx, q, tkID, task.Patch{DeveloperIDs: nullable.Present([]int64{})}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weekly.SaveAttribution(ctx, q, tkID, week, devID, weekly.AttributionPatch{PlannedHours: 1}, now); err == nil {
+		t.Fatal("expected person-not-on-task to fail")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Reason != "person-not-on-task" {
+		t.Fatalf("unexpected person-not-on-task error: %v", err)
+	}
+	if err := weekly.ClearAttribution(ctx, q, tkID, week, devID, false, now); err != nil {
+		t.Fatalf("clear after developer removed failed: %v", err)
+	}
+	rows, err := q.ListTaskWeekDevelopers(ctx, db.ListTaskWeekDevelopersParams{TaskID: tkID, WeekStart: "2026-01-05"})
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("allocation still present after clear: %#v %v", rows, err)
+	}
+}
+
+func TestDeletePersonWithWeekAllocationsRejected(t *testing.T) {
+	ctx := t.Context()
+	q, tkID, devID := newTaskWithDeveloper(t, "2026-01-05", "2026-06-01")
+	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	if _, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(8.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := person.Delete(ctx, q, devID); err == nil {
+		t.Fatal("expected person delete to be rejected")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+		t.Fatalf("unexpected delete error: %v", err)
+	}
+	got, err := person.Get(ctx, q, devID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != devID {
+		t.Fatalf("rejected delete removed the person: %#v", got)
+	}
 }

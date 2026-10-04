@@ -72,7 +72,8 @@ SELECT
     ), 0) AS REAL) AS previous_progress,
     COALESCE(tw.planned_hours, 0) AS planned_hours,
     COALESCE(tw.spent_hours, 0) AS spent_hours,
-    tw.progress
+    tw.progress,
+    CASE WHEN tw.task_id IS NULL THEN 0 ELSE 1 END AS row_exists
 FROM input
 JOIN tasks t ON t.id = input.task_id
 LEFT JOIN v_project_bounds p ON p.id = t.project_id
@@ -92,10 +93,10 @@ SELECT
         WHEN in_range = 0 THEN 'week-outside-project-bounds'
         ELSE ''
     END AS reason,
-    planned_hours, spent_hours, progress, previous_progress
+    planned_hours, spent_hours, progress, previous_progress, row_exists
 FROM context
 )
-SELECT status, CAST(reason AS TEXT) AS reason, planned_hours, spent_hours, progress, previous_progress
+SELECT status, CAST(reason AS TEXT) AS reason, planned_hours, spent_hours, progress, previous_progress, row_exists
 FROM result;
 
 -- name: UpsertTaskWeek :one

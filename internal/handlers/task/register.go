@@ -18,6 +18,8 @@ func Register(mux *http.ServeMux, q *db.Queries) {
 	mux.HandleFunc("PUT /api/v1/tasks/{id}", web.JSONUpdate(q, task.Update))
 	mux.HandleFunc("DELETE /api/v1/tasks/{id}", web.JSONDelete(q, task.Delete))
 	mux.HandleFunc("PUT /api/v1/tasks/{id}/weeks/{weekStart}", weekJSON(q))
+	mux.HandleFunc("PUT /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}", attributionJSON(q))
+	mux.HandleFunc("DELETE /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}", clearAttributionJSON(q))
 	mux.HandleFunc("POST /tasks/{id}/weeks/{weekStart}", weekHTML(q))
 	mux.HandleFunc("GET /tasks/new", newForm(q))
 	mux.HandleFunc("POST /tasks", createHTML(q))

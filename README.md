@@ -62,8 +62,9 @@ conflict or scope checks also carry a stable machine `reason` code for automatio
 The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, `task-has-weekly-data`
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
 `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
-`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`
-(people, including task developer ids). Validation errors without a SQL-backed reason omit the key.
+`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`,
+`person-not-on-task` (people, including task developer and attribution checks). Validation errors
+without a SQL-backed reason omit the key.
 The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
 `reason` appears only when the API provides one.
 
@@ -77,6 +78,26 @@ the project's start-week through its end-week, including zero planned/spent week
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
 have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
 monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
+
+Each week cell also carries an `attributions` array (empty when none): per-person `planned_hours`
+and `spent_hours` splits for that week. On the first save of a task-week row, if the task has
+developers and that week has no attribution rows, the full planned and spent hours are automatically
+attributed to the lowest-`person_id` developer. Updates to the week never rebalance an existing
+attribution, and deleting an allocation does not resurrect it on later saves. Allocations are
+informational splits; their sums are not enforced against the week totals.
+
+Attributions are editable per task-week+person via
+`PUT /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}` with body
+`{"planned_hours": <hours>, "spent_hours": <hours>, "unlock": <bool>}` and removed via
+`DELETE /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}` (which accepts `?unlock=true`).
+Both apply the same gates as weekly writes (past-month lock unless `unlock`, idea-task `400`
+`idea-task-not-assignable`, week outside the project `400` `week-outside-project-bounds`, missing
+task `404`). The `PUT` endpoint also requires the person to be on the task: unknown person `404`
+`person-not-found`, and a person not assigned to the task `400` `person-not-on-task`. `DELETE` does
+not check membership — it clears the allocation by task/week/person if present (`404 allocation not
+found` otherwise), so allocations left behind after a developer is removed stay cleanable. The `pmctl` commands
+`update-task-week-developer <task-id> <week-start> <person-id> --planned-hours --spent-hours [--unlock]`
+and `clear-task-week-developer <task-id> <week-start> <person-id> [--unlock]` wrap these endpoints.
 
 Task developers are real people. Creates send `developer_ids`; reads resolve them into a
 `developers` array of `{"id","name"}` objects (empty array when none). Updates are presence-driven:

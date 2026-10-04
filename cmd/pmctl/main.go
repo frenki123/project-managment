@@ -57,7 +57,7 @@ func newRoot(s *commandState) *cobra.Command {
 		return nil
 	}}
 	root.PersistentFlags().StringVar(&s.apiURL, "url", s.apiURL, "REST API base URL")
-	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), personCommands(s), updateWeekCommand(s), curveCommand(s))
+	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), personCommands(s), updateWeekCommand(s), updateWeekDeveloperCommand(s), clearWeekDeveloperCommand(s), curveCommand(s))
 	return root
 }
 
@@ -81,6 +81,21 @@ func twoArgs(args []string) (int64, string, error) {
 		return 0, "", fmt.Errorf("invalid task id %q", args[0])
 	}
 	return id, args[1], nil
+}
+
+func threeArgs(args []string) (int64, string, int64, error) {
+	if len(args) != 3 {
+		return 0, "", 0, fmt.Errorf("expected task id, week start, and person id")
+	}
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return 0, "", 0, fmt.Errorf("invalid task id %q", args[0])
+	}
+	personID, err := strconv.ParseInt(args[2], 10, 64)
+	if err != nil {
+		return 0, "", 0, fmt.Errorf("invalid person id %q", args[2])
+	}
+	return id, args[1], personID, nil
 }
 
 func resolveProject(ctx context.Context, c *client.Client, name string) (int64, error) {

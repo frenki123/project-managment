@@ -195,6 +195,7 @@ templ TaskPanel(data TaskPanelData) {
 			<h3>Ownership</h3>
 			<dl class="panel-details"><dt>Department</dt><dd>{ data.Department }</dd><dt>Developers</dt><dd>{ data.Developers }</dd><dt>Priority</dt><dd>{ data.Priority }</dd></dl>
 		</section>
+		@TaskAttributionSection(data)
 		if data.Error != "" {
 			<p class="error" role="alert">{ data.Error }</p>
 		}
@@ -205,6 +206,29 @@ templ TaskPanel(data TaskPanelData) {
 			<section class="panel-section"><h3>Implementation notes</h3><p>{ data.Notes }</p></section>
 		}
 		<div class="panel-actions"><button type="button" class="linkish" hx-get={ templ.URL(data.EditPath) } hx-target="#modal-root" hx-swap="innerHTML">Edit task</button>@DeleteForm(data.DeletePath, "Delete this task?", "Delete")</div>
+	}
+}
+
+templ TaskAttributionSection(data TaskPanelData) {
+	if hasAttributions(data.Weeks) {
+		<section class="panel-section">
+			<h3>Weekly attribution</h3>
+			for _, week := range data.Weeks {
+				if len(week.Attributions) > 0 {
+					<p class="panel-context">{ dateLabel(week.WeekStart.String()) }</p>
+					<table>
+						<thead>
+							<tr><th>Developer</th><th>Planned</th><th>Spent</th></tr>
+						</thead>
+						<tbody>
+							for _, allocation := range week.Attributions {
+								<tr><td>{ allocation.Name }</td><td>{ hours(allocation.PlannedHours) } h</td><td>{ hours(allocation.SpentHours) } h</td></tr>
+							}
+						</tbody>
+					</table>
+				}
+			}
+		</section>
 	}
 }
 
