@@ -69,7 +69,8 @@ is stored. Effective progress is a running maximum, so stored progress is strict
 Task detail responses return `weeks` from the canonical project-bounded series: every Monday from
 the project's start-week through its end-week, including zero planned/spent weeks. `progress` is the
 effective carried value; `stored_progress` is `null` when that week has no stored value. Idea tasks
-have no weeks.
+have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
+monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
 
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
 `project name already exists`. Deleting a referenced project, subproject, or task, or moving a
