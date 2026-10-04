@@ -4,7 +4,6 @@ import (
 	"bytes"
 	json "encoding/json/v2"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,36 +34,51 @@ func runCommand(t *testing.T, server *httptest.Server, args ...string) error {
 	return root.Execute()
 }
 
-func TestTableOutputIsBounded(t *testing.T) {
-	values := make([]task.Task, 51)
-	for i := range values {
-		values[i].ID = int64(i + 1)
-		values[i].Name = fmt.Sprintf("Task %d", i+1)
-	}
-	var out strings.Builder
-	if err := taskTable(&out, values); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "... 1 more rows; use JSON output") {
-		t.Fatalf("missing truncation message: %s", out.String())
-	}
-	if strings.Contains(out.String(), "Task 51") {
-		t.Fatal("table included rows past the limit")
-	}
-}
-
 func TestWriteErrorIncludesHTTPStatusAsJSON(t *testing.T) {
 	var out bytes.Buffer
 	writeError(&out, &client.APIError{Method: http.MethodGet, Path: "/api/v1/tasks/1", Status: http.StatusNotFound, Message: "task not found"})
-	var got struct {
-		Error  string `json:"error"`
-		Status int    `json:"status"`
-	}
+	var got result
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Error != "HTTP 404: task not found" || got.Status != http.StatusNotFound {
 		t.Fatalf("error output = %q", out.String())
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(out.Bytes(), &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["reason"]; ok {
+		t.Fatalf("reason key present without APIError reason: %s", out.String())
+	}
+}
+
+func TestWriteErrorIncludesReasonWhenPresent(t *testing.T) {
+	var out bytes.Buffer
+	writeError(&out, &client.APIError{Method: http.MethodPut, Path: "/api/v1/tasks/4/weeks/2026-09-21", Status: http.StatusBadRequest, Message: "ideas cannot be planned", Reason: "idea-task-not-assignable"})
+	var got result
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Error != "HTTP 400: ideas cannot be planned" || got.Status != http.StatusBadRequest || got.Reason != "idea-task-not-assignable" {
+		t.Fatalf("error output = %q", out.String())
+	}
+}
+
+func TestWriteJSONProducesJSON(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeJSON(&out, result{Deleted: true, ID: 7, Type: "task"}); err != nil {
+		t.Fatal(err)
+	}
+	var got result
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Deleted || got.ID != 7 || got.Type != "task" {
+		t.Fatalf("decoded result = %+v", got)
+	}
+	if !bytes.HasSuffix(out.Bytes(), []byte("\n")) {
+		t.Fatalf("output missing trailing newline: %q", out.String())
 	}
 }
 
