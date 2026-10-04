@@ -156,6 +156,6 @@ func deleteCommand(use, kind string, s *commandState, del func(context.Context, 
 		if err := del(cmd.Context(), id); err != nil {
 			return err
 		}
-		return writeDeleted(s.out, kind, id)
+		return writeJSON(s.out, result{Deleted: true, ID: id, Type: kind})
 	}}
 }
