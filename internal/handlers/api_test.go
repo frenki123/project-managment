@@ -704,6 +704,19 @@ func TestJSONContractConsistency(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("save planned %d %s", rr.Code, rr.Body.String())
 	}
+	var updatedWeek struct {
+		WeekStart      string   `json:"week_start"`
+		PlannedHours   float64  `json:"planned_hours"`
+		SpentHours     float64  `json:"spent_hours"`
+		Progress       float64  `json:"progress"`
+		StoredProgress *float64 `json:"stored_progress"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &updatedWeek); err != nil {
+		t.Fatal(err)
+	}
+	if updatedWeek.WeekStart != start.AddDate(0, 0, 7).Format("2006-01-02") || updatedWeek.PlannedHours != 1 || updatedWeek.SpentHours != 0 || updatedWeek.Progress != 25 || updatedWeek.StoredProgress != nil {
+		t.Fatalf("weekly update response = %#v", updatedWeek)
+	}
 
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
