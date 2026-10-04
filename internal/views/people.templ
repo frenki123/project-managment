@@ -1,0 +1,104 @@
+package views
+
+import (
+	"strconv"
+
+	"cad-development/internal/person"
+)
+
+templ PeoplePage(data PeoplePageData) {
+	@Layout("People") {
+		<main class="workspace">
+			<header class="project-header">
+				<div class="project-heading">
+					<p class="eyebrow">PEOPLE</p>
+					<h1>People</h1>
+					<p class="project-description">Named developers with a weekly capacity default; per-week availability overrides take precedence.</p>
+				</div>
+			</header>
+			if len(data.People) == 0 {
+				<p>Create a person to start tracking availability.</p>
+			} else {
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Weekly capacity</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, p := range data.People {
+								@PersonRow(p)
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</main>
+	}
+}
+
+templ PersonRow(p person.Person) {
+	<tr>
+		<td>{ p.Name }</td>
+		<td>{ hours(p.WeeklyCapacity) } h</td>
+		<td class="panel-actions">
+			<button type="button" class="linkish" hx-get={ templ.URL("/people/" + strconv.FormatInt(p.ID, 10) + "/edit") } hx-target="#modal-root" hx-swap="innerHTML">Edit</button>
+			<form hx-post={ templ.URL("/people/" + strconv.FormatInt(p.ID, 10) + "/delete") } hx-target="#modal-root" hx-swap="innerHTML" hx-confirm="Delete this person?">
+				<button type="submit" class="secondary outline">Delete</button>
+			</form>
+		</td>
+	</tr>
+}
+
+templ PersonForm(data PersonFormData) {
+	@ResourceModal("PERSON", data.Title, data.Context, data.Error, data.DeleteAction, "Delete this person?") {
+		@ResourceForm(data.Action) {
+			@PersonFields(data)
+			@ResourceActions(data.DeleteAction != "", "Create person", "")
+		}
+		if data.DeleteAction != "" {
+			@PersonOverridesSection(data)
+		}
+	}
+}
+
+templ PersonFields(data PersonFormData) {
+	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Person.Name } required/></label></section>
+	<section class="panel-section"><h3>Capacity</h3><label>Weekly capacity (hours)<input type="number" step="any" min="0" name="weekly_capacity" value={ data.Person.WeeklyCapacity } required/></label><small class="form-hint">Availability overrides below take precedence over this default.</small></section>
+}
+
+templ PersonOverridesSection(data PersonFormData) {
+	<section class="panel-section">
+		<h3>Availability overrides</h3>
+		if len(data.Overrides) > 0 {
+			<table>
+				<thead>
+					<tr><th>Week</th><th>Capacity</th><th></th></tr>
+				</thead>
+				<tbody>
+					for _, o := range data.Overrides {
+						<tr>
+							<td>{ dateLabel(o.WeekStart) }</td>
+							<td>{ hours(o.Capacity) } h</td>
+							<td>
+								<form hx-post={ templ.URL("/people/" + strconv.FormatInt(data.PersonID, 10) + "/overrides/" + o.WeekStart + "/delete") } hx-target="#modal-root" hx-swap="innerHTML" hx-confirm="Remove this override?">
+									<button type="submit" class="secondary outline">Remove</button>
+								</form>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+		<form class="override-form" hx-post={ templ.URL("/people/" + strconv.FormatInt(data.PersonID, 10) + "/overrides") } hx-target="#modal-root" hx-swap="innerHTML">
+			<div class="form-grid form-grid-two">
+				<label>Week starting (Monday)<input type="date" name="week_start" required/></label>
+				<label>Capacity (hours)<input type="number" step="any" min="0" name="capacity" required/></label>
+			</div>
+			<div class="resource-actions"><button type="submit">Add override</button></div>
+		</form>
+	</section>
+}

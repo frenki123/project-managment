@@ -57,7 +57,7 @@ func newRoot(s *commandState) *cobra.Command {
 		return nil
 	}}
 	root.PersistentFlags().StringVar(&s.apiURL, "url", s.apiURL, "REST API base URL")
-	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), updateWeekCommand(s), curveCommand(s))
+	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), personCommands(s), updateWeekCommand(s), curveCommand(s))
 	return root
 }
 

@@ -1,6 +1,7 @@
 package views
 
 import (
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 )
@@ -61,6 +62,26 @@ type SubprojectFormValues struct {
 	Name       string
 	ProjectID  string
 	TotalHours string
+}
+
+type PeoplePageData struct {
+	People []person.Person
+}
+
+type PersonFormData struct {
+	Action       string
+	Title        string
+	Context      string
+	PersonID     int64
+	Person       PersonFormValues
+	Overrides    []person.Override
+	Error        string
+	DeleteAction string
+}
+
+type PersonFormValues struct {
+	Name           string
+	WeeklyCapacity string
 }
 
 type TaskPanelData struct {

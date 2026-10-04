@@ -41,6 +41,19 @@ CREATE TABLE task_weeks (
     PRIMARY KEY (task_id, week_start)
 );
 
+CREATE TABLE people (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    weekly_capacity REAL NOT NULL DEFAULT 40 CHECK (weekly_capacity >= 0)
+);
+
+CREATE TABLE person_week_overrides (
+    person_id INTEGER NOT NULL REFERENCES people (id),
+    week_start TEXT NOT NULL,
+    capacity REAL NOT NULL CHECK (capacity >= 0),
+    PRIMARY KEY (person_id, week_start)
+);
+
 CREATE INDEX idx_subprojects_project_name
     ON subprojects (project_id, name COLLATE NOCASE, id);
 CREATE INDEX idx_tasks_project_name
@@ -119,6 +132,8 @@ DROP VIEW IF EXISTS v_task_week_series;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;
 DROP VIEW IF EXISTS v_task_totals;
+DROP TABLE person_week_overrides;
+DROP TABLE people;
 DROP TABLE task_weeks;
 DROP TABLE tasks;
 DROP TABLE subprojects;

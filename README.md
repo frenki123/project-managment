@@ -24,6 +24,8 @@ one S-curve per project.
   budget, planned, spent, and progress %.
 - **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
 - **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
+- **People**: named developers with a weekly capacity default (40 h); per-week availability overrides
+  (holiday, part-time, training) take precedence over the default capacity for that week.
 - **Progress rules**: effective progress is a running maximum and never decreases. An empty week
   carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
 - **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
@@ -58,8 +60,9 @@ conflict or scope checks also carry a stable machine `reason` code for automatio
 
 The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, `task-has-weekly-data`
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
-and `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
-`subproject-hours-exceed-project` (project/subproject). Validation errors without a SQL-backed reason omit the key.
+`project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
+`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`
+(people). Validation errors without a SQL-backed reason omit the key.
 The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
 `reason` appears only when the API provides one.
 
@@ -79,6 +82,15 @@ Project names are case-insensitively unique; duplicate creates or updates return
 subproject that still has tasks, returns `409` with `record is still used by other data`;
 reassigning a task with weekly data returns `409` with `cannot reassign task with weekly data`.
 Assigning to a missing project or subproject returns `404`; a subproject from another project returns `400` with `subproject does not belong to project`.
+
+People are listed under `/api/v1/people` with the same create/get/update/delete shape as projects.
+Person names are case-insensitively unique; duplicates return `409` with `person-name-taken`.
+A person's weekly capacity defaults to `40` when `weekly_capacity` is omitted on create. Per-week
+availability overrides live under `/api/v1/people/{id}/overrides`: `GET` lists them, `PUT .../{weekStart}`
+with `{"capacity": <hours>}` upserts one (the `weekStart` must be a Monday, and the person must exist,
+else `404 person-not-found`), and `DELETE .../{weekStart}` clears it. An override wins over the default
+capacity for its week; clearing it restores the default. Deleting a person that still has overrides
+returns `409` with `record is still used by other data`.
 
 ## Stack
 
@@ -154,12 +166,14 @@ pmctl tasks list --project "Project Alpha"
 pmctl tasks create --name "Implement API" --project-id 5 --priority high
 pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
+pmctl people create --name "Ada" --weekly-capacity 32
+pmctl people overrides set 3 2026-09-07 --capacity 20
 ```
 
 ## Layout
 
 Code is organized by domain, not by layer: `internal/task`, `internal/project`, `internal/subproject`,
-`internal/weekly`, `internal/historyaccess`. `internal/web` is the small web framework (HTTP helpers,
+`internal/person`, `internal/weekly`, `internal/historyaccess`. `internal/web` is the small web framework (HTTP helpers,
 errors, CRUD, rendering, recover, static files, validation); `internal/db` holds database open,
 migration wiring, and generated sqlc code, with `internal/db/testkit` as the test helper;
 `internal/nullable` is the optional wire primitive for JSON fields. `internal/handlers` holds HTTP

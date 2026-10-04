@@ -36,6 +36,8 @@ var reasonErrors = map[string]string{
 	"subproject-hours-exceed-project":   "subproject hours exceed project hours",
 	"project-name-taken":                "project name already exists",
 	"task-has-weekly-data":              "cannot reassign task with weekly data",
+	"person-name-taken":                 "person name already exists",
+	"person-not-found":                  "person not found",
 }
 
 // HTTPErrorFromReason converts a conflict row's status and machine reason code into an HTTPError.

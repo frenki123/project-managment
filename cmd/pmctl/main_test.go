@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"cad-development/internal/client"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -440,6 +441,100 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 	defer server.Close()
 	if err := runCommand(t, server, "project-s-curve", "--project", "Alpha", "--project-id", "7"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPeopleCreateSendsNameAndCapacity(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/people" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","weekly_capacity":32}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "create", "--name", "X", "--weekly-capacity", "32"); err != nil {
+		t.Fatal(err)
+	}
+	var input person.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Name != "X" || input.WeeklyCapacity == nil || *input.WeeklyCapacity != 32 {
+		t.Fatalf("unexpected person fields: %+v", input)
+	}
+}
+
+func TestPeopleCreateLeavesCapacityUnsetWhenFlagOmitted(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/people" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","weekly_capacity":40}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "create", "--name", "X"); err != nil {
+		t.Fatal(err)
+	}
+	var input person.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.WeeklyCapacity != nil {
+		t.Fatalf("capacity should default server-side, sent %+v", input)
+	}
+}
+
+func TestPeopleOverrideSetSendsCapacity(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/people/5/overrides/2026-09-07" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"person_id":5,"week_start":"2026-09-07","capacity":10}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "overrides", "set", "5", "2026-09-07", "--capacity", "10"); err != nil {
+		t.Fatal(err)
+	}
+	if body != `{"capacity":10}` {
+		t.Fatalf("unexpected override body: %s", body)
+	}
+}
+
+func TestPeopleOverrideSetRequiresCapacity(t *testing.T) {
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "overrides", "set", "5", "2026-09-07"); err == nil {
+		t.Fatal("expected missing capacity flag error")
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
 	}
 }
 
