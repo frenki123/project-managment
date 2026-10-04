@@ -81,6 +81,26 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	}
 }
 
+func TestGridRendersNoteMarker(t *testing.T) {
+	html := renderGrid(t, task.Grid{
+		Kind: task.ViewProject,
+		Rows: []task.GridRow{{Name: "T", Cells: []task.GridCell{
+			{SavePath: "/tasks/1/weeks/2026-01-05", Note: "blocker"},
+			{SavePath: "/tasks/1/weeks/2026-01-12"},
+		}}},
+		Weeks: []weekly.WeekInfo{
+			{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")},
+			{Number: 2, Date: "12.01", Start: testkit.MustWeek(t, "2026-01-12")},
+		},
+	})
+	if strings.Count(html, "note-marker") != 1 {
+		t.Fatalf("expected exactly one note marker: %s", html)
+	}
+	if !strings.Contains(html, `value="blocker"`) || !strings.Contains(html, `name="note"`) || !strings.Contains(html, `hx-post="/tasks/1/weeks/2026-01-05"`) {
+		t.Fatalf("note input missing: %s", html)
+	}
+}
+
 func renderGrid(t *testing.T, data task.Grid) string {
 	t.Helper()
 	var output strings.Builder

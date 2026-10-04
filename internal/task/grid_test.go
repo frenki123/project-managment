@@ -143,6 +143,53 @@ weekTotalFound:
 	}
 }
 
+func TestGridCellCarriesNoteFromSeries(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{
+		Name: "Notes", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Note: nullable.Present("blocker")}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "blocker" {
+		t.Fatalf("save should return the note: %#v", cell)
+	}
+	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{PlannedHours: nullable.Present(8.0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, week := range grid.Weeks {
+		cell := grid.Rows[0].Cells[i]
+		switch week.Start.String() {
+		case "2026-09-07":
+			if cell.Note != "blocker" {
+				t.Fatalf("note should be carried from series: %#v", cell)
+			}
+		case "2026-09-21":
+			if cell.Planned != 8 || cell.Note != "" {
+				t.Fatalf("hours week should have no note: %#v", cell)
+			}
+		case "2026-09-14":
+			if cell.Note != "" {
+				t.Fatalf("missing week should have no note: %#v", cell)
+			}
+		}
+	}
+}
+
 func TestUpdateRejectsReassignmentWithWeeklyData(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
