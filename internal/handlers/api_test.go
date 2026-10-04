@@ -262,6 +262,58 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 	}
 }
 
+func TestHTMLWeekNoteEditPersists(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	projID := createProject(t, mux, "Alpha", start)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Note task","project_id":`+strconv.FormatInt(projID, 10)+`}`))
+	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+
+	rr := postForm(t, mux, path, "note=blocker&project="+strconv.FormatInt(projID, 10))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("note edit %d %s", rr.Code, rr.Body.String())
+	}
+	if note := taskWeekNote(t, mux, taskID, start); note != "blocker" {
+		t.Fatalf("note edit not persisted: %q", note)
+	}
+
+	rr = postForm(t, mux, path, "note=&project="+strconv.FormatInt(projID, 10))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("note clear %d %s", rr.Code, rr.Body.String())
+	}
+	if note := taskWeekNote(t, mux, taskID, start); note != "" {
+		t.Fatalf("note clear not persisted: %q", note)
+	}
+}
+
+func taskWeekNote(t *testing.T, mux *http.ServeMux, taskID int64, week time.Time) string {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
+	}
+	var got struct {
+		Weeks []struct {
+			WeekStart string `json:"week_start"`
+			Note      string `json:"note"`
+		} `json:"weeks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range got.Weeks {
+		if w.WeekStart == week.Format(time.DateOnly) {
+			return w.Note
+		}
+	}
+	t.Fatalf("task %d has no week %s: %#v", taskID, week.Format(time.DateOnly), got.Weeks)
+	return ""
+}
+
 func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

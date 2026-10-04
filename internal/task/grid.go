@@ -74,6 +74,7 @@ type GridCell struct {
 	Locked    bool
 	SavePath  string
 	Error     string
+	Note      string
 }
 
 type GridWeekTotal struct {
@@ -347,6 +348,7 @@ func buildTaskRows(tasks []Task, byTask map[int64][]weekly.Cell, grid Grid, subN
 				cell.Spent = s.SpentHours
 				cell.Progress = *s.Progress
 				cell.Stored = s.StoredProgress != nil
+				cell.Note = s.Note
 			}
 			row.Cells = append(row.Cells, cell)
 		}
