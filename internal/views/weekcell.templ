@@ -2,8 +2,8 @@ package views
 
 import "cad-development/internal/task"
 
-templ WeekCellEditor(cell task.GridCell) {
-	<td class="week-cell">
+templ WeekCellEditor(cell task.GridCell, currentWeek string) {
+	<td class={ "week-cell " + weekColumnClass(cell.WeekStart, currentWeek) }>
 		if cell.Error != "" {
 			<div class="cell-error" role="alert">{ cell.Error }</div>
 		}
@@ -25,9 +25,9 @@ func maxAttr(max string) templ.Attributes {
 }
 
 templ WeekRowResponse(data task.Grid, rowIndex int) {
-			@TaskGridRow(data.Rows[rowIndex], data.Kind)
+			@TaskGridRow(data.Rows[rowIndex], data.Kind, data.CurrentWeek)
 	for i, total := range data.WeekTotals {
-		@WeekTotalCellOOB(i, total)
+		@WeekTotalCellOOB(i, total, weekColumnClass(data.Weeks[i].Start, data.CurrentWeek))
 	}
 	@GridTotalsOOB(data)
 }

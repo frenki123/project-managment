@@ -32,6 +32,19 @@ func overrunClass(overrun bool) string {
 	return ""
 }
 
+func weekColumnClass(weekStart weekly.WeekStart, currentWeek string) string {
+	switch {
+	case weekStart.IsZero() || currentWeek == "":
+		return ""
+	case weekStart.String() == currentWeek:
+		return "week-current"
+	case weekStart.String() < currentWeek:
+		return "week-past"
+	default:
+		return "week-future"
+	}
+}
+
 func progressClass(stored bool) string {
 	if stored {
 		return "stored-progress"

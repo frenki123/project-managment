@@ -69,25 +69,28 @@ templ GridPage(data task.Grid) {
 					</label>
 				}
 			</form>
-					if task.IsWeekly(data.Kind) {
-				<div class="historical-editing-controls">
-					<span class="historical-editing-status">
-					if data.HistoricalEditingAllowed {
-							Historical editing allowed
-						} else {
-							Historical weeks locked by default
-						}
-					</span>
-					<div class="historical-editing-actions">
-						<form hx-post="/history-access/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+			if task.IsWeekly(data.Kind) {
+				<div class="workboard-actions">
+					<button type="button" class="jump-week" data-current-week={ data.CurrentWeek }>Jump to current week</button>
+					<div class="historical-editing-controls">
+						<span class="historical-editing-status">
 							if data.HistoricalEditingAllowed {
-								<input type="hidden" name="historical_editing" value="false"/>
-								<button type="submit" class="secondary outline">Stop historical editing</button>
+								Historical editing allowed
 							} else {
-								<input type="hidden" name="historical_editing" value="true"/>
-								<button type="submit" class="secondary outline">Allow historical editing</button>
+								Historical weeks locked by default
 							}
-					</form>
+						</span>
+						<div class="historical-editing-actions">
+							<form hx-post="/history-access/set" hx-target="#grid" hx-swap="outerHTML" hx-include="#filters">
+								if data.HistoricalEditingAllowed {
+									<input type="hidden" name="historical_editing" value="false"/>
+									<button type="submit" class="secondary outline">Stop historical editing</button>
+								} else {
+									<input type="hidden" name="historical_editing" value="true"/>
+									<button type="submit" class="secondary outline">Allow historical editing</button>
+								}
+							</form>
+						</div>
 					</div>
 				</div>
 			}
@@ -138,14 +141,14 @@ templ GridPage(data task.Grid) {
 						}
 						if task.IsWeekly(data.Kind) {
 							for _, w := range data.Weeks {
-								<th class="week-col" title={ w.Start }><span>W{ strconv.Itoa(w.Number) }</span><small>{ w.Date }</small></th>
+								<th class={ "week-col " + weekColumnClass(w.Start, data.CurrentWeek) } title={ w.Start } data-week={ w.Start }><span>W{ strconv.Itoa(w.Number) }</span><small>{ w.Date }</small></th>
 							}
 						}
 					</tr>
 				</thead>
 				<tbody>
 					for _, row := range data.Rows {
-						@TaskGridRow(row, data.Kind)
+						@TaskGridRow(row, data.Kind, data.CurrentWeek)
 					}
 				</tbody>
 				if task.IsWeekly(data.Kind) {
@@ -158,7 +161,7 @@ templ GridPage(data task.Grid) {
 								</div>
 							</th>
 							for i, total := range data.WeekTotals {
-								@WeekTotalCell(i, total)
+								@WeekTotalCell(i, total, weekColumnClass(data.Weeks[i].Start, data.CurrentWeek))
 							}
 						</tr>
 					</tfoot>
@@ -201,19 +204,19 @@ func gridClass(data task.Grid) string {
 	return class
 }
 
-templ WeekTotalCell(index int, total task.GridWeekTotal) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total">@WeekTotalContent(total)</td>
+templ WeekTotalCell(index int, total task.GridWeekTotal, weekClass string) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class={ "week-total " + weekClass }>@WeekTotalContent(total)</td>
 }
 
-templ WeekTotalCellOOB(index int, total task.GridWeekTotal) {
-	<td id={ "week-total-" + strconv.Itoa(index) } class="week-total" hx-swap-oob="outerHTML">@WeekTotalContent(total)</td>
+templ WeekTotalCellOOB(index int, total task.GridWeekTotal, weekClass string) {
+	<td id={ "week-total-" + strconv.Itoa(index) } class={ "week-total " + weekClass } hx-swap-oob="outerHTML">@WeekTotalContent(total)</td>
 }
 
 templ WeekTotalContent(total task.GridWeekTotal) {
 	<small>{ hours(total.Planned) }</small><small>{ hours(total.Spent) }</small>
 }
 
-templ TaskGridRow(row task.GridRow, kind task.ViewKind) {
+templ TaskGridRow(row task.GridRow, kind task.ViewKind, currentWeek string) {
 	<tr id={ "task-row-" + strconv.FormatInt(row.ID, 10) } class="task-row">
 		<td class="sticky c0">
 			<button type="button" class="linkish" hx-get={ templ.URL(row.DetailPath) } hx-target="#modal-root" hx-swap="innerHTML">{ row.Name }</button>
@@ -229,7 +232,7 @@ templ TaskGridRow(row task.GridRow, kind task.ViewKind) {
 			</td>
 			if task.IsWeekly(kind) {
 				for _, cell := range row.Cells {
-					@WeekCellEditor(cell)
+					@WeekCellEditor(cell, currentWeek)
 				}
 			}
 		}

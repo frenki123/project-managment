@@ -34,7 +34,7 @@ func TestGridClass(t *testing.T) {
 func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	row := task.GridRow{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development"}
 	ideas := renderGrid(t, task.Grid{Kind: task.ViewIdeas, Rows: []task.GridRow{row}})
-	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") {
+	if !strings.Contains(ideas, "Assignment") || strings.Contains(ideas, "Planned [h]") || strings.Contains(ideas, "week-cell") || strings.Contains(ideas, "jump-week") || strings.Contains(ideas, "data-current-week") || strings.Contains(ideas, "week-past") || strings.Contains(ideas, "week-current") || strings.Contains(ideas, "week-future") {
 		t.Fatalf("unexpected ideas grid: %s", ideas)
 	}
 	if strings.Contains(ideas, "Weekly inputs") || strings.Contains(ideas, "Scroll horizontally") || strings.Contains(ideas, "Historical editing allowed") || strings.Contains(ideas, "Allow historical editing") || strings.Contains(ideas, "Stop historical editing") {
@@ -45,9 +45,10 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	}
 
 	project := renderGrid(t, task.Grid{
-		Kind:  task.ViewProject,
-		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
-		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
+		Kind:        task.ViewProject,
+		Rows:        []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
+		Weeks:       []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
+		CurrentWeek: "2026-01-05",
 	})
 	for _, label := range []string{"Status", "Summary", "W1"} {
 		if !strings.Contains(project, label) {
@@ -74,6 +75,9 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if strings.Contains(project, "Cum plan") || strings.Contains(project, "Cum spent") {
 		t.Fatalf("cumulative footer values are still rendered: %s", project)
 	}
+	if !strings.Contains(project, `class="jump-week"`) || !strings.Contains(project, `data-current-week="2026-01-05"`) {
+		t.Fatalf("project grid is missing the week jump control: %s", project)
+	}
 
 	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}}})
 	if strings.Contains(subproject, ">Earned<") {
@@ -88,4 +92,84 @@ func renderGrid(t *testing.T, data task.Grid) string {
 		t.Fatal(err)
 	}
 	return output.String()
+}
+
+func mustWeekInfos(t *testing.T, dates ...string) []weekly.WeekInfo {
+	t.Helper()
+	infos := make([]weekly.WeekInfo, len(dates))
+	for i, date := range dates {
+		info, err := testkit.MustWeek(t, date).Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+		infos[i] = info
+	}
+	return infos
+}
+
+func TestGridRendersWeekMarkers(t *testing.T) {
+	weeks := mustWeekInfos(t, "2026-09-07", "2026-09-14", "2026-09-21")
+	data := task.Grid{
+		Kind:        task.ViewProject,
+		Weeks:       weeks,
+		WeekTotals:  []task.GridWeekTotal{{}, {}, {}},
+		CurrentWeek: "2026-09-14",
+		Rows: []task.GridRow{{
+			Name:        "Task",
+			ProjectName: "Project",
+			Subproject:  "Subproject",
+			Status:      "Development",
+			Cells: []task.GridCell{
+				{WeekStart: weeks[0].Start},
+				{WeekStart: weeks[1].Start},
+				{WeekStart: weeks[2].Start},
+			},
+		}},
+	}
+	out := renderGrid(t, data)
+	for _, marker := range []string{
+		`class="week-col week-past"`,
+		`class="week-col week-current"`,
+		`class="week-col week-future"`,
+		`data-week="2026-09-14"`,
+		`class="week-cell week-past"`,
+		`class="week-cell week-current"`,
+		`class="week-cell week-future"`,
+		`class="week-total week-past"`,
+		`class="week-total week-current"`,
+		`class="week-total week-future"`,
+		`class="jump-week"`,
+		`data-current-week="2026-09-14"`,
+		`>Jump to current week<`,
+	} {
+		if !strings.Contains(out, marker) {
+			t.Fatalf("grid is missing %q: %s", marker, out)
+		}
+	}
+}
+
+func TestGridRendersNoWeekMarkersWhenCurrentWeekEmpty(t *testing.T) {
+	weeks := mustWeekInfos(t, "2026-09-07", "2026-09-14", "2026-09-21")
+	data := task.Grid{
+		Kind:       task.ViewProject,
+		Weeks:      weeks,
+		WeekTotals: []task.GridWeekTotal{{}, {}, {}},
+		Rows: []task.GridRow{{
+			Name: "Task",
+			Cells: []task.GridCell{
+				{WeekStart: weeks[0].Start},
+				{WeekStart: weeks[1].Start},
+				{WeekStart: weeks[2].Start},
+			},
+		}},
+	}
+	out := renderGrid(t, data)
+	for _, marker := range []string{"week-current", "week-past", "week-future"} {
+		if strings.Contains(out, marker) {
+			t.Fatalf("grid should not render %q: %s", marker, out)
+		}
+	}
+	if !strings.Contains(out, `class="jump-week"`) || !strings.Contains(out, `>Jump to current week<`) {
+		t.Fatalf("grid should still render the jump button: %s", out)
+	}
 }
