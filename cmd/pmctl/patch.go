@@ -41,10 +41,11 @@ func taskPatchFromFlags(cmd *cobra.Command, f taskFlags) task.Patch {
 	return in
 }
 
-func weekPatchFromFlags(cmd *cobra.Command, planned, spent float64, progress string, unlock bool) (weekly.Patch, error) {
+func weekPatchFromFlags(cmd *cobra.Command, planned, spent float64, progress, note string, unlock bool) (weekly.Patch, error) {
 	in := weekly.Patch{
 		PlannedHours: opt(cmd, "planned-hours", planned),
 		SpentHours:   opt(cmd, "spent-hours", spent),
+		Note:         stringOpt(cmd, "note", note),
 		Unlock:       unlock,
 	}
 	if cmd.Flags().Changed("progress") {

@@ -143,12 +143,70 @@ func TestWeekPatchFromFlagsProgressNullClears(t *testing.T) {
 	if err := c.ParseFlags([]string{"--progress", "null"}); err != nil {
 		t.Fatal(err)
 	}
-	patch, err := weekPatchFromFlags(c, 0, 0, "null", false)
+	patch, err := weekPatchFromFlags(c, 0, 0, "null", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !patch.Progress.Present || patch.Progress.Value != nil {
 		t.Fatalf("progress not cleared: %#v", patch.Progress)
+	}
+}
+
+func TestUpdateTaskWeekSendsNote(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/api/v1/tasks/4/weeks/2026-09-21" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		writeBody(t, w, `{"task_id":4,"week_start":"2026-09-21","planned_hours":0,"spent_hours":0,"progress":null,"note":"blocked on drawings"}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "update-task-week", "4", "2026-09-21", "--note", "blocked on drawings"); err != nil {
+		t.Fatal(err)
+	}
+	var patch weekly.Patch
+	if err := json.Unmarshal([]byte(body), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if !patch.Note.HasValue() || *patch.Note.Value != "blocked on drawings" {
+		t.Fatalf("note missing from request: %s", body)
+	}
+}
+
+func TestWeekPatchFromFlagsNoteNullClears(t *testing.T) {
+	c := &cobra.Command{}
+	c.Flags().String("note", "", "")
+	if err := c.ParseFlags([]string{"--note", "null"}); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := weekPatchFromFlags(c, 0, 0, "", "null", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !patch.Note.Present || patch.Note.Value != nil {
+		t.Fatalf("note not cleared: %#v", patch.Note)
+	}
+}
+
+func TestWeekPatchFromFlagsNoteAbsent(t *testing.T) {
+	c := &cobra.Command{}
+	c.Flags().String("note", "", "")
+	if err := c.ParseFlags(nil); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := weekPatchFromFlags(c, 0, 0, "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Note.Present {
+		t.Fatalf("absent note flag must stay off the wire: %#v", patch.Note)
 	}
 }
 
