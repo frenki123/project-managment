@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 
 	"cad-development/internal/task"
 	"github.com/spf13/cobra"
@@ -27,14 +26,14 @@ func taskCommands(s *commandState) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, v.Tasks) })
+		return writeJSON(s.out, v)
 	}}
 	list.Flags().BoolVar(&ideas, "ideas", false, "list unassigned idea tasks")
 	list.Flags().StringVar(&projectName, "project", "", "filter by unique project name")
 	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project ID")
 	list.Flags().StringVar(&subprojectName, "subproject", "", "filter by subproject name within the project")
 	list.Flags().Int64Var(&subprojectID, "subproject-id", 0, "filter by subproject ID")
-	root.AddCommand(list, getCommand(s, s.client.Task, taskTable), taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
+	root.AddCommand(list, getCommand(s, s.client.Task), taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
 	return root
 }
 
@@ -88,7 +87,7 @@ func taskCommand(use string, s *commandState, update bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return s.printer().print(v, func(w io.Writer) error { return taskTable(w, []task.Task{v}) })
+		return writeJSON(s.out, v)
 	}}
 	f.addFlags(c)
 	return c
