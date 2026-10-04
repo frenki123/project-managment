@@ -133,7 +133,7 @@ templ GridPage(data task.Grid) {
 						} else {
 							<th class="sticky c1">Project</th>
 							<th class="sticky c2">Subproject</th>
-							<th class="sticky c3">Status</th>
+							<th class="sticky c3">Stage</th>
 							<th class="sticky c4">Summary</th>
 						}
 						if task.IsWeekly(data.Kind) {
@@ -223,7 +223,12 @@ templ TaskGridRow(row task.GridRow, kind task.ViewKind) {
 		if kind == task.ViewIdeas {
 			<td class="sticky c3 idea-status">Unassigned</td>
 		} else {
-			<td class="sticky c3">{ row.Status }</td>
+			<td class="sticky c3">
+				{ row.Status }
+				if row.Manual {
+					<span class="stage-manual" title="Stage set manually">manual</span>
+				}
+			</td>
 			<td class="sticky c4">
 				@TaskSummary(row)
 			</td>

@@ -268,7 +268,7 @@ func loadIdeaRows(ctx context.Context, q *db.Queries, gc gridContext) (Grid, err
 	}
 	grid := gc.grid
 	for _, t := range tasks {
-		grid.Rows = append(grid.Rows, GridRow{ID: t.ID, Name: t.Name, Manual: t.ManualStatus != nil, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)})
+		grid.Rows = append(grid.Rows, GridRow{ID: t.ID, Name: t.Name, DetailPath: "/tasks/" + strconv.FormatInt(t.ID, 10)})
 	}
 	return grid, nil
 }
