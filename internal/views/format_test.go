@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"cad-development/internal/task"
+	"cad-development/internal/weekly"
 )
 
 func TestTaskStatus(t *testing.T) {
@@ -43,6 +44,32 @@ func TestHours(t *testing.T) {
 		if got := hours(c.in); got != c.want {
 			t.Errorf("hours(%v) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestWeekLabel(t *testing.T) {
+	week, err := weekly.Parse("2026-01-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := weekLabel(week); got != "W2 · 05.01" {
+		t.Fatalf("weekLabel() = %q, want %q", got, "W2 · 05.01")
+	}
+	if got := weekLabel(weekly.WeekStart{}); got != "" {
+		t.Fatalf("weekLabel(zero) = %q, want empty", got)
+	}
+}
+
+func TestHasNotes(t *testing.T) {
+	week, err := weekly.Parse("2026-01-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasNotes([]weekly.Cell{{WeekStart: week, Note: "blocker"}}) {
+		t.Fatal("noted week should report a note")
+	}
+	if hasNotes([]weekly.Cell{{WeekStart: week}}) || hasNotes(nil) {
+		t.Fatal("weeks without notes should report none")
 	}
 }
 
