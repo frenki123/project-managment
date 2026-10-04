@@ -1,5 +1,5 @@
 -- name: GetTaskWeek :one
-SELECT task_id, week_start, planned_hours, spent_hours, progress
+SELECT task_id, week_start, planned_hours, spent_hours, progress, note
 FROM task_weeks WHERE task_id = ? AND week_start = ?;
 
 -- name: GetTaskTotals :one
@@ -72,6 +72,7 @@ SELECT
     ), 0) AS REAL) AS previous_progress,
     COALESCE(tw.planned_hours, 0) AS planned_hours,
     COALESCE(tw.spent_hours, 0) AS spent_hours,
+    COALESCE(tw.note, '') AS note,
     tw.progress
 FROM input
 JOIN tasks t ON t.id = input.task_id
@@ -92,20 +93,21 @@ SELECT
         WHEN in_range = 0 THEN 'week-outside-project-bounds'
         ELSE ''
     END AS reason,
-    planned_hours, spent_hours, progress, previous_progress
+    planned_hours, spent_hours, note, progress, previous_progress
 FROM context
 )
-SELECT status, CAST(reason AS TEXT) AS reason, planned_hours, spent_hours, progress, previous_progress
+SELECT status, CAST(reason AS TEXT) AS reason, planned_hours, spent_hours, note, progress, previous_progress
 FROM result;
 
 -- name: UpsertTaskWeek :one
-INSERT INTO task_weeks (task_id, week_start, planned_hours, spent_hours, progress)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO task_weeks (task_id, week_start, planned_hours, spent_hours, progress, note)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (task_id, week_start) DO UPDATE SET
     planned_hours = excluded.planned_hours,
     spent_hours = excluded.spent_hours,
-    progress = excluded.progress
-RETURNING task_id, week_start, planned_hours, spent_hours, progress;
+    progress = excluded.progress,
+    note = excluded.note
+RETURNING task_id, week_start, planned_hours, spent_hours, progress, note;
 
 -- name: UpdateTaskWeeksProgressAfter :exec
 UPDATE task_weeks

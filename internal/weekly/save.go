@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"cad-development/internal/db"
@@ -15,6 +16,7 @@ type Patch struct {
 	PlannedHours nullable.Optional[float64] `json:"planned_hours,omitzero"`
 	SpentHours   nullable.Optional[float64] `json:"spent_hours,omitzero"`
 	Progress     nullable.Optional[float64] `json:"progress,omitzero"`
+	Note         nullable.Optional[string]  `json:"note,omitzero"`
 	Unlock       bool                       `json:"unlock,omitzero"`
 }
 
@@ -25,6 +27,7 @@ type Cell struct {
 	SpentHours     float64   `json:"spent_hours"`
 	Progress       *float64  `json:"progress"`
 	StoredProgress *float64  `json:"stored_progress"`
+	Note           string    `json:"note"`
 }
 
 func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart, patch Patch, now time.Time) (Cell, error) {
@@ -54,9 +57,10 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 
 		planned := patch.PlannedHours.ValueOr(contextRow.PlannedHours)
 		spent := patch.SpentHours.ValueOr(contextRow.SpentHours)
+		note := strings.TrimSpace(patch.Note.Apply(contextRow.Note))
 		stored, store := resolveProgress(patch, contextRow)
 		_, err = txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
-			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: stored,
+			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: stored, Note: note,
 		})
 		if err != nil {
 			return err
@@ -70,13 +74,13 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 				return err
 			}
 		}
-		result = savedCell(taskID, weekStart, planned, spent, stored, contextRow.PreviousProgress)
+		result = savedCell(taskID, weekStart, planned, spent, stored, contextRow.PreviousProgress, note)
 		return nil
 	})
 	return result, err
 }
 
-func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored sql.NullFloat64, previous float64) Cell {
+func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored sql.NullFloat64, previous float64, note string) Cell {
 	effective := previous
 	if stored.Valid {
 		effective = max(effective, stored.Float64)
@@ -85,6 +89,7 @@ func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored
 		TaskID: taskID, WeekStart: weekStart,
 		PlannedHours: planned, SpentHours: spent,
 		Progress: new(effective),
+		Note:     note,
 	}
 	if stored.Valid {
 		cell.StoredProgress = new(stored.Float64)
@@ -93,7 +98,7 @@ func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored
 }
 
 func validatePatch(patch Patch) error {
-	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present {
+	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present && !patch.Note.Present {
 		return web.Invalid("at least one value is required")
 	}
 	if patch.PlannedHours.HasValue() {

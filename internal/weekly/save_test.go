@@ -357,6 +357,83 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 	}
 }
 
+func TestSaveNoteWithLockRules(t *testing.T) {
+	ctx := t.Context()
+	q, pid, tkID := newProjectTask(t, 10.0, "2026-04-06", "2026-06-01")
+	if pid == 0 {
+		t.Fatal("expected a project ID")
+	}
+	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	locked := "2026-04-06"
+	_, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, locked), weekly.Patch{Note: nullable.Present("blocked on drawings")}, now)
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusForbidden {
+		t.Fatalf("locked note-only patch should fail with 403, got %v", err)
+	}
+	if _, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: locked}); err == nil {
+		t.Fatal("locked note-only patch persisted a week")
+	}
+	cell, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, locked), weekly.Patch{Note: nullable.Present("blocked on drawings"), Unlock: true}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "blocked on drawings" {
+		t.Fatalf("unlocked note save returned %q, want %q", cell.Note, "blocked on drawings")
+	}
+	row, err := q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: locked})
+	if err != nil || row.Note != "blocked on drawings" {
+		t.Fatalf("stored note = %q, err %v", row.Note, err)
+	}
+	_, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, locked), weekly.Patch{Note: nullable.Clear[string]()}, now)
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusForbidden {
+		t.Fatalf("locked note clear should fail with 403, got %v", err)
+	}
+	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: locked})
+	if err != nil || row.Note != "blocked on drawings" {
+		t.Fatalf("rejected clear changed note to %q, err %v", row.Note, err)
+	}
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, locked), weekly.Patch{Note: nullable.Clear[string](), Unlock: true}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "" {
+		t.Fatalf("unlocked clear returned note %q, want empty", cell.Note)
+	}
+	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: locked})
+	if err != nil || row.Note != "" {
+		t.Fatalf("cleared note = %q, err %v", row.Note, err)
+	}
+	open := "2026-05-04"
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, open), weekly.Patch{Note: nullable.Present("waiting on customer")}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "waiting on customer" {
+		t.Fatalf("note edit returned %q, want %q", cell.Note, "waiting on customer")
+	}
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, open), weekly.Patch{PlannedHours: nullable.Present(3.0)}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "waiting on customer" {
+		t.Fatalf("hours-only patch dropped note %q", cell.Note)
+	}
+	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: open})
+	if err != nil || row.Note != "waiting on customer" {
+		t.Fatalf("stored note after hours patch = %q, err %v", row.Note, err)
+	}
+	cell, err = weekly.Save(ctx, q, tkID, testkit.MustWeek(t, open), weekly.Patch{Note: nullable.Present("  padded  ")}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cell.Note != "padded" {
+		t.Fatalf("whitespace-trimmed note = %q, want %q", cell.Note, "padded")
+	}
+	row, err = q.GetTaskWeek(ctx, db.GetTaskWeekParams{TaskID: tkID, WeekStart: open})
+	if err != nil || row.Note != "padded" {
+		t.Fatalf("stored trimmed note = %q, err %v", row.Note, err)
+	}
+}
+
 func newProjectTask(t *testing.T, total float64, start, end string) (*db.Queries, int64, int64) {
 	t.Helper()
 	ctx := t.Context()
