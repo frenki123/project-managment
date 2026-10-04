@@ -29,6 +29,7 @@ type Grid struct {
 	PlannedHours             float64
 	SpentHours               float64
 	ProgressPct              *float64
+	CurrentWeek              string
 	Overrun                  bool
 	HistoricalEditingAllowed bool
 }
@@ -149,6 +150,7 @@ func loadGrid(ctx context.Context, q *db.Queries, resolved ResolvedFilter, taskI
 		return Grid{}, err
 	}
 	grid.Overrun = grid.PlannedHours > grid.BudgetHours
+	grid.CurrentWeek = weekly.MondayOnOrBefore(now).Format(time.DateOnly)
 	return grid, nil
 }
 

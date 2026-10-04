@@ -309,6 +309,55 @@ func TestGridUsesRequestHistoricalEditingAccess(t *testing.T) {
 	}
 }
 
+func TestGridMarksCurrentWeek(t *testing.T) {
+	tests := []struct {
+		name      string
+		startDate string
+		endDate   string
+	}{
+		{name: "current week in project range", startDate: "2026-09-07", endDate: "2026-09-28"},
+		{name: "current week outside project range", startDate: "2026-01-05", endDate: "2026-01-26"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			q := testkit.Open(t)
+			p, err := project.Create(ctx, q, project.Input{
+				Name: "Current", TotalHours: new(10.0), StartDate: tt.startDate, EndDate: tt.endDate,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID}); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)
+			grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if grid.CurrentWeek != "2026-09-14" {
+				t.Fatalf("current week = %q, want %q", grid.CurrentWeek, "2026-09-14")
+			}
+		})
+	}
+}
+
+func TestIdeasGridHasNoCurrentWeek(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	if _, err := task.Create(ctx, q, task.Input{Name: "Idea"}); err != nil {
+		t.Fatal(err)
+	}
+	grid, err := task.LoadGrid(ctx, q, mustFilter(t, "ideas", ""), time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid.CurrentWeek != "" {
+		t.Fatalf("ideas grid current week = %q, want empty", grid.CurrentWeek)
+	}
+}
+
 func mustFilter(t *testing.T, projectKey, subprojectKey string) task.Filter {
 	t.Helper()
 	filter, err := task.ParseFilter(projectKey, subprojectKey)
