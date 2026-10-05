@@ -13,8 +13,7 @@ func MapWeekSeries(rows []db.VTaskWeekSeries) ([]Cell, error) {
 		cell := Cell{
 			TaskID: row.TaskID, WeekStart: weekStart,
 			PlannedHours: row.PlannedHours, SpentHours: row.SpentHours,
-			Progress:     new(row.EffectiveProgress),
-			Attributions: []DeveloperAllocation{},
+			Progress: new(row.EffectiveProgress),
 		}
 		if row.StoredProgress.Valid {
 			cell.StoredProgress = new(row.StoredProgress.Float64)

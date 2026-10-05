@@ -15,8 +15,12 @@ INSERT INTO tasks (
 RETURNING id, name, description, implementation_notes, department, priority, project_id, subproject_id;
 
 -- name: GetTask :one
-SELECT id, name, description, implementation_notes, department, priority, project_id, subproject_id
-FROM tasks WHERE id = ?;
+SELECT
+    t.id, t.name, t.description, t.implementation_notes, t.department, t.priority, t.project_id, t.subproject_id,
+    CAST((SELECT json_group_array(json_object('id', p.id, 'name', p.name, 'weekly_capacity', p.weekly_capacity))
+          FROM task_developers td JOIN people p ON p.id = td.person_id
+          WHERE td.task_id = t.id) AS TEXT) AS developers
+FROM tasks t WHERE t.id = ?;
 
 -- name: ListIdeaTasks :many
 SELECT id, name, description, implementation_notes, department, priority, project_id, subproject_id

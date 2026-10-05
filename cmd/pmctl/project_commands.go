@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+//nolint:dupl // mirrors personCommands; the client methods and command names differ.
 func projectCommands(s *commandState) *cobra.Command {
 	root := &cobra.Command{Use: "projects"}
 	root.AddCommand(&cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {

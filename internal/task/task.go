@@ -1,10 +1,13 @@
 package task
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"cad-development/internal/db"
@@ -20,7 +23,7 @@ type Task struct {
 	Description         string        `json:"description"`
 	ImplementationNotes string        `json:"implementation_notes"`
 	Department          string        `json:"department"`
-	Developers          []person.Ref  `json:"developers"`
+	Developers          []person.Person `json:"developers,omitzero"`
 	Priority            string        `json:"priority"`
 	ProjectID           *int64        `json:"project_id"`
 	SubprojectID        *int64        `json:"subproject_id"`
@@ -91,12 +94,34 @@ func FromDB(t db.Task) Task {
 		Description:         t.Description,
 		ImplementationNotes: t.ImplementationNotes,
 		Department:          t.Department,
-		Developers:          []person.Ref{},
 		Priority:            t.Priority,
 	}
 	out.ProjectID = nullable.Int64Pointer(t.ProjectID)
 	out.SubprojectID = nullable.Int64Pointer(t.SubprojectID)
 	return out
+}
+
+func fromGetRow(row db.GetTaskRow) (Task, error) {
+	out := Task{
+		ID:                  row.ID,
+		Name:                row.Name,
+		Description:         row.Description,
+		ImplementationNotes: row.ImplementationNotes,
+		Department:          row.Department,
+		Priority:            row.Priority,
+	}
+	out.ProjectID = nullable.Int64Pointer(row.ProjectID)
+	out.SubprojectID = nullable.Int64Pointer(row.SubprojectID)
+	if err := json.Unmarshal([]byte(row.Developers), &out.Developers); err != nil {
+		return Task{}, err
+	}
+	slices.SortFunc(out.Developers, func(a, b person.Person) int {
+		if c := cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
 }
 
 func validate(in Input) (Input, error) {
@@ -113,16 +138,6 @@ func validate(in Input) (Input, error) {
 	}
 	if in.SubprojectID != nil && *in.SubprojectID < 1 {
 		return in, web.Invalid("invalid subproject")
-	}
-	seen := make(map[int64]struct{}, len(in.DeveloperIDs))
-	for _, id := range in.DeveloperIDs {
-		if id < 1 {
-			return in, web.Invalid("invalid developer")
-		}
-		if _, ok := seen[id]; ok {
-			return in, web.Invalid("duplicate developer")
-		}
-		seen[id] = struct{}{}
 	}
 	return in, nil
 }
@@ -143,9 +158,6 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
 			return err
 		}
-		if err := validateDevelopersExist(ctx, txq, validated.DeveloperIDs); err != nil {
-			return err
-		}
 		row, err := txq.CreateTask(ctx, db.CreateTaskParams{
 			Name:                validated.Name,
 			Description:         validated.Description,
@@ -159,12 +171,7 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 			return err
 		}
 		id = row.ID
-		for _, personID := range validated.DeveloperIDs {
-			if _, err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: id, PersonID: personID}); err != nil {
-				return err
-			}
-		}
-		return nil
+		return addTaskDevelopers(ctx, txq, id, validated.DeveloperIDs)
 	})
 	if err != nil {
 		return Task{}, err
@@ -172,25 +179,23 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 	return Get(ctx, q, id)
 }
 
-func validateDevelopersExist(ctx context.Context, txq *db.Queries, ids []int64) error {
-	for _, id := range ids {
-		exists, err := txq.PersonExists(ctx, id)
-		if err != nil {
-			return err
-		}
-		if exists == 0 {
-			return web.HTTPErrorFromReason(http.StatusNotFound, "person-not-found")
+func addTaskDevelopers(ctx context.Context, txq *db.Queries, taskID int64, ids []int64) error {
+	for _, personID := range ids {
+		if _, err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: taskID, PersonID: personID}); err != nil {
+			return developerError(err)
 		}
 	}
 	return nil
 }
 
-func refs(rows []db.ListTaskDevelopersRow) []person.Ref {
-	out := make([]person.Ref, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, person.Ref{ID: row.ID, Name: row.Name})
+func developerError(err error) error {
+	switch {
+	case db.ForeignKeyViolation(err):
+		return web.HTTPErrorFromReason(http.StatusNotFound, "person-not-found")
+	case db.UniqueViolation(err, "task_developers.person_id"):
+		return web.Invalid("duplicate developer")
 	}
-	return out
+	return err
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
@@ -201,7 +206,10 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	out := FromDB(row)
+	out, err := fromGetRow(row)
+	if err != nil {
+		return Task{}, err
+	}
 	totals, err := q.GetTaskTotals(ctx, id)
 	if err != nil {
 		return Task{}, err
@@ -210,11 +218,6 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	developerRows, err := q.ListTaskDevelopers(ctx, id)
-	if err != nil {
-		return Task{}, err
-	}
-	out.Developers = refs(developerRows)
 	out.TotalHours = totals.PlannedHours
 	out.SpentHours = totals.SpentHours
 	out.Progress = totals.Progress
@@ -236,7 +239,7 @@ func ListIdeas(ctx context.Context, q *db.Queries) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mergeTotals(ctx, q, rows, totals)
+	return mergeTotals(rows, totals), nil
 }
 
 func ListByProject(ctx context.Context, q *db.Queries, projectID int64) ([]Task, error) {
@@ -257,10 +260,10 @@ func listScoped(ctx context.Context, q *db.Queries, projectID, subprojectID sql.
 	if err != nil {
 		return nil, err
 	}
-	return mergeTotals(ctx, q, rows, totals)
+	return mergeTotals(rows, totals), nil
 }
 
-func mergeTotals(ctx context.Context, q *db.Queries, rows []db.Task, totals []db.VTaskTotal) ([]Task, error) {
+func mergeTotals(rows []db.Task, totals []db.VTaskTotal) []Task {
 	byID := make(map[int64]db.VTaskTotal, len(totals))
 	for _, total := range totals {
 		byID[total.TaskID] = total
@@ -272,20 +275,7 @@ func mergeTotals(ctx context.Context, q *db.Queries, rows []db.Task, totals []db
 		t.TotalHours, t.SpentHours, t.Progress, t.Status = total.PlannedHours, total.SpentHours, total.Progress, Status(total.Progress)
 		out = append(out, t)
 	}
-	developerRows, err := q.ListAllTaskDevelopers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byTask := make(map[int64][]person.Ref)
-	for _, row := range developerRows {
-		byTask[row.TaskID] = append(byTask[row.TaskID], person.Ref{ID: row.ID, Name: row.Name})
-	}
-	for i := range out {
-		if devs, ok := byTask[out[i].ID]; ok {
-			out[i].Developers = devs
-		}
-	}
-	return out, nil
+	return out
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, error) {
@@ -303,9 +293,9 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		}
 		in := mergeInput(current, patch)
 		if patch.DeveloperIDs.Present {
-			in = applyDeveloperPatch(in, patch)
-			if err := validateDevelopersExist(ctx, txq, in.DeveloperIDs); err != nil {
-				return err
+			in.DeveloperIDs = nil
+			if patch.DeveloperIDs.Value != nil {
+				in.DeveloperIDs = *patch.DeveloperIDs.Value
 			}
 		}
 		in, err = resolveAssignment(ctx, txq, id, current, patch, in)
@@ -318,15 +308,6 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 		return Task{}, err
 	}
 	return Get(ctx, q, id)
-}
-
-func applyDeveloperPatch(in Input, patch Patch) Input {
-	if patch.DeveloperIDs.Value == nil {
-		in.DeveloperIDs = nil
-	} else {
-		in.DeveloperIDs = *patch.DeveloperIDs.Value
-	}
-	return in
 }
 
 func updateTaskWithDevelopers(ctx context.Context, txq *db.Queries, id int64, in Input, replaceDevelopers bool) error {
@@ -345,15 +326,10 @@ func updateTaskWithDevelopers(ctx context.Context, txq *db.Queries, id int64, in
 	if err := txq.ReplaceTaskDevelopers(ctx, id); err != nil {
 		return err
 	}
-	for _, personID := range in.DeveloperIDs {
-		if _, err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: id, PersonID: personID}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return addTaskDevelopers(ctx, txq, id, in.DeveloperIDs)
 }
 
-func mergeInput(current db.Task, patch Patch) Input {
+func mergeInput(current db.GetTaskRow, patch Patch) Input {
 	currentInput := Input{
 		Name: current.Name, Description: current.Description,
 		ImplementationNotes: current.ImplementationNotes, Department: current.Department,
@@ -372,7 +348,7 @@ func mergeInput(current db.Task, patch Patch) Input {
 	}
 }
 
-func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current db.Task, patch Patch, in Input) (Input, error) {
+func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current db.GetTaskRow, patch Patch, in Input) (Input, error) {
 	in, err := validate(in)
 	if err != nil {
 		return in, err
@@ -402,9 +378,6 @@ func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current d
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {
 	err := q.InTx(ctx, func(txq *db.Queries) error {
-		if err := txq.DeleteTaskDevelopers(ctx, id); err != nil {
-			return err
-		}
 		rows, err := txq.DeleteTask(ctx, id)
 		if err != nil {
 			return err

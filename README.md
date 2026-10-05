@@ -24,9 +24,8 @@ one S-curve per project.
   budget, planned, spent, and progress %.
 - **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
 - **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
-- **People**: named developers with a weekly capacity default (40 h); per-week availability overrides
-  (holiday, part-time, training) take precedence over the default capacity for that week. Tasks pick
-  their developers from people instead of free text.
+- **People**: named developers with a weekly capacity default (40 h). Tasks pick their developers
+  from people instead of free text.
 - **Progress rules**: effective progress is a running maximum and never decreases. An empty week
   carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
 - **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
@@ -62,9 +61,8 @@ conflict or scope checks also carry a stable machine `reason` code for automatio
 The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, `task-has-weekly-data`
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
 `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
-`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`,
-`person-not-on-task` (people, including task developer and attribution checks). Validation errors
-without a SQL-backed reason omit the key.
+`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`
+(people, including unknown task developer ids). Validation errors without a SQL-backed reason omit the key.
 The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
 `reason` appears only when the API provides one.
 
@@ -79,32 +77,13 @@ effective carried value; `stored_progress` is `null` when that week has no store
 have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
 monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
 
-Each week cell also carries an `attributions` array (empty when none): per-person `planned_hours`
-and `spent_hours` splits for that week. On the first save of a task-week row, if the task has
-developers and that week has no attribution rows, the full planned and spent hours are automatically
-attributed to the lowest-`person_id` developer. Updates to the week never rebalance an existing
-attribution, and deleting an allocation does not resurrect it on later saves. Allocations are
-informational splits; their sums are not enforced against the week totals.
-
-Attributions are editable per task-week+person via
-`PUT /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}` with body
-`{"planned_hours": <hours>, "spent_hours": <hours>, "unlock": <bool>}` and removed via
-`DELETE /api/v1/tasks/{id}/weeks/{weekStart}/developers/{personId}` (which accepts `?unlock=true`).
-Both apply the same gates as weekly writes (past-month lock unless `unlock`, idea-task `400`
-`idea-task-not-assignable`, week outside the project `400` `week-outside-project-bounds`, missing
-task `404`). The `PUT` endpoint also requires the person to be on the task: unknown person `404`
-`person-not-found`, and a person not assigned to the task `400` `person-not-on-task`. `DELETE` does
-not check membership — it clears the allocation by task/week/person if present (`404 allocation not
-found` otherwise), so allocations left behind after a developer is removed stay cleanable. The `pmctl` commands
-`update-task-week-developer <task-id> <week-start> <person-id> --planned-hours --spent-hours [--unlock]`
-and `clear-task-week-developer <task-id> <week-start> <person-id> [--unlock]` wrap these endpoints.
-
-Task developers are real people. Creates send `developer_ids`; reads resolve them into a
-`developers` array of `{"id","name"}` objects (empty array when none). Updates are presence-driven:
-an omitted `developer_ids` preserves the current developers, while `"developer_ids": []` or
-`"developer_ids": null` both clear them and `"developer_ids": [<ids>]` replaces the set. Unknown
-person ids return `404` with `person-not-found`; duplicate ids return `400 duplicate developer`;
-reassigning developers never conflicts with weekly data.
+Task developers are real people. Creates send `developer_ids`; task detail
+`GET /api/v1/tasks/{id}` embeds them as a `developers` array of `{"id","name","weekly_capacity"}`
+objects, while task list responses omit `developers`. Updates are presence-driven: an omitted
+`developer_ids` preserves the current developers, `"developer_ids": []` or `"developer_ids": null`
+both clear them, and `"developer_ids": [<ids>]` replaces the set. Unknown person ids return `404`
+with `person-not-found`; duplicate ids return `400 duplicate developer`; reassigning developers
+never conflicts with weekly data.
 
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
 `project name already exists`. Deleting a referenced project, subproject, or task, or moving a
@@ -114,12 +93,8 @@ Assigning to a missing project or subproject returns `404`; a subproject from an
 
 People are listed under `/api/v1/people` with the same create/get/update/delete shape as projects.
 Person names are case-insensitively unique; duplicates return `409` with `person-name-taken`.
-A person's weekly capacity defaults to `40` when `weekly_capacity` is omitted on create. Per-week
-availability overrides live under `/api/v1/people/{id}/overrides`: `GET` lists them, `PUT .../{weekStart}`
-with `{"capacity": <hours>}` upserts one (the `weekStart` must be a Monday, and the person must exist,
-else `404 person-not-found`), and `DELETE .../{weekStart}` clears it. An override wins over the default
-capacity for its week; clearing it restores the default. Deleting a person that still has overrides
-returns `409` with `record is still used by other data`.
+A person's weekly capacity defaults to `40` when `weekly_capacity` is omitted on create.
+Deleting a person still assigned to a task returns `409` with `record is still used by other data`.
 
 ## Stack
 
@@ -198,9 +173,6 @@ pmctl tasks update 12 --clear-developers
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
 pmctl people list
 pmctl people create --name "Ada" --weekly-capacity 32
-pmctl people overrides set 3 2026-09-07 --capacity 20
-pmctl update-task-week-developer 12 2026-09-21 3 --planned-hours 5 --spent-hours 2
-pmctl clear-task-week-developer 12 2026-09-21 3
 ```
 
 ## Layout

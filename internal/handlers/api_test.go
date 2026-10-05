@@ -103,15 +103,16 @@ func TestJSONTaskAndWeek(t *testing.T) {
 	var tk struct {
 		ID         int64 `json:"id"`
 		Developers []struct {
-			ID   int64  `json:"id"`
-			Name string `json:"name"`
+			ID             int64   `json:"id"`
+			Name           string  `json:"name"`
+			WeeklyCapacity float64 `json:"weekly_capacity"`
 		} `json:"developers"`
 		Priority string `json:"priority"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
 		t.Fatal(err)
 	}
-	if len(tk.Developers) != 1 || tk.Developers[0].ID != personID || tk.Developers[0].Name != "Ada" || tk.Priority != "high" {
+	if len(tk.Developers) != 1 || tk.Developers[0].ID != personID || tk.Developers[0].Name != "Ada" || tk.Developers[0].WeeklyCapacity != 40 || tk.Priority != "high" {
 		t.Fatalf("got %#v", tk)
 	}
 
@@ -187,12 +188,16 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`,"developer_ids":[`+strconv.FormatInt(ada, 10)+`]}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10)
 	developers := func(rr *httptest.ResponseRecorder) []struct {
-		ID int64 `json:"id"`
+		ID             int64   `json:"id"`
+		Name           string  `json:"name"`
+		WeeklyCapacity float64 `json:"weekly_capacity"`
 	} {
 		t.Helper()
 		var body struct {
 			Developers []struct {
-				ID int64 `json:"id"`
+				ID             int64   `json:"id"`
+				Name           string  `json:"name"`
+				WeeklyCapacity float64 `json:"weekly_capacity"`
 			} `json:"developers"`
 		}
 		if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
@@ -203,7 +208,7 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(grace, 10)+`]}`))))
-	if rr.Code != http.StatusOK || len(developers(rr)) != 1 || developers(rr)[0].ID != grace {
+	if rr.Code != http.StatusOK || len(developers(rr)) != 1 || developers(rr)[0].ID != grace || developers(rr)[0].Name != "Grace" || developers(rr)[0].WeeklyCapacity != 40 {
 		t.Fatalf("replace developers: %d %s", rr.Code, rr.Body.String())
 	}
 
@@ -217,6 +222,30 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":null}`))))
 	if rr.Code != http.StatusOK || len(developers(rr)) != 0 {
 		t.Fatalf("null clears developers: %d %s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`"developers":[]`)) {
+		t.Fatalf("detail with no developers must render developers:[]: %s", rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(projID, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list tasks: %d %s", rr.Code, rr.Body.String())
+	}
+	var list struct {
+		Tasks []struct {
+			Developers []struct {
+				ID int64 `json:"id"`
+			} `json:"developers"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range list.Tasks {
+		if item.Developers != nil {
+			t.Fatalf("task list must omit developers: %#v", item.Developers)
+		}
 	}
 
 	rr = httptest.NewRecorder()
@@ -235,139 +264,6 @@ func TestJSONTaskRejectsOldDevelopersString(t *testing.T) {
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"Old","developers":"Ada"}`))))
 	assertAPIError(t, rr, http.StatusBadRequest, "invalid json", "")
-}
-
-func TestJSONAttributionWire(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
-	projID := createProject(t, mux, "Alpha", start)
-	personID := createPerson(t, mux, "Ada")
-	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`,"developer_ids":[`+strconv.FormatInt(personID, 10)+`]}`))
-	week := start.Format(time.DateOnly)
-	weekPath := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + week
-
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath, bytes.NewReader([]byte(`{"planned_hours":8,"spent_hours":3}`))))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("save week: %d %s", rr.Code, rr.Body.String())
-	}
-	var cell struct {
-		Attributions []struct {
-			PersonID     int64   `json:"person_id"`
-			PlannedHours float64 `json:"planned_hours"`
-			SpentHours   float64 `json:"spent_hours"`
-		} `json:"attributions"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &cell); err != nil {
-		t.Fatal(err)
-	}
-	if len(cell.Attributions) != 1 || cell.Attributions[0].PersonID != personID || cell.Attributions[0].PlannedHours != 8 || cell.Attributions[0].SpentHours != 3 {
-		t.Fatalf("unexpected auto attributions: %#v", cell.Attributions)
-	}
-
-	attributionPath := weekPath + "/developers/" + strconv.FormatInt(personID, 10)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, attributionPath, bytes.NewReader([]byte(`{"planned_hours":5,"spent_hours":2}`))))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("put attribution: %d %s", rr.Code, rr.Body.String())
-	}
-	taskPath := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, taskPath, nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("get task: %d %s", rr.Code, rr.Body.String())
-	}
-	var task struct {
-		Weeks []struct {
-			WeekStart    string `json:"week_start"`
-			Attributions []struct {
-				PersonID     int64   `json:"person_id"`
-				PlannedHours float64 `json:"planned_hours"`
-				SpentHours   float64 `json:"spent_hours"`
-			} `json:"attributions"`
-		} `json:"weeks"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &task); err != nil {
-		t.Fatal(err)
-	}
-	var found bool
-	for _, w := range task.Weeks {
-		if w.WeekStart == week {
-			found = true
-			if len(w.Attributions) != 1 || w.Attributions[0].PersonID != personID || w.Attributions[0].PlannedHours != 5 || w.Attributions[0].SpentHours != 2 {
-				t.Fatalf("unexpected attributions: %#v", w.Attributions)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("missing attributed week: %#v", task.Weeks)
-	}
-
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath+"/developers/999", bytes.NewReader([]byte(`{"planned_hours":1}`))))
-	assertAPIError(t, rr, http.StatusNotFound, "person not found", "person-not-found")
-
-	other := createPerson(t, mux, "Grace")
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath+"/developers/"+strconv.FormatInt(other, 10), bytes.NewReader([]byte(`{"planned_hours":1}`))))
-	assertAPIError(t, rr, http.StatusBadRequest, "person is not assigned to this task", "person-not-on-task")
-
-	// Add Grace to the task, attribute to her, then remove her: DELETE still works, PUT does not.
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, taskPath, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(personID, 10)+`,`+strconv.FormatInt(other, 10)+`]}`))))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("add developer: %d %s", rr.Code, rr.Body.String())
-	}
-	otherAttributionPath := weekPath + "/developers/" + strconv.FormatInt(other, 10)
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, otherAttributionPath, bytes.NewReader([]byte(`{"planned_hours":2,"spent_hours":1}`))))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("put Grace attribution: %d %s", rr.Code, rr.Body.String())
-	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, taskPath, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(personID, 10)+`]}`))))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("remove developer: %d %s", rr.Code, rr.Body.String())
-	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, otherAttributionPath, bytes.NewReader([]byte(`{"planned_hours":1}`))))
-	assertAPIError(t, rr, http.StatusBadRequest, "person is not assigned to this task", "person-not-on-task")
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, otherAttributionPath, nil))
-	if rr.Code != http.StatusNoContent {
-		t.Fatalf("delete removed-developer attribution: %d %s", rr.Code, rr.Body.String())
-	}
-
-	historical := weekly.MondayOnOrBefore(start.AddDate(0, -2, 0))
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+historical.Format(time.DateOnly)+"/developers/"+strconv.FormatInt(personID, 10), bytes.NewReader([]byte(`{"planned_hours":1}`))))
-	assertAPIError(t, rr, http.StatusForbidden, "historical editing is not enabled", "")
-
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, attributionPath, nil))
-	if rr.Code != http.StatusNoContent {
-		t.Fatalf("delete attribution: %d %s", rr.Code, rr.Body.String())
-	}
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, taskPath, nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("get task after clear: %d %s", rr.Code, rr.Body.String())
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &task); err != nil {
-		t.Fatal(err)
-	}
-	for _, w := range task.Weeks {
-		if w.WeekStart == week && len(w.Attributions) != 0 {
-			t.Fatalf("attributions not cleared: %#v", w.Attributions)
-		}
-	}
-
-	ideaID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Idea","developer_ids":[`+strconv.FormatInt(personID, 10)+`]}`))
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(ideaID, 10)+"/weeks/"+week+"/developers/"+strconv.FormatInt(personID, 10), bytes.NewReader([]byte(`{"planned_hours":1}`))))
-	assertAPIError(t, rr, http.StatusBadRequest, "ideas cannot be planned", "idea-task-not-assignable")
 }
 
 func TestHTMLWeekEditPersists(t *testing.T) {

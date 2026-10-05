@@ -217,17 +217,6 @@ func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in w
 	var v weekly.Cell
 	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d/weeks/%s", id, url.PathEscape(week)), in, &v)
 }
-func (c *Client) UpdateTaskWeekDeveloper(ctx context.Context, taskID int64, week string, personID int64, in weekly.AttributionPatch) (weekly.DeveloperAllocation, error) {
-	var v weekly.DeveloperAllocation
-	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/tasks/%d/weeks/%s/developers/%d", taskID, url.PathEscape(week), personID), in, &v)
-}
-func (c *Client) ClearTaskWeekDeveloper(ctx context.Context, taskID int64, week string, personID int64, unlock bool) error {
-	path := fmt.Sprintf("/api/v1/tasks/%d/weeks/%s/developers/%d", taskID, url.PathEscape(week), personID)
-	if unlock {
-		path += "?unlock=true"
-	}
-	return c.DoNoBody(ctx, http.MethodDelete, path, (*struct{})(nil))
-}
 func (c *Client) SCurve(ctx context.Context, id int64) (project.SCurve, error) {
 	var v project.SCurve
 	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d/s-curve", id), &v)
@@ -251,17 +240,4 @@ func (c *Client) UpdatePerson(ctx context.Context, id int64, in person.Patch) (p
 }
 func (c *Client) DeletePerson(ctx context.Context, id int64) error {
 	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/people/%d", id), (*struct{})(nil))
-}
-func (c *Client) PersonOverrides(ctx context.Context, id int64) (person.OverridesResponse, error) {
-	var v person.OverridesResponse
-	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/people/%d/overrides", id), &v)
-}
-func (c *Client) SetPersonOverride(ctx context.Context, id int64, week string, capacity float64) (person.Override, error) {
-	var v person.Override
-	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/people/%d/overrides/%s", id, url.PathEscape(week)), struct {
-		Capacity float64 `json:"capacity"`
-	}{Capacity: capacity}, &v)
-}
-func (c *Client) ClearPersonOverride(ctx context.Context, id int64, week string) error {
-	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/people/%d/overrides/%s", id, url.PathEscape(week)), (*struct{})(nil))
 }

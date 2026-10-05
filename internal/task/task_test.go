@@ -262,7 +262,7 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 func TestCreateAssignsDevelopers(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	p, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	p, err := person.Create(ctx, q, person.Input{Name: "Ada", WeeklyCapacity: new(32.0)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestCreateAssignsDevelopers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Developers) != 1 || got.Developers[0].ID != p.ID || got.Developers[0].Name != "Ada" {
+	if len(got.Developers) != 1 || got.Developers[0].ID != p.ID || got.Developers[0].Name != "Ada" || got.Developers[0].WeeklyCapacity != 32 {
 		t.Fatalf("unexpected developers: %#v", got.Developers)
 	}
 }
@@ -283,7 +283,7 @@ func TestCreateRejectsUnknownDeveloper(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
 	_, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{999}})
-	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Message != "person not found" {
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Reason != "person-not-found" || httpErr.Message != "person not found" {
 		t.Fatalf("expected person not found, got %v", err)
 	}
 	items, err := task.List(ctx, q)
@@ -354,14 +354,10 @@ func TestUpdateDeveloperReplaceClearPreserve(t *testing.T) {
 	}
 }
 
-func TestListResolvesDevelopers(t *testing.T) {
+func TestListOmitsDevelopers(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
-	ada, err := person.Create(ctx, q, person.Input{Name: "Ada"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	grace, err := person.Create(ctx, q, person.Input{Name: "Grace"})
+	ada, err := person.Create(ctx, q, person.Input{Name: "Ada", WeeklyCapacity: new(32.0)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,33 +365,50 @@ func TestListResolvesDevelopers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := task.Create(ctx, q, task.Input{Name: "Second", DeveloperIDs: []int64{ada.ID, grace.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	empty, err := task.Create(ctx, q, task.Input{Name: "Empty"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	items, err := task.List(ctx, q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 3 {
+	if len(items) != 1 {
 		t.Fatalf("got %d tasks: %#v", len(items), items)
 	}
-	byID := make(map[int64]task.Task, len(items))
-	for _, item := range items {
-		byID[item.ID] = item
+	if items[0].Developers != nil {
+		t.Fatalf("list must omit developers: %#v", items[0].Developers)
 	}
-	if got := byID[first.ID]; len(got.Developers) != 1 || got.Developers[0].Name != "Ada" {
-		t.Fatalf("first developers: %#v", got.Developers)
+	got, err := task.Get(ctx, q, first.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := byID[second.ID]; len(got.Developers) != 2 {
-		t.Fatalf("second developers: %#v", got.Developers)
+	if len(got.Developers) != 1 || got.Developers[0].ID != ada.ID || got.Developers[0].Name != "Ada" || got.Developers[0].WeeklyCapacity != 32 {
+		t.Fatalf("detail developers: %#v", got.Developers)
 	}
-	if got := byID[empty.ID]; got.Developers == nil {
-		t.Fatalf("empty developers should be a non-nil slice: %#v", got.Developers)
+}
+
+func TestUpdateRejectsDuplicateDeveloperKeepsSet(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	a, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := person.Create(ctx, q, person.Input{Name: "Grace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{a.ID, b.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.Update(ctx, q, tk.ID, task.Patch{DeveloperIDs: nullable.Present([]int64{a.ID, a.ID})})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "duplicate developer" {
+		t.Fatalf("expected duplicate developer, got %v", err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 2 {
+		t.Fatalf("rejected update changed the developer set: %#v", got.Developers)
 	}
 }
 
@@ -420,43 +433,5 @@ func TestDeletePersonReferencedByTaskIsConflict(t *testing.T) {
 	}
 	if got.ID != p.ID {
 		t.Fatalf("rejected delete removed the person: %#v", got)
-	}
-}
-
-func TestGetIncludesWeekAttributions(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(100.0), StartDate: "2026-01-05", EndDate: "2026-06-01"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	dev, err := person.Create(ctx, q, person.Input{Name: "Ada"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tk, err := task.Create(ctx, q, task.Input{Name: "T", ProjectID: &p.ID, DeveloperIDs: []int64{dev.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	planned, spent := 8.0, 3.0
-	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-01-05"), weekly.Patch{PlannedHours: nullable.Present(planned), SpentHours: nullable.Present(spent)}, now); err != nil {
-		t.Fatal(err)
-	}
-	got, err := task.Get(ctx, q, tk.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var found bool
-	for _, week := range got.Weeks {
-		if week.WeekStart.String() == "2026-01-05" {
-			found = true
-			if len(week.Attributions) != 1 || week.Attributions[0].PersonID != dev.ID || week.Attributions[0].Name != "Ada" || week.Attributions[0].PlannedHours != planned || week.Attributions[0].SpentHours != spent {
-				t.Fatalf("unexpected attributions: %#v", week.Attributions)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("missing attributed week: %#v", got.Weeks)
 	}
 }

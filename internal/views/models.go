@@ -4,7 +4,6 @@ import (
 	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
-	"cad-development/internal/weekly"
 )
 
 type TaskFormData struct {
@@ -73,10 +72,7 @@ type PeoplePageData struct {
 type PersonFormData struct {
 	Action       string
 	Title        string
-	Context      string
-	PersonID     int64
 	Person       PersonFormValues
-	Overrides    []person.Override
 	Error        string
 	DeleteAction string
 }
@@ -93,7 +89,6 @@ type TaskPanelData struct {
 	Priority   string
 	Notes      string
 	Desc       string
-	Weeks      []weekly.Cell
 	Error      string
 	EditPath   string
 	DeletePath string

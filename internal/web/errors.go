@@ -38,7 +38,6 @@ var reasonErrors = map[string]string{
 	"task-has-weekly-data":              "cannot reassign task with weekly data",
 	"person-name-taken":                 "person name already exists",
 	"person-not-found":                  "person not found",
-	"person-not-on-task":                "person is not assigned to this task",
 }
 
 // HTTPErrorFromReason converts a conflict row's status and machine reason code into an HTTPError.

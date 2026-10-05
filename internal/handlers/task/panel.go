@@ -66,13 +66,12 @@ func taskPanelData(r *http.Request, q *db.Queries, t task.Task) (views.TaskPanel
 		Priority:   t.Priority,
 		Notes:      t.ImplementationNotes,
 		Desc:       t.Description,
-		Weeks:      t.Weeks,
 		EditPath:   "/tasks/" + id + "/edit",
 		DeletePath: "/tasks/" + id + "/delete",
 	}, nil
 }
 
-func joinedNames(people []person.Ref) string {
+func joinedNames(people []person.Person) string {
 	names := make([]string, 0, len(people))
 	for _, p := range people {
 		names = append(names, p.Name)

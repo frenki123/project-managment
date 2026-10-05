@@ -47,30 +47,12 @@ CREATE TABLE people (
     weekly_capacity REAL NOT NULL DEFAULT 40 CHECK (weekly_capacity >= 0)
 );
 
-CREATE TABLE person_week_overrides (
-    person_id INTEGER NOT NULL REFERENCES people (id),
-    week_start TEXT NOT NULL,
-    capacity REAL NOT NULL CHECK (capacity >= 0),
-    PRIMARY KEY (person_id, week_start)
-);
-
 CREATE TABLE task_developers (
-    task_id INTEGER NOT NULL REFERENCES tasks (id),
+    task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
     person_id INTEGER NOT NULL REFERENCES people (id),
     PRIMARY KEY (task_id, person_id)
 );
 CREATE INDEX idx_task_developers_person ON task_developers (person_id);
-
-CREATE TABLE task_week_developers (
-    task_id INTEGER NOT NULL,
-    week_start TEXT NOT NULL,
-    person_id INTEGER NOT NULL REFERENCES people (id),
-    planned_hours REAL NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
-    spent_hours REAL NOT NULL DEFAULT 0 CHECK (spent_hours >= 0),
-    PRIMARY KEY (task_id, week_start, person_id),
-    FOREIGN KEY (task_id, week_start) REFERENCES task_weeks (task_id, week_start)
-);
-CREATE INDEX idx_task_week_developers_person ON task_week_developers (person_id);
 
 ALTER TABLE tasks DROP COLUMN developers;
 
@@ -152,9 +134,7 @@ DROP VIEW IF EXISTS v_task_week_series;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;
 DROP VIEW IF EXISTS v_task_totals;
-DROP TABLE IF EXISTS task_week_developers;
 DROP TABLE IF EXISTS task_developers;
-DROP TABLE person_week_overrides;
 DROP TABLE people;
 DROP TABLE task_weeks;
 DROP TABLE tasks;
