@@ -88,9 +88,10 @@ func TestJSONTaskAndWeek(t *testing.T) {
 
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projID := createProject(t, mux, "Alpha", start)
+	personID := createPerson(t, mux, "Ada")
 
 	// Keep this map to pin the request wire shape independently of domain types.
-	taskBody, err := json.Marshal(map[string]any{"name": "Do work", "project_id": projID, "developers": "Ada", "priority": "high"})
+	taskBody, err := json.Marshal(map[string]any{"name": "Do work", "project_id": projID, "developer_ids": []int64{personID}, "priority": "high"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,14 +101,18 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatalf("create task %d %s", rr.Code, rr.Body.String())
 	}
 	var tk struct {
-		ID         int64  `json:"id"`
-		Developers string `json:"developers"`
-		Priority   string `json:"priority"`
+		ID         int64 `json:"id"`
+		Developers []struct {
+			ID             int64   `json:"id"`
+			Name           string  `json:"name"`
+			WeeklyCapacity float64 `json:"weekly_capacity"`
+		} `json:"developers"`
+		Priority string `json:"priority"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &tk); err != nil {
 		t.Fatal(err)
 	}
-	if tk.Developers != "Ada" || tk.Priority != "high" {
+	if len(tk.Developers) != 1 || tk.Developers[0].ID != personID || tk.Developers[0].Name != "Ada" || tk.Developers[0].WeeklyCapacity != 40 || tk.Priority != "high" {
 		t.Fatalf("got %#v", tk)
 	}
 
@@ -169,6 +174,75 @@ func TestJSONTaskAndWeek(t *testing.T) {
 		t.Fatalf("unknown task status: got %d", rr.Code)
 	}
 
+}
+
+func TestJSONTaskDevelopersWire(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	projID := createProject(t, mux, "Alpha", start)
+	ada := createPerson(t, mux, "Ada")
+
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`,"developer_ids":[`+strconv.FormatInt(ada, 10)+`]}`))
+	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10)
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(projID, 10), nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list tasks: %d %s", rr.Code, rr.Body.String())
+	}
+	var list struct {
+		Tasks []struct {
+			ID         int64 `json:"id"`
+			Developers []struct {
+				ID int64 `json:"id"`
+			} `json:"developers"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Tasks) != 1 || list.Tasks[0].ID != taskID {
+		t.Fatalf("list tasks = %#v", list.Tasks)
+	}
+	if list.Tasks[0].Developers != nil {
+		t.Fatalf("task list must omit developers: %#v", list.Tasks[0].Developers)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[999]}`))))
+	assertAPIError(t, rr, http.StatusNotFound, "person not found", "person-not-found")
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(ada, 10)+`,`+strconv.FormatInt(ada, 10)+`]}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "duplicate developer", "")
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get task after duplicate %d %s", rr.Code, rr.Body.String())
+	}
+	var after struct {
+		Developers []struct {
+			ID int64 `json:"id"`
+		} `json:"developers"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Developers) != 1 || after.Developers[0].ID != ada {
+		t.Fatalf("duplicate request changed stored developers: %#v", after.Developers)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[]}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("clear developers %d %s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`"developers":[]`)) {
+		t.Fatalf("detail with no developers must render developers:[]: %s", rr.Body.String())
+	}
 }
 
 func TestHTMLWeekEditPersists(t *testing.T) {
@@ -284,7 +358,7 @@ func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
 		"description":          {""},
 		"implementation_notes": {""},
 		"department":           {""},
-		"developers":           {""},
+		"developer_ids":        {},
 		"priority":             {""},
 		"project_id":           {strconv.FormatInt(projectID, 10)},
 		"subproject_id":        {""},
@@ -657,6 +731,55 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
 	if err != nil || row.Progress.Valid {
 		t.Fatalf("progress null should clear stored progress: %#v %v", row, err)
+	}
+}
+
+func TestJSONNullRequiredNumbers(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	pid := createProject(t, mux, "P", start)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	personID := createPerson(t, mux, "Ada")
+
+	personPath := "/api/v1/people/" + strconv.FormatInt(personID, 10)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, personPath, bytes.NewReader([]byte(`{"weekly_capacity":null}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "weekly capacity cannot be null", "")
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, personPath, nil))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`"weekly_capacity":40`)) {
+		t.Fatalf("null capacity changed stored person: %s", rr.Body.String())
+	}
+
+	weekPath := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath, bytes.NewReader([]byte(`{"planned_hours":null,"progress":50}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "planned hours cannot be null", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath, bytes.NewReader([]byte(`{"spent_hours":null,"progress":50}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "spent hours cannot be null", "")
+	if _, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)}); err == nil {
+		t.Fatal("null hours persisted a week row")
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, personPath, bytes.NewReader([]byte(`{"weekly_capacity":0}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("zero capacity %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, personPath, nil))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`"weekly_capacity":0`)) {
+		t.Fatalf("zero capacity not stored: %s", rr.Body.String())
+	}
+
+	putJSON(t, mux, weekPath, `{"planned_hours":0}`, http.StatusOK)
+	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+	if err != nil || row.PlannedHours != 0 {
+		t.Fatalf("zero planned_hours not stored: %#v %v", row, err)
 	}
 }
 

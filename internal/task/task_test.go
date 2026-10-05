@@ -11,6 +11,7 @@ import (
 	"cad-development/internal/db"
 	"cad-development/internal/db/testkit"
 	"cad-development/internal/nullable"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -171,6 +172,30 @@ func TestDeleteRejectsWeeklyHistory(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskWithDevelopersSucceeds(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "Project", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", ProjectID: &p.ID, DeveloperIDs: []int64{dev.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := task.Delete(ctx, q, tk.ID); err != nil {
+		t.Fatalf("delete with developers failed: %v", err)
+	}
+	_, err = task.Get(ctx, q, tk.ID)
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Message != "task not found" {
+		t.Fatalf("deleted task still readable: %v", err)
+	}
+}
+
 func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)
@@ -231,5 +256,182 @@ func TestListTaskTotalsOnlyAggregatesRequestedScope(t *testing.T) {
 		if !slices.Equal(ids, tc.ids) {
 			t.Fatalf("%s included unrelated tasks: %v", tc.name, ids)
 		}
+	}
+}
+
+func TestCreateAssignsDevelopers(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := person.Create(ctx, q, person.Input{Name: "Ada", WeeklyCapacity: new(32.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{p.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 1 || got.Developers[0].ID != p.ID || got.Developers[0].Name != "Ada" || got.Developers[0].WeeklyCapacity != 32 {
+		t.Fatalf("unexpected developers: %#v", got.Developers)
+	}
+}
+
+func TestCreateRejectsUnknownDeveloper(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	_, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{999}})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusNotFound || httpErr.Reason != "person-not-found" || httpErr.Message != "person not found" {
+		t.Fatalf("expected person not found, got %v", err)
+	}
+	items, err := task.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("rejected create persisted a task: %#v", items)
+	}
+}
+
+func TestCreateRejectsDuplicateDeveloper(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{p.ID, p.ID}})
+	var httpErr web.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusBadRequest || httpErr.Message != "duplicate developer" {
+		t.Fatalf("expected duplicate developer, got %v", err)
+	}
+	items, err := task.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("rejected create persisted a task: %#v", items)
+	}
+}
+
+func TestUpdateDeveloperReplaceClearPreserve(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	a, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := person.Create(ctx, q, person.Input{Name: "Grace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{a.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := task.Update(ctx, q, tk.ID, task.Patch{DeveloperIDs: nullable.Present([]int64{b.ID})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 1 || got.Developers[0].ID != b.ID {
+		t.Fatalf("replace failed: %#v", got.Developers)
+	}
+	got, err = task.Update(ctx, q, tk.ID, task.Patch{Name: nullable.Present("Renamed")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Renamed" || len(got.Developers) != 1 || got.Developers[0].ID != b.ID {
+		t.Fatalf("name-only update changed developers: %#v", got)
+	}
+	got, err = task.Update(ctx, q, tk.ID, task.Patch{DeveloperIDs: nullable.Clear[[]int64]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 0 {
+		t.Fatalf("clear failed: %#v", got.Developers)
+	}
+}
+
+func TestListOmitsDevelopers(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	ada, err := person.Create(ctx, q, person.Input{Name: "Ada", WeeklyCapacity: new(32.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := task.Create(ctx, q, task.Input{Name: "First", DeveloperIDs: []int64{ada.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := task.List(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("got %d tasks: %#v", len(items), items)
+	}
+	if items[0].Developers != nil {
+		t.Fatalf("list must omit developers: %#v", items[0].Developers)
+	}
+	got, err := task.Get(ctx, q, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 1 || got.Developers[0].ID != ada.ID || got.Developers[0].Name != "Ada" || got.Developers[0].WeeklyCapacity != 32 {
+		t.Fatalf("detail developers: %#v", got.Developers)
+	}
+}
+
+func TestUpdateRejectsDuplicateDeveloperKeepsSet(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	a, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := person.Create(ctx, q, person.Input{Name: "Grace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{a.ID, b.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = task.Update(ctx, q, tk.ID, task.Patch{DeveloperIDs: nullable.Present([]int64{a.ID, a.ID})})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "duplicate developer" {
+		t.Fatalf("expected duplicate developer, got %v", err)
+	}
+	got, err := task.Get(ctx, q, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Developers) != 2 {
+		t.Fatalf("rejected update changed the developer set: %#v", got.Developers)
+	}
+}
+
+func TestDeletePersonReferencedByTaskIsConflict(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := person.Create(ctx, q, person.Input{Name: "Ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Create(ctx, q, task.Input{Name: "Task", DeveloperIDs: []int64{p.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := person.Delete(ctx, q, p.ID); err == nil {
+		t.Fatal("expected delete to be rejected")
+	} else if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Message != "record is still used by other data" {
+		t.Fatalf("unexpected delete error: %v", err)
+	}
+	got, err := person.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != p.ID {
+		t.Fatalf("rejected delete removed the person: %#v", got)
 	}
 }

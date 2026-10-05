@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"cad-development/internal/client"
 	"cad-development/internal/subproject"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,7 @@ func subprojectCommands(s *commandState) *cobra.Command {
 	}}
 	list.Flags().StringVar(&projectName, "project", "", "filter by project name")
 	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project ID")
-	root.AddCommand(list, getCommand(s, s.client.Subproject), subprojectCommand("create", s, false), subprojectCommand("update <id>", s, true), deleteCommand("delete", "subproject", s, func(ctx context.Context, id int64) error { return s.client.DeleteSubproject(ctx, id) }))
+	root.AddCommand(list, getCommand(s, (*client.Client).Subproject), subprojectCommand("create", s, false), subprojectCommand("update <id>", s, true), deleteCommand("delete", "subproject", s, func(ctx context.Context, id int64) error { return s.client.DeleteSubproject(ctx, id) }))
 	return root
 }
 

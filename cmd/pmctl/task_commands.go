@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"cad-development/internal/client"
 	"cad-development/internal/task"
 	"github.com/spf13/cobra"
 )
@@ -33,14 +34,16 @@ func taskCommands(s *commandState) *cobra.Command {
 	list.Flags().Int64Var(&projectID, "project-id", 0, "filter by project ID")
 	list.Flags().StringVar(&subprojectName, "subproject", "", "filter by subproject name within the project")
 	list.Flags().Int64Var(&subprojectID, "subproject-id", 0, "filter by subproject ID")
-	root.AddCommand(list, getCommand(s, s.client.Task), taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
+	root.AddCommand(list, getCommand(s, (*client.Client).Task), taskCommand("create", s, false), taskCommand("update <id>", s, true), deleteCommand("delete", "task", s, func(ctx context.Context, id int64) error { return s.client.DeleteTask(ctx, id) }))
 	return root
 }
 
 type taskFlags struct {
-	name, description, notes, department, developers, priority string
-	projectID, subprojectID                                    int64
-	ideas                                                      bool
+	name, description, notes, department, priority string
+	developerIDs                                   []int64
+	projectID, subprojectID                        int64
+	clearDevelopers                                bool
+	ideas                                          bool
 }
 
 func (f *taskFlags) addFlags(c *cobra.Command) {
@@ -48,7 +51,8 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 	c.Flags().StringVar(&f.description, "description", "", "task description")
 	c.Flags().StringVar(&f.notes, "implementation-notes", "", "task implementation notes")
 	c.Flags().StringVar(&f.department, "department", "", "relevant department")
-	c.Flags().StringVar(&f.developers, "developers", "", "developer or developers")
+	c.Flags().Int64SliceVar(&f.developerIDs, "developer-id", nil, "developer person ID (repeatable)")
+	c.Flags().BoolVar(&f.clearDevelopers, "clear-developers", false, "remove all developers on update")
 	c.Flags().StringVar(&f.priority, "priority", "", "task priority")
 	c.Flags().Int64Var(&f.projectID, "project-id", 0, "project ID")
 	c.Flags().Int64Var(&f.subprojectID, "subproject-id", 0, "subproject ID")
@@ -58,7 +62,7 @@ func (f *taskFlags) addFlags(c *cobra.Command) {
 func taskInput(cmd *cobra.Command, f taskFlags) task.Input {
 	in := task.Input{
 		Name: f.name, Description: f.description, ImplementationNotes: f.notes,
-		Department: f.department, Developers: f.developers, Priority: f.priority,
+		Department: f.department, DeveloperIDs: f.developerIDs, Priority: f.priority,
 		ProjectID:    opt(cmd, "project-id", f.projectID).Value,
 		SubprojectID: opt(cmd, "subproject-id", f.subprojectID).Value,
 	}

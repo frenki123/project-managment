@@ -3,11 +3,14 @@ package task
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/person"
 	"cad-development/internal/web"
 	"cad-development/internal/weekly"
 )
@@ -18,7 +21,7 @@ type Task struct {
 	Description         string        `json:"description"`
 	ImplementationNotes string        `json:"implementation_notes"`
 	Department          string        `json:"department"`
-	Developers          string        `json:"developers"`
+	Developers          []person.Person `json:"developers,omitzero"`
 	Priority            string        `json:"priority"`
 	ProjectID           *int64        `json:"project_id"`
 	SubprojectID        *int64        `json:"subproject_id"`
@@ -44,25 +47,25 @@ func Status(progress float64) string {
 }
 
 type Input struct {
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	ImplementationNotes string `json:"implementation_notes"`
-	Department          string `json:"department"`
-	Developers          string `json:"developers"`
-	Priority            string `json:"priority"`
-	ProjectID           *int64 `json:"project_id"`
-	SubprojectID        *int64 `json:"subproject_id"`
+	Name                string  `json:"name"`
+	Description         string  `json:"description"`
+	ImplementationNotes string  `json:"implementation_notes"`
+	Department          string  `json:"department"`
+	DeveloperIDs        []int64 `json:"developer_ids"`
+	Priority            string  `json:"priority"`
+	ProjectID           *int64  `json:"project_id"`
+	SubprojectID        *int64  `json:"subproject_id"`
 }
 
 type Patch struct {
-	Name                nullable.Optional[string] `json:"name,omitzero"`
-	Description         nullable.Optional[string] `json:"description,omitzero"`
-	ImplementationNotes nullable.Optional[string] `json:"implementation_notes,omitzero"`
-	Department          nullable.Optional[string] `json:"department,omitzero"`
-	Developers          nullable.Optional[string] `json:"developers,omitzero"`
-	Priority            nullable.Optional[string] `json:"priority,omitzero"`
-	ProjectID           nullable.Optional[*int64] `json:"project_id,omitzero"`
-	SubprojectID        nullable.Optional[*int64] `json:"subproject_id,omitzero"`
+	Name                nullable.Optional[string]  `json:"name,omitzero"`
+	Description         nullable.Optional[string]  `json:"description,omitzero"`
+	ImplementationNotes nullable.Optional[string]  `json:"implementation_notes,omitzero"`
+	Department          nullable.Optional[string]  `json:"department,omitzero"`
+	DeveloperIDs        nullable.Optional[[]int64] `json:"developer_ids,omitzero"`
+	Priority            nullable.Optional[string]  `json:"priority,omitzero"`
+	ProjectID           nullable.Optional[*int64]  `json:"project_id,omitzero"`
+	SubprojectID        nullable.Optional[*int64]  `json:"subproject_id,omitzero"`
 }
 
 func PatchFromInput(in Input) Patch {
@@ -71,7 +74,7 @@ func PatchFromInput(in Input) Patch {
 		Description:         nullable.Present(in.Description),
 		ImplementationNotes: nullable.Present(in.ImplementationNotes),
 		Department:          nullable.Present(in.Department),
-		Developers:          nullable.Present(in.Developers),
+		DeveloperIDs:        nullable.Present(in.DeveloperIDs),
 		Priority:            nullable.Present(in.Priority),
 		ProjectID:           nullable.Present(in.ProjectID),
 		SubprojectID:        nullable.Present(in.SubprojectID),
@@ -89,7 +92,6 @@ func FromDB(t db.Task) Task {
 		Description:         t.Description,
 		ImplementationNotes: t.ImplementationNotes,
 		Department:          t.Department,
-		Developers:          t.Developers,
 		Priority:            t.Priority,
 	}
 	out.ProjectID = nullable.Int64Pointer(t.ProjectID)
@@ -97,12 +99,28 @@ func FromDB(t db.Task) Task {
 	return out
 }
 
+func fromGetRow(row db.GetTaskRow) (Task, error) {
+	out := Task{
+		ID:                  row.ID,
+		Name:                row.Name,
+		Description:         row.Description,
+		ImplementationNotes: row.ImplementationNotes,
+		Department:          row.Department,
+		Priority:            row.Priority,
+	}
+	out.ProjectID = nullable.Int64Pointer(row.ProjectID)
+	out.SubprojectID = nullable.Int64Pointer(row.SubprojectID)
+	if err := json.Unmarshal([]byte(row.Developers), &out.Developers); err != nil {
+		return Task{}, err
+	}
+	return out, nil
+}
+
 func validate(in Input) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
 	in.ImplementationNotes = strings.TrimSpace(in.ImplementationNotes)
 	in.Department = strings.TrimSpace(in.Department)
-	in.Developers = strings.TrimSpace(in.Developers)
 	in.Priority = strings.TrimSpace(in.Priority)
 	if in.Name == "" {
 		return in, web.Invalid("name is required")
@@ -137,20 +155,43 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 			Description:         validated.Description,
 			ImplementationNotes: validated.ImplementationNotes,
 			Department:          validated.Department,
-			Developers:          validated.Developers,
 			Priority:            validated.Priority,
 			ProjectID:           nullable.Int64(validated.ProjectID),
 			SubprojectID:        nullable.Int64(validated.SubprojectID),
 		})
-		if err == nil {
-			id = row.ID
+		if err != nil {
+			return err
 		}
-		return err
+		id = row.ID
+		return addTaskDevelopers(ctx, txq, id, validated.DeveloperIDs)
 	})
 	if err != nil {
 		return Task{}, err
 	}
 	return Get(ctx, q, id)
+}
+
+func addTaskDevelopers(ctx context.Context, txq *db.Queries, taskID int64, ids []int64) error {
+	seen := make(map[int64]struct{}, len(ids))
+	for _, personID := range ids {
+		if _, duplicate := seen[personID]; duplicate {
+			return web.Invalid("duplicate developer")
+		}
+		seen[personID] = struct{}{}
+	}
+	for _, personID := range ids {
+		if err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: taskID, PersonID: personID}); err != nil {
+			return developerError(err)
+		}
+	}
+	return nil
+}
+
+func developerError(err error) error {
+	if db.ForeignKeyViolation(err) {
+		return web.HTTPErrorFromReason(http.StatusNotFound, "person-not-found")
+	}
+	return err
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
@@ -161,7 +202,10 @@ func Get(ctx context.Context, q *db.Queries, id int64) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	out := FromDB(row)
+	out, err := fromGetRow(row)
+	if err != nil {
+		return Task{}, err
+	}
 	totals, err := q.GetTaskTotals(ctx, id)
 	if err != nil {
 		return Task{}, err
@@ -243,22 +287,13 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			(!patch.SubprojectID.Present || patch.SubprojectID.Value != nil) {
 			return web.Invalid("project cannot be cleared while subproject is assigned")
 		}
-		in, err := resolveAssignment(ctx, txq, id, current, patch, mergeInput(current, patch))
+		in := mergeInput(current, patch)
+		in.DeveloperIDs = patch.DeveloperIDs.Apply(in.DeveloperIDs)
+		in, err = resolveAssignment(ctx, txq, id, current, patch, in)
 		if err != nil {
 			return err
 		}
-		_, err = txq.UpdateTask(ctx, db.UpdateTaskParams{ // the returned row cannot replace the post-update Get; only the error is needed
-			Name:                in.Name,
-			Description:         in.Description,
-			ImplementationNotes: in.ImplementationNotes,
-			Department:          in.Department,
-			Developers:          in.Developers,
-			Priority:            in.Priority,
-			ProjectID:           nullable.Int64(in.ProjectID),
-			SubprojectID:        nullable.Int64(in.SubprojectID),
-			ID:                  id,
-		})
-		return err
+		return updateTaskWithDevelopers(ctx, txq, id, in, patch.DeveloperIDs.Present)
 	})
 	if err != nil {
 		return Task{}, err
@@ -266,11 +301,30 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 	return Get(ctx, q, id)
 }
 
-func mergeInput(current db.Task, patch Patch) Input {
+func updateTaskWithDevelopers(ctx context.Context, txq *db.Queries, id int64, in Input, replaceDevelopers bool) error {
+	_, err := txq.UpdateTask(ctx, db.UpdateTaskParams{ // the returned row cannot replace the post-update Get; only the error is needed
+		Name: in.Name, Description: in.Description,
+		ImplementationNotes: in.ImplementationNotes, Department: in.Department,
+		Priority: in.Priority, ProjectID: nullable.Int64(in.ProjectID),
+		SubprojectID: nullable.Int64(in.SubprojectID), ID: id,
+	})
+	if err != nil {
+		return err
+	}
+	if !replaceDevelopers {
+		return nil
+	}
+	if err := txq.ClearTaskDevelopers(ctx, id); err != nil {
+		return err
+	}
+	return addTaskDevelopers(ctx, txq, id, in.DeveloperIDs)
+}
+
+func mergeInput(current db.GetTaskRow, patch Patch) Input {
 	currentInput := Input{
 		Name: current.Name, Description: current.Description,
 		ImplementationNotes: current.ImplementationNotes, Department: current.Department,
-		Developers: current.Developers, Priority: current.Priority,
+		Priority: current.Priority,
 		ProjectID:    nullable.Int64Pointer(current.ProjectID),
 		SubprojectID: nullable.Int64Pointer(current.SubprojectID),
 	}
@@ -279,14 +333,13 @@ func mergeInput(current db.Task, patch Patch) Input {
 		Description:         patch.Description.Apply(currentInput.Description),
 		ImplementationNotes: patch.ImplementationNotes.Apply(currentInput.ImplementationNotes),
 		Department:          patch.Department.Apply(currentInput.Department),
-		Developers:          patch.Developers.Apply(currentInput.Developers),
 		Priority:            patch.Priority.Apply(currentInput.Priority),
 		ProjectID:           patch.ProjectID.Apply(currentInput.ProjectID),
 		SubprojectID:        patch.SubprojectID.Apply(currentInput.SubprojectID),
 	}
 }
 
-func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current db.Task, patch Patch, in Input) (Input, error) {
+func resolveAssignment(ctx context.Context, txq *db.Queries, id int64, current db.GetTaskRow, patch Patch, in Input) (Input, error) {
 	in, err := validate(in)
 	if err != nil {
 		return in, err

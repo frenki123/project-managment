@@ -18,6 +18,7 @@ data/
 *.db-shm
 /pmctl
 /server
+/devseed
 
 # sqlc generated (run `just generate`)
 internal/db/db.go

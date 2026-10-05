@@ -11,6 +11,7 @@ import (
 
 	"cad-development/internal/db"
 	"cad-development/internal/nullable"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -69,6 +70,11 @@ type week struct {
 	progress  *float64
 }
 
+type personSeed struct {
+	name     string
+	capacity float64
+}
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("seed", "err", err)
@@ -94,16 +100,44 @@ func run() error {
 
 func seed(ctx context.Context, q *db.Queries, anchor time.Time) error {
 	anchor = weekly.MondayOnOrBefore(anchor)
+	people, err := seedPeople(ctx, q)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("%2s %8s %8s %8s %9s %6s %6s\n", "#", "total", "task", "spent", "progress", "weeks", "rows")
 	for index, plan := range dataset() {
-		if err := seedProject(ctx, q, anchor, index+1, plan); err != nil {
+		if err := seedProject(ctx, q, anchor, index+1, plan, people); err != nil {
 			return err
 		}
 	}
-	return seedIdeas(ctx, q)
+	if err := seedIdeas(ctx, q, people); err != nil {
+		return err
+	}
+	return nil
 }
 
-func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number int, plan projectPlan) error {
+func seedPeople(ctx context.Context, q *db.Queries) ([]person.Person, error) {
+	seeds := []personSeed{
+		{"Ada Lovelace", 40},
+		{"Grace Hopper", 32},
+		{"Alan Turing", 24},
+		{"Edsger Dijkstra", 40},
+		{"Margaret Hamilton", 40},
+		{"Linus Torvalds", 16},
+	}
+	people := make([]person.Person, 0, len(seeds))
+	for _, seed := range seeds {
+		created, err := person.Create(ctx, q, person.Input{Name: seed.name, WeeklyCapacity: new(seed.capacity)})
+		if err != nil {
+			return nil, err
+		}
+		people = append(people, created)
+	}
+	fmt.Printf("people: seeded %d\n", len(people))
+	return people, nil
+}
+
+func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number int, plan projectPlan, people []person.Person) error {
 	start := weekly.MondayOnOrBefore(anchor.AddDate(0, 0, 7*plan.startOffset))
 	end := weekly.MondayOnOrBefore(anchor.AddDate(0, 0, 7*plan.endOffset))
 	weeks := weekly.WeekStarts(start, end)
@@ -134,34 +168,11 @@ func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number in
 
 	rows := 0
 	for i, tp := range plan.tasks {
-		var subprojectID *int64
-		if tp.subproject > 0 {
-			subprojectID = &ids[tp.subproject]
-		}
-		createdTask, err := task.Create(ctx, q, task.Input{
-			Name:         fmt.Sprintf("Task %02d", i+1),
-			ProjectID:    &created.ID,
-			SubprojectID: subprojectID,
-		})
-		if err != nil {
-			return err
-		}
-		cells, err := expand(tp, weeks)
+		taskRows, err := seedTask(ctx, q, created.ID, ids, i, tp, weeks, people)
 		if err != nil {
 			return fmt.Errorf("project %d task %d: %w", number, i+1, err)
 		}
-		for _, cell := range cells {
-			if _, err := q.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
-				TaskID:       createdTask.ID,
-				WeekStart:    cell.weekStart,
-				PlannedHours: cell.planned,
-				SpentHours:   cell.spent,
-				Progress:     nullable.Float64(cell.progress),
-			}); err != nil {
-				return err
-			}
-			rows++
-		}
+		rows += taskRows
 	}
 
 	filled, err := project.Get(ctx, q, created.ID)
@@ -174,16 +185,62 @@ func seedProject(ctx context.Context, q *db.Queries, anchor time.Time, number in
 	return nil
 }
 
-func seedIdeas(ctx context.Context, q *db.Queries) error {
-	for i := range 10 {
-		if _, err := task.Create(ctx, q, task.Input{
-			Name: fmt.Sprintf("Idea %d", i+1),
+func seedTask(ctx context.Context, q *db.Queries, projectID int64, ids []int64, i int, tp taskPlan, weeks []weekly.WeekStart, people []person.Person) (int, error) {
+	var subprojectID *int64
+	if tp.subproject > 0 {
+		subprojectID = &ids[tp.subproject]
+	}
+	developers := taskDevelopers(i, people)
+	createdTask, err := task.Create(ctx, q, task.Input{
+		Name:         fmt.Sprintf("Task %02d", i+1),
+		ProjectID:    &projectID,
+		SubprojectID: subprojectID,
+		DeveloperIDs: developers,
+	})
+	if err != nil {
+		return 0, err
+	}
+	cells, err := expand(tp, weeks)
+	if err != nil {
+		return 0, err
+	}
+	rows := 0
+	for _, cell := range cells {
+		if _, err := q.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
+			TaskID:       createdTask.ID,
+			WeekStart:    cell.weekStart,
+			PlannedHours: cell.planned,
+			SpentHours:   cell.spent,
+			Progress:     nullable.Float64(cell.progress),
 		}); err != nil {
+			return 0, err
+		}
+		rows++
+	}
+	return rows, nil
+}
+
+func seedIdeas(ctx context.Context, q *db.Queries, people []person.Person) error {
+	for i := range 10 {
+		in := task.Input{Name: fmt.Sprintf("Idea %d", i+1)}
+		if i%2 == 0 {
+			in.DeveloperIDs = taskDevelopers(i, people)
+		}
+		if _, err := task.Create(ctx, q, in); err != nil {
 			return err
 		}
 	}
 	fmt.Println("ideas: 10 tasks, 0 weekly cells")
 	return nil
+}
+
+// taskDevelopers assigns one or two developers deterministically by task index.
+func taskDevelopers(i int, people []person.Person) []int64 {
+	primary := people[i%len(people)].ID
+	if i%3 == 2 {
+		return []int64{primary}
+	}
+	return []int64{primary, people[(i+2)%len(people)].ID}
 }
 
 func expand(tp taskPlan, weeks []weekly.WeekStart) ([]week, error) {

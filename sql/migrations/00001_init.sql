@@ -23,7 +23,6 @@ CREATE TABLE tasks (
     description TEXT NOT NULL DEFAULT '',
     implementation_notes TEXT NOT NULL DEFAULT '',
     department TEXT NOT NULL DEFAULT '',
-    developers TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT '',
     project_id INTEGER REFERENCES projects (id),
     subproject_id INTEGER REFERENCES subprojects (id),
@@ -31,6 +30,19 @@ CREATE TABLE tasks (
     FOREIGN KEY (project_id, subproject_id)
         REFERENCES subprojects (project_id, id)
 );
+
+CREATE TABLE people (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    weekly_capacity REAL NOT NULL CHECK (weekly_capacity >= 0)
+);
+
+CREATE TABLE task_developers (
+    task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES people (id),
+    PRIMARY KEY (task_id, person_id)
+);
+CREATE INDEX idx_task_developers_person ON task_developers (person_id);
 
 CREATE TABLE task_weeks (
     task_id INTEGER NOT NULL REFERENCES tasks (id),
@@ -119,6 +131,8 @@ DROP VIEW IF EXISTS v_task_week_series;
 DROP VIEW IF EXISTS v_project_bounds;
 DROP VIEW IF EXISTS v_project_totals;
 DROP VIEW IF EXISTS v_task_totals;
+DROP TABLE IF EXISTS task_developers;
+DROP TABLE people;
 DROP TABLE task_weeks;
 DROP TABLE tasks;
 DROP TABLE subprojects;

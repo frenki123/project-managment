@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 
+	"cad-development/internal/client"
 	"cad-development/internal/project"
 	"github.com/spf13/cobra"
 )
 
+//nolint:dupl // mirrors personCommands; the client methods and command names differ.
 func projectCommands(s *commandState) *cobra.Command {
 	root := &cobra.Command{Use: "projects"}
 	root.AddCommand(&cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
@@ -16,7 +18,7 @@ func projectCommands(s *commandState) *cobra.Command {
 		}
 		return writeJSON(s.out, v)
 	}})
-	root.AddCommand(getCommand(s, s.client.Project))
+	root.AddCommand(getCommand(s, (*client.Client).Project))
 	root.AddCommand(projectCommand("create", s, false), projectCommand("update <id>", s, true), deleteCommand("delete", "project", s, func(ctx context.Context, id int64) error { return s.client.DeleteProject(ctx, id) }))
 	return root
 }

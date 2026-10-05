@@ -57,7 +57,7 @@ func newRoot(s *commandState) *cobra.Command {
 		return nil
 	}}
 	root.PersistentFlags().StringVar(&s.apiURL, "url", s.apiURL, "REST API base URL")
-	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), updateWeekCommand(s), curveCommand(s))
+	root.AddCommand(projectCommands(s), subprojectCommands(s), taskCommands(s), personCommands(s), updateWeekCommand(s), curveCommand(s))
 	return root
 }
 
@@ -133,13 +133,13 @@ func resolveSubproject(ctx context.Context, c *client.Client, projectID *int64, 
 	return 0, fmt.Errorf("subproject %q not found in project %q", name, strconv.FormatInt(*projectID, 10))
 }
 
-func getCommand[V any](s *commandState, get func(context.Context, int64) (V, error)) *cobra.Command {
+func getCommand[V any](s *commandState, get func(*client.Client, context.Context, int64) (V, error)) *cobra.Command {
 	return &cobra.Command{Use: "get <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := idArg(args)
 		if err != nil {
 			return err
 		}
-		v, err := get(cmd.Context(), id)
+		v, err := get(s.client, cmd.Context(), id)
 		if err != nil {
 			return err
 		}

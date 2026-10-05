@@ -241,6 +241,8 @@ func TestSaveRejectsInvalidPatches(t *testing.T) {
 		wantMessage string
 	}{
 		{"empty patch", weekly.Patch{}, "2026-01-05", "at least one value is required"},
+		{"null planned hours", weekly.Patch{PlannedHours: nullable.Clear[float64]()}, "2026-01-05", "planned hours cannot be null"},
+		{"null spent hours", weekly.Patch{SpentHours: nullable.Clear[float64]()}, "2026-01-05", "spent hours cannot be null"},
 		{"negative hours", weekly.Patch{PlannedHours: nullable.Present(-1.0)}, "2026-01-05", "hours cannot be negative"},
 		{"infinite hours", weekly.Patch{SpentHours: nullable.Present(math.Inf(1))}, "2026-01-05", "hours cannot be negative"},
 		{"progress above 100", weekly.Patch{Progress: nullable.Present(101.0)}, "2026-01-05", "progress must be between 0 and 100"},

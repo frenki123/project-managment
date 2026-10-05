@@ -1,0 +1,68 @@
+package views
+
+import (
+	"strconv"
+
+	"cad-development/internal/person"
+)
+
+templ PeoplePage(data PeoplePageData) {
+	@Layout("People") {
+		<main class="workspace">
+			<header class="project-header">
+				<div class="project-heading">
+					<p class="eyebrow">PEOPLE</p>
+					<h1>People</h1>
+					<p class="project-description">Named developers with a weekly capacity default.</p>
+				</div>
+			</header>
+			if len(data.People) == 0 {
+				<p>Create a person to start assigning developers to tasks.</p>
+			} else {
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Weekly capacity</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, p := range data.People {
+								@PersonRow(p)
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</main>
+	}
+}
+
+templ PersonRow(p person.Person) {
+	<tr>
+		<td>{ p.Name }</td>
+		<td>{ hours(p.WeeklyCapacity) } h</td>
+		<td class="panel-actions">
+			<button type="button" class="linkish" hx-get={ templ.URL("/people/" + strconv.FormatInt(p.ID, 10) + "/edit") } hx-target="#modal-root" hx-swap="innerHTML">Edit</button>
+			<form hx-post={ templ.URL("/people/" + strconv.FormatInt(p.ID, 10) + "/delete") } hx-target="#modal-root" hx-swap="innerHTML" hx-confirm="Delete this person?">
+				<button type="submit" class="secondary outline">Delete</button>
+			</form>
+		</td>
+	</tr>
+}
+
+templ PersonForm(data PersonFormData) {
+	@ResourceModal("PERSON", data.Title, "", data.Error, data.DeleteAction, "Delete this person?") {
+		@ResourceForm(data.Action) {
+			@PersonFields(data)
+			@ResourceActions(data.DeleteAction != "", "Create person", "")
+		}
+	}
+}
+
+templ PersonFields(data PersonFormData) {
+	<section class="panel-section"><h3>Identity</h3><label>Name<input type="text" name="name" value={ data.Person.Name } required/></label></section>
+	<section class="panel-section"><h3>Capacity</h3><label>Weekly capacity (hours)<input type="number" step="any" min="0" name="weekly_capacity" value={ data.Person.WeeklyCapacity } required/></label></section>
+}

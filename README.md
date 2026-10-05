@@ -24,6 +24,8 @@ one S-curve per project.
   budget, planned, spent, and progress %.
 - **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
 - **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
+- **People**: named developers with a weekly capacity default (40 h). Tasks pick their developers
+  from people instead of free text. The entity is `people`/`person`; the task relationship is `developer_ids` on write and `developers` on read.
 - **Progress rules**: effective progress is a running maximum and never decreases. An empty week
   carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
 - **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
@@ -36,8 +38,11 @@ one S-curve per project.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the only output
   format. `pmctl tasks list` returns all tasks by default; project
   filters are name- or ID-based, names win if both given. POST creates use empty values for
-  omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
-  fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
+  omitted fields; PUT is presence-driven — omitted fields preserved; a value sets the field
+  (`0` sets a numeric to `0`, `""` clears text); `null` clears fields that can be unset
+  (text → empty, assignment → unset), while `null` on a non-nullable field (required number,
+  name, or date) is rejected with `400`.
+  Weekly updates set only the flags passed (`--planned-hours`,
   `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress); historical
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;
@@ -58,8 +63,9 @@ conflict or scope checks also carry a stable machine `reason` code for automatio
 
 The reason codes are `idea-task-not-assignable`, `week-outside-project-bounds`, `task-has-weekly-data`
 (week writes); `subproject-not-found`, `project-not-found`, `subproject-project-mismatch` (assignments);
-and `project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
-`subproject-hours-exceed-project` (project/subproject). Validation errors without a SQL-backed reason omit the key.
+`project-name-taken`, `project-hours-below-subprojects`, `project-dates-exclude-weekly-data`,
+`subproject-hours-exceed-project` (project/subproject); and `person-name-taken`, `person-not-found`
+(people, including unknown task developer ids). Validation errors without a SQL-backed reason omit the key.
 The `pmctl` CLI emits the same `error`/`reason` fields; API errors also carry the HTTP `status`, and
 `reason` appears only when the API provides one.
 
@@ -74,11 +80,24 @@ effective carried value; `stored_progress` is `null` when that week has no store
 have no weeks. The workboard, REST API, and `pmctl` CLI consume this same canonical series; future
 monthly review and XLSX export must reuse it rather than calculate a consumer-specific series.
 
+Task developers are real people. Creates send `developer_ids`; task detail
+`GET /api/v1/tasks/{id}` embeds them as a `developers` array of `{"id","name","weekly_capacity"}`
+objects, while task list responses omit `developers`. Updates are presence-driven: an omitted
+`developer_ids` preserves the current developers, `"developer_ids": []` or `"developer_ids": null`
+both clear them, and `"developer_ids": [<ids>]` replaces the set. Unknown person ids return `404`
+with `person-not-found`; duplicate ids return `400 duplicate developer`; reassigning developers
+never conflicts with weekly data.
+
 Project names are case-insensitively unique; duplicate creates or updates return `409` with
 `project name already exists`. Deleting a referenced project, subproject, or task, or moving a
 subproject that still has tasks, returns `409` with `record is still used by other data`;
 reassigning a task with weekly data returns `409` with `cannot reassign task with weekly data`.
 Assigning to a missing project or subproject returns `404`; a subproject from another project returns `400` with `subproject does not belong to project`.
+
+People are listed under `/api/v1/people` with the same create/get/update/delete shape as projects.
+Person names are case-insensitively unique; duplicates return `409` with `person-name-taken`.
+A person's weekly capacity defaults to `40` when `weekly_capacity` is omitted on create.
+Deleting a person still assigned to a task returns `409` with `record is still used by other data`.
 
 ## Stack
 
@@ -151,15 +170,18 @@ The CLI targets the local server by default and can use `CAD_API_URL` or `--url`
 ```sh
 pmctl projects list
 pmctl tasks list --project "Project Alpha"
-pmctl tasks create --name "Implement API" --project-id 5 --priority high
-pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1
+pmctl tasks create --name "Implement API" --project-id 5 --priority high --developer-id 3 --developer-id 7
+pmctl tasks update 12 --priority medium --project-id 5 --subproject-id 1 --developer-id 3
+pmctl tasks update 12 --clear-developers
 pmctl update-task-week 12 2026-09-21 --planned-hours 8 --unlock
+pmctl people list
+pmctl people create --name "Ada" --weekly-capacity 32
 ```
 
 ## Layout
 
 Code is organized by domain, not by layer: `internal/task`, `internal/project`, `internal/subproject`,
-`internal/weekly`, `internal/historyaccess`. `internal/web` is the small web framework (HTTP helpers,
+`internal/person`, `internal/weekly`, `internal/historyaccess`. `internal/web` is the small web framework (HTTP helpers,
 errors, CRUD, rendering, recover, static files, validation); `internal/db` holds database open,
 migration wiring, and generated sqlc code, with `internal/db/testkit` as the test helper;
 `internal/nullable` is the optional wire primitive for JSON fields. `internal/handlers` holds HTTP

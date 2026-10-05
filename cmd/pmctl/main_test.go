@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"cad-development/internal/client"
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -204,11 +205,66 @@ func TestTaskUpdateFlagsSendPartialPatch(t *testing.T) {
 	if err := json.Unmarshal([]byte(putBody), &input); err != nil {
 		t.Fatal(err)
 	}
-	if input.Name != "" || input.Description != "" || input.ImplementationNotes != "" || input.Department != "" || input.Developers != "" || input.Priority != "high" {
+	if input.Name != "" || input.Description != "" || input.ImplementationNotes != "" || input.Department != "" || input.Priority != "high" {
 		t.Fatalf("unexpected task fields: %+v", input)
+	}
+	if input.DeveloperIDs != nil {
+		t.Fatalf("unexpected developer ids: %+v", input.DeveloperIDs)
 	}
 	if input.ProjectID != nil || input.SubprojectID != nil {
 		t.Fatalf("unexpected task assignment: %+v", input)
+	}
+}
+
+func TestTaskCreateSendsDeveloperIDs(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/tasks" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","developers":[]}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "tasks", "create", "--name", "X", "--developer-id", "3", "--developer-id", "5"); err != nil {
+		t.Fatal(err)
+	}
+	var input task.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if len(input.DeveloperIDs) != 2 || input.DeveloperIDs[0] != 3 || input.DeveloperIDs[1] != 5 {
+		t.Fatalf("unexpected task body: %s", body)
+	}
+}
+
+func TestTaskUpdateClearDevelopers(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/tasks/4" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":4,"name":"X","developers":[]}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "tasks", "update", "4", "--clear-developers"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"developer_ids":null`) {
+		t.Fatalf("unexpected patch body: %s", body)
 	}
 }
 
@@ -353,6 +409,32 @@ func TestProjectUpdateSendsFullReplacement(t *testing.T) {
 	}
 }
 
+func TestGetCommandUsesInitializedClient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/projects/1" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"Alpha","purchase_order_name":"PO-1","total_hours":120,"start_date":"2026-01-05","end_date":"2026-03-30"}`)
+	}))
+	defer server.Close()
+	out := &bytes.Buffer{}
+	state := &commandState{apiURL: server.URL, out: out, errOut: &strings.Builder{}}
+	root := newRoot(state)
+	root.SetArgs([]string{"projects", "get", "1"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got project.Project
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != 1 || got.Name != "Alpha" {
+		t.Fatalf("unexpected project: %#v", got)
+	}
+}
+
 func TestSubprojectUpdateSendsFullReplacement(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -440,6 +522,62 @@ func TestProjectSCurveNameTakesPrecedenceOverID(t *testing.T) {
 	defer server.Close()
 	if err := runCommand(t, server, "project-s-curve", "--project", "Alpha", "--project-id", "7"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPeopleCreateSendsNameAndCapacity(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/people" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","weekly_capacity":32}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "create", "--name", "X", "--weekly-capacity", "32"); err != nil {
+		t.Fatal(err)
+	}
+	var input person.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Name != "X" || input.WeeklyCapacity == nil || *input.WeeklyCapacity != 32 {
+		t.Fatalf("unexpected person fields: %+v", input)
+	}
+}
+
+func TestPeopleCreateLeavesCapacityUnsetWhenFlagOmitted(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/people" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		body = string(data)
+		w.Header().Set("Content-Type", "application/json")
+		writeBody(t, w, `{"id":1,"name":"X","weekly_capacity":40}`)
+	}))
+	defer server.Close()
+	if err := runCommand(t, server, "people", "create", "--name", "X"); err != nil {
+		t.Fatal(err)
+	}
+	var input person.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.WeeklyCapacity != nil {
+		t.Fatalf("capacity should default server-side, sent %+v", input)
 	}
 }
 

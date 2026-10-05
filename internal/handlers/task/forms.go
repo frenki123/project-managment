@@ -23,16 +23,39 @@ func formInput(r *http.Request) (task.Input, error) {
 	if err != nil {
 		return task.Input{}, err
 	}
+	developerIDs, err := parseDeveloperIDs(r)
+	if err != nil {
+		return task.Input{}, err
+	}
 	return task.Input{
 		Name:                vals.Name,
 		Description:         vals.Description,
 		ImplementationNotes: vals.ImplementationNotes,
 		Department:          vals.Department,
-		Developers:          vals.Developers,
+		DeveloperIDs:        developerIDs,
 		Priority:            vals.Priority,
 		ProjectID:           projectID,
 		SubprojectID:        subprojectID,
 	}, nil
+}
+
+func parseDeveloperIDs(r *http.Request) ([]int64, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, web.Invalid("invalid form")
+	}
+	return parseInt64s(r.Form["developer_ids"])
+}
+
+func parseInt64s(values []string) ([]int64, error) {
+	out := make([]int64, 0, len(values))
+	for _, value := range values {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return nil, web.Invalid("invalid developer")
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 func formValues(r *http.Request) views.TaskFormValues {
@@ -41,7 +64,7 @@ func formValues(r *http.Request) views.TaskFormValues {
 		Description:         r.FormValue("description"),
 		ImplementationNotes: r.FormValue("implementation_notes"),
 		Department:          r.FormValue("department"),
-		Developers:          r.FormValue("developers"),
+		DeveloperIDs:        r.Form["developer_ids"],
 		Priority:            r.FormValue("priority"),
 		ProjectID:           r.FormValue("project_id"),
 		SubprojectID:        r.FormValue("subproject_id"),
@@ -54,8 +77,11 @@ func taskFormValues(t task.Task) views.TaskFormValues {
 		Description:         t.Description,
 		ImplementationNotes: t.ImplementationNotes,
 		Department:          t.Department,
-		Developers:          t.Developers,
 		Priority:            t.Priority,
+	}
+	vals.DeveloperIDs = make([]string, 0, len(t.Developers))
+	for _, dev := range t.Developers {
+		vals.DeveloperIDs = append(vals.DeveloperIDs, strconv.FormatInt(dev.ID, 10))
 	}
 	if t.ProjectID != nil {
 		vals.ProjectID = strconv.FormatInt(*t.ProjectID, 10)
@@ -101,10 +127,19 @@ func taskFormData(r *http.Request, q *db.Queries, vals views.TaskFormValues, can
 	if err != nil {
 		return views.TaskFormData{}, err
 	}
+	selected, err := parseInt64s(vals.DeveloperIDs)
+	if err != nil {
+		return views.TaskFormData{}, err
+	}
+	people, err := shared.PersonOptions(r, q, selected)
+	if err != nil {
+		return views.TaskFormData{}, err
+	}
 	return views.TaskFormData{
 		Task:         vals,
 		Projects:     po,
 		Subprojects:  so,
+		People:       people,
 		CanReassign:  canReassign,
 		ReassignNote: "Project and subproject cannot be changed after weekly data is entered.",
 		Error:        errMsg,

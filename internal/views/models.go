@@ -1,6 +1,7 @@
 package views
 
 import (
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/task"
 )
@@ -13,6 +14,7 @@ type TaskFormData struct {
 	DetailPath   string
 	Projects     []task.Option
 	Subprojects  []task.Option
+	People       []task.Option
 	CanReassign  bool
 	ReassignNote string
 	Error        string
@@ -24,7 +26,7 @@ type TaskFormValues struct {
 	Description         string
 	ImplementationNotes string
 	Department          string
-	Developers          string
+	DeveloperIDs        []string
 	Priority            string
 	ProjectID           string
 	SubprojectID        string
@@ -61,6 +63,23 @@ type SubprojectFormValues struct {
 	Name       string
 	ProjectID  string
 	TotalHours string
+}
+
+type PeoplePageData struct {
+	People []person.Person
+}
+
+type PersonFormData struct {
+	Action       string
+	Title        string
+	Person       PersonFormValues
+	Error        string
+	DeleteAction string
+}
+
+type PersonFormValues struct {
+	Name           string
+	WeeklyCapacity string
 }
 
 type TaskPanelData struct {

@@ -181,6 +181,9 @@ func ListByProjectWithTotals(ctx context.Context, q *db.Queries, projectID int64
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Subproject, error) {
+	if patch.TotalHours.IsNull() {
+		return Subproject{}, web.Invalid("total hours cannot be null")
+	}
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetSubproject(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {

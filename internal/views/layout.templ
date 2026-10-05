@@ -24,11 +24,13 @@ templ Layout(title string) {
 				<nav class="primary-nav" aria-label="Primary">
 					<a href="/" class="active">Workboard</a>
 					<a href="/chart">S-curve</a>
+					<a href="/people">People</a>
 				</nav>
 				<nav class="header-actions" aria-label="Create">
 					<button type="button" hx-get="/tasks/new" hx-target="#modal-root" hx-swap="innerHTML">+ New task</button>
 					<button type="button" hx-get="/projects/new" hx-target="#modal-root" hx-swap="innerHTML">+ New project</button>
 					<button type="button" hx-get="/subprojects/new" hx-target="#modal-root" hx-swap="innerHTML">+ New subproject</button>
+					<button type="button" hx-get="/people/new" hx-target="#modal-root" hx-swap="innerHTML">+ New person</button>
 				</nav>
 			</header>
 			{ children... }

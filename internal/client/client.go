@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"cad-development/internal/person"
 	"cad-development/internal/project"
 	"cad-development/internal/subproject"
 	"cad-development/internal/task"
@@ -219,4 +220,24 @@ func (c *Client) UpdateTaskWeek(ctx context.Context, id int64, week string, in w
 func (c *Client) SCurve(ctx context.Context, id int64) (project.SCurve, error) {
 	var v project.SCurve
 	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/projects/%d/s-curve", id), &v)
+}
+
+func (c *Client) People(ctx context.Context) (person.PeopleResponse, error) {
+	var v person.PeopleResponse
+	return v, c.DoNoBody(ctx, http.MethodGet, "/api/v1/people", &v)
+}
+func (c *Client) Person(ctx context.Context, id int64) (person.Person, error) {
+	var v person.Person
+	return v, c.DoNoBody(ctx, http.MethodGet, fmt.Sprintf("/api/v1/people/%d", id), &v)
+}
+func (c *Client) CreatePerson(ctx context.Context, in person.Input) (person.Person, error) {
+	var v person.Person
+	return v, c.Do(ctx, http.MethodPost, "/api/v1/people", in, &v)
+}
+func (c *Client) UpdatePerson(ctx context.Context, id int64, in person.Patch) (person.Person, error) {
+	var v person.Person
+	return v, c.Do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/people/%d", id), in, &v)
+}
+func (c *Client) DeletePerson(ctx context.Context, id int64) error {
+	return c.DoNoBody(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/people/%d", id), (*struct{})(nil))
 }
