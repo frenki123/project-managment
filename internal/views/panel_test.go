@@ -9,7 +9,7 @@ import (
 	"cad-development/internal/weekly"
 )
 
-func TestTaskPanelRendersWeeklyNotes(t *testing.T) {
+func TestTaskPanelWeeklyNotes(t *testing.T) {
 	data := TaskPanelData{
 		Task: task.GridRow{Name: "T"},
 		Weeks: []weekly.Cell{
@@ -26,15 +26,13 @@ func TestTaskPanelRendersWeeklyNotes(t *testing.T) {
 	if strings.Contains(html, "W3") {
 		t.Fatalf("panel should not list weeks without notes: %s", html)
 	}
-}
 
-func TestTaskPanelOmitsWeeklyNotesWithoutNotes(t *testing.T) {
 	week := testkit.MustWeek(t, "2026-01-05")
-	for _, data := range []TaskPanelData{
+	for _, noNotes := range []TaskPanelData{
 		{Task: task.GridRow{Name: "T"}},
 		{Task: task.GridRow{Name: "T"}, Weeks: []weekly.Cell{{WeekStart: week}}},
 	} {
-		if html := renderPanel(t, data); strings.Contains(html, "Weekly notes") {
+		if html := renderPanel(t, noNotes); strings.Contains(html, "Weekly notes") {
 			t.Fatalf("panel without notes should not render the section: %s", html)
 		}
 	}

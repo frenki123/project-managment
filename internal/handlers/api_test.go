@@ -182,7 +182,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 		ID int64 `json:"id"`
 	}{ID: createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Grid task","project_id":`+strconv.FormatInt(projID, 10)+`}`))}
 
-	body := "planned_hours=8&spent_hours=3&progress=25&project=" + strconv.FormatInt(projID, 10)
+	body := "planned_hours=8&spent_hours=3&progress=25&note=blocker&project=" + strconv.FormatInt(projID, 10)
 	r := httptest.NewRequest(http.MethodPost, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format("2006-01-02"), bytes.NewBufferString(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("HX-Request", "true")
@@ -195,21 +195,51 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 		t.Fatalf("expected row fragment with OOB totals, got %q", rr.Body.String())
 	}
 
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
-	}
 	var got struct {
 		TotalHours float64 `json:"total_hours"`
 		SpentHours float64 `json:"spent_hours"`
 		Progress   float64 `json:"progress"`
+		Weeks      []struct {
+			WeekStart string `json:"week_start"`
+			Note      string `json:"note"`
+		} `json:"weeks"`
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
+	readTask := func() {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
+			t.Fatalf("week edit not persisted: %#v", got)
+		}
 	}
-	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
-		t.Fatalf("week edit not persisted: %#v", got)
+	noteForWeek := func() string {
+		t.Helper()
+		for _, week := range got.Weeks {
+			if week.WeekStart == start.Format(time.DateOnly) {
+				return week.Note
+			}
+		}
+		t.Fatalf("task %d has no week %s: %#v", tk.ID, start.Format(time.DateOnly), got.Weeks)
+		return ""
+	}
+	readTask()
+	if note := noteForWeek(); note != "blocker" {
+		t.Fatalf("week edit did not persist note: %q", note)
+	}
+
+	clear := postForm(t, mux, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format(time.DateOnly), "note=&project="+strconv.FormatInt(projID, 10))
+	if clear.Code != http.StatusOK {
+		t.Fatalf("note clear %d %s", clear.Code, clear.Body.String())
+	}
+	readTask()
+	if note := noteForWeek(); note != "" {
+		t.Fatalf("note clear not persisted: %q", note)
 	}
 }
 
@@ -260,58 +290,6 @@ func TestHTMLWeekHistoricalEditUsesHistoricalEditingCookie(t *testing.T) {
 	if err != nil || len(weeks) == 0 || weeks[0].PlannedHours != 4 {
 		t.Fatalf("historical edit was not saved: %#v %v", weeks, err)
 	}
-}
-
-func TestHTMLWeekNoteEditPersists(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-
-	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
-	projID := createProject(t, mux, "Alpha", start)
-	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"Note task","project_id":`+strconv.FormatInt(projID, 10)+`}`))
-	path := "/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
-
-	rr := postForm(t, mux, path, "note=blocker&project="+strconv.FormatInt(projID, 10))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("note edit %d %s", rr.Code, rr.Body.String())
-	}
-	if note := taskWeekNote(t, mux, taskID, start); note != "blocker" {
-		t.Fatalf("note edit not persisted: %q", note)
-	}
-
-	rr = postForm(t, mux, path, "note=&project="+strconv.FormatInt(projID, 10))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("note clear %d %s", rr.Code, rr.Body.String())
-	}
-	if note := taskWeekNote(t, mux, taskID, start); note != "" {
-		t.Fatalf("note clear not persisted: %q", note)
-	}
-}
-
-func taskWeekNote(t *testing.T, mux *http.ServeMux, taskID int64, week time.Time) string {
-	t.Helper()
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10), nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
-	}
-	var got struct {
-		Weeks []struct {
-			WeekStart string `json:"week_start"`
-			Note      string `json:"note"`
-		} `json:"weeks"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	for _, w := range got.Weeks {
-		if w.WeekStart == week.Format(time.DateOnly) {
-			return w.Note
-		}
-	}
-	t.Fatalf("task %d has no week %s: %#v", taskID, week.Format(time.DateOnly), got.Weeks)
-	return ""
 }
 
 func TestHTMLTaskEditAndProjectDeleteFragments(t *testing.T) {
@@ -696,7 +674,7 @@ func TestMutationsRedirectToContext(t *testing.T) {
 	assertAPIError(t, rr, http.StatusNotFound, "subproject not found", "")
 }
 
-func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
+func TestJSONNullClearsStoredValues(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
 	handlers.Register(mux, q)
@@ -706,9 +684,15 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
 	putJSON(t, mux, path, `{"progress":30}`, http.StatusOK)
 	putJSON(t, mux, path, `{"progress":null}`, http.StatusOK)
+	putJSON(t, mux, path, `{"note":"blocked"}`, http.StatusOK)
 	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
-	if err != nil || row.Progress.Valid {
-		t.Fatalf("progress null should clear stored progress: %#v %v", row, err)
+	if err != nil || row.Note != "blocked" {
+		t.Fatalf("note set should persist before clearing: %#v %v", row, err)
+	}
+	putJSON(t, mux, path, `{"note":null}`, http.StatusOK)
+	row, err = q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+	if err != nil || row.Progress.Valid || row.Note != "" {
+		t.Fatalf("null clears should clear stored progress and note: %#v %v", row, err)
 	}
 }
 
@@ -752,7 +736,7 @@ func TestJSONContractConsistency(t *testing.T) {
 		t.Fatalf("save progress %d %s", rr.Code, rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.AddDate(0, 0, 7).Format("2006-01-02"), bytes.NewReader([]byte(`{"planned_hours":1}`))))
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/v1/tasks/"+strconv.FormatInt(taskID, 10)+"/weeks/"+start.AddDate(0, 0, 7).Format("2006-01-02"), bytes.NewReader([]byte(`{"planned_hours":1,"note":"blocked"}`))))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("save planned %d %s", rr.Code, rr.Body.String())
 	}
@@ -762,11 +746,12 @@ func TestJSONContractConsistency(t *testing.T) {
 		SpentHours     float64  `json:"spent_hours"`
 		Progress       float64  `json:"progress"`
 		StoredProgress *float64 `json:"stored_progress"`
+		Note           string   `json:"note"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &updatedWeek); err != nil {
 		t.Fatal(err)
 	}
-	if updatedWeek.WeekStart != start.AddDate(0, 0, 7).Format("2006-01-02") || updatedWeek.PlannedHours != 1 || updatedWeek.SpentHours != 0 || updatedWeek.Progress != 25 || updatedWeek.StoredProgress != nil {
+	if updatedWeek.WeekStart != start.AddDate(0, 0, 7).Format("2006-01-02") || updatedWeek.PlannedHours != 1 || updatedWeek.SpentHours != 0 || updatedWeek.Progress != 25 || updatedWeek.StoredProgress != nil || updatedWeek.Note != "blocked" {
 		t.Fatalf("weekly update response = %#v", updatedWeek)
 	}
 
@@ -782,6 +767,7 @@ func TestJSONContractConsistency(t *testing.T) {
 			SpentHours     float64  `json:"spent_hours"`
 			Progress       float64  `json:"progress"`
 			StoredProgress *float64 `json:"stored_progress"`
+			Note           string   `json:"note"`
 		} `json:"weeks"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
@@ -791,9 +777,10 @@ func TestJSONContractConsistency(t *testing.T) {
 		t.Fatalf("expected all project-bounded weeks, got %#v", got.Weeks)
 	}
 	expectedPlanned := []float64{0, 1, 0, 0, 0}
+	expectedNotes := []string{"", "blocked", "", "", ""}
 	for i, week := range got.Weeks {
 		expectedWeek := start.AddDate(0, 0, i*7).Format("2006-01-02")
-		if week.WeekStart != expectedWeek || week.PlannedHours != expectedPlanned[i] || week.SpentHours != 0 || week.Progress != 25 {
+		if week.WeekStart != expectedWeek || week.PlannedHours != expectedPlanned[i] || week.SpentHours != 0 || week.Progress != 25 || week.Note != expectedNotes[i] {
 			t.Fatalf("unexpected week %d: %#v", i, week)
 		}
 	}

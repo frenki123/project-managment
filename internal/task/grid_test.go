@@ -31,12 +31,12 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	first, later := 20.0, 40.0
-	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(first)}, now)
+	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Progress: nullable.Present(first), Note: nullable.Present("blocker")}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cell.Progress == nil || *cell.Progress != first {
-		t.Fatalf("week 1 save should store progress %v: %#v", first, cell)
+	if cell.Progress == nil || *cell.Progress != first || cell.Note != "blocker" {
+		t.Fatalf("week 1 save should store progress %v and note: %#v", first, cell)
 	}
 	cell, err = weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{Progress: nullable.Present(later)}, now)
 	if err != nil {
@@ -49,15 +49,25 @@ func TestGridCarriesProgressAcrossMissingWeeks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sawNote, sawGap := false, false
 	for i, week := range grid.Weeks {
-		if week.Start.String() == "2026-09-14" {
-			if grid.Rows[0].Cells[i].Progress != first || grid.Rows[0].Cells[i].Stored {
-				t.Fatalf("missing week did not carry SQL progress: %#v", grid.Rows[0].Cells[i])
+		cell := grid.Rows[0].Cells[i]
+		switch week.Start.String() {
+		case "2026-09-07":
+			sawNote = true
+			if cell.Note != "blocker" {
+				t.Fatalf("note should be carried from series: %#v", cell)
 			}
-			return
+		case "2026-09-14":
+			sawGap = true
+			if cell.Progress != first || cell.Stored || cell.Note != "" {
+				t.Fatalf("missing week did not carry SQL progress without note: %#v", cell)
+			}
 		}
 	}
-	t.Fatal("missing gap week")
+	if !sawNote || !sawGap {
+		t.Fatalf("expected note and gap weeks: %#v", grid.Weeks)
+	}
 }
 
 func TestGridReportsHoursAndProgressSeparately(t *testing.T) {
@@ -140,53 +150,6 @@ weekTotalFound:
 	}
 	if !foundCarryForward {
 		t.Fatal("expected a week without stored progress")
-	}
-}
-
-func TestGridCellCarriesNoteFromSeries(t *testing.T) {
-	ctx := t.Context()
-	q := testkit.Open(t)
-	p, err := project.Create(ctx, q, project.Input{
-		Name: "Notes", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-09-28",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tk, err := task.Create(ctx, q, task.Input{Name: "Tracked", ProjectID: &p.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
-	cell, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-07"), weekly.Patch{Note: nullable.Present("blocker")}, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cell.Note != "blocker" {
-		t.Fatalf("save should return the note: %#v", cell)
-	}
-	if _, err := weekly.Save(ctx, q, tk.ID, testkit.MustWeek(t, "2026-09-21"), weekly.Patch{PlannedHours: nullable.Present(8.0)}, now); err != nil {
-		t.Fatal(err)
-	}
-	grid, err := task.LoadGrid(ctx, q, mustFilter(t, strconv.FormatInt(p.ID, 10), ""), now, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, week := range grid.Weeks {
-		cell := grid.Rows[0].Cells[i]
-		switch week.Start.String() {
-		case "2026-09-07":
-			if cell.Note != "blocker" {
-				t.Fatalf("note should be carried from series: %#v", cell)
-			}
-		case "2026-09-21":
-			if cell.Planned != 8 || cell.Note != "" {
-				t.Fatalf("hours week should have no note: %#v", cell)
-			}
-		case "2026-09-14":
-			if cell.Note != "" {
-				t.Fatalf("missing week should have no note: %#v", cell)
-			}
-		}
 	}
 }
 

@@ -46,15 +46,15 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 
 	project := renderGrid(t, task.Grid{
 		Kind:  task.ViewProject,
-		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05"}}}},
-		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}},
+		Rows:  []task.GridRow{{Name: "Task", ProjectName: "Project", Subproject: "Subproject", Status: "Development", Cells: []task.GridCell{{SavePath: "/tasks/1/weeks/2026-01-05", Note: "blocker"}, {SavePath: "/tasks/1/weeks/2026-01-12"}}}},
+		Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}, {Number: 2, Date: "12.01", Start: testkit.MustWeek(t, "2026-01-12")}},
 	})
 	for _, label := range []string{"Status", "Summary", "W1"} {
 		if !strings.Contains(project, label) {
 			t.Fatalf("project grid is missing %q: %s", label, project)
 		}
 	}
-	if strings.Count(project, `<col class="`) != 6 || !strings.Contains(project, `colspan="5" class="sticky c0"`) {
+	if strings.Count(project, `<col class="`) != 7 || !strings.Contains(project, `colspan="5" class="sticky c0"`) {
 		t.Fatalf("project grid has unexpected fixed/footer structure: %s", project)
 	}
 	if !strings.Contains(project, "Status") || !strings.Contains(project, ">Development<") || !strings.Contains(project, `<dl class="task-summary">`) || !strings.Contains(project, "<dt>Planned</dt><dd>0 h</dd>") || !strings.Contains(project, "<dt>Progress</dt><dd>0%</dd>") {
@@ -74,30 +74,16 @@ func TestGridRendersDistinctIdeasAndProjectColumns(t *testing.T) {
 	if strings.Contains(project, "Cum plan") || strings.Contains(project, "Cum spent") {
 		t.Fatalf("cumulative footer values are still rendered: %s", project)
 	}
+	if strings.Count(project, "note-marker") != 1 {
+		t.Fatalf("expected exactly one note marker: %s", project)
+	}
+	if !strings.Contains(project, `name="note"`) || !strings.Contains(project, `value="blocker"`) || !strings.Contains(project, `hx-post="/tasks/1/weeks/2026-01-05"`) {
+		t.Fatalf("note input missing: %s", project)
+	}
 
 	subproject := renderGrid(t, task.Grid{Kind: task.ViewSubproject, Rows: []task.GridRow{{Name: "Task"}}, Weeks: []weekly.WeekInfo{{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")}}})
 	if strings.Contains(subproject, ">Earned<") {
 		t.Fatalf("subproject footer should not render earned values: %s", subproject)
-	}
-}
-
-func TestGridRendersNoteMarker(t *testing.T) {
-	html := renderGrid(t, task.Grid{
-		Kind: task.ViewProject,
-		Rows: []task.GridRow{{Name: "T", Cells: []task.GridCell{
-			{SavePath: "/tasks/1/weeks/2026-01-05", Note: "blocker"},
-			{SavePath: "/tasks/1/weeks/2026-01-12"},
-		}}},
-		Weeks: []weekly.WeekInfo{
-			{Number: 1, Date: "05.01", Start: testkit.MustWeek(t, "2026-01-05")},
-			{Number: 2, Date: "12.01", Start: testkit.MustWeek(t, "2026-01-12")},
-		},
-	})
-	if strings.Count(html, "note-marker") != 1 {
-		t.Fatalf("expected exactly one note marker: %s", html)
-	}
-	if !strings.Contains(html, `value="blocker"`) || !strings.Contains(html, `name="note"`) || !strings.Contains(html, `hx-post="/tasks/1/weeks/2026-01-05"`) {
-		t.Fatalf("note input missing: %s", html)
 	}
 }
 
