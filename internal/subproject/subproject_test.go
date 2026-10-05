@@ -66,6 +66,30 @@ func TestHoursCap(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsNullTotalHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-01-05", EndDate: "2026-02-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := subproject.Create(ctx, q, subproject.Input{ProjectID: p.ID, Name: "A", TotalHours: new(4.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = subproject.Update(ctx, q, sp.ID, subproject.Patch{TotalHours: nullable.Clear[float64]()})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "total hours cannot be null" {
+		t.Fatalf("expected null total hours rejection, got %v", err)
+	}
+	got, err := subproject.Get(ctx, q, sp.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalHours != 4 {
+		t.Fatalf("rejected update changed total hours: %v", got.TotalHours)
+	}
+}
+
 func TestHoursRejectNonFiniteValues(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

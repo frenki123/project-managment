@@ -734,6 +734,55 @@ func TestJSONProgressNullClearsStoredProgress(t *testing.T) {
 	}
 }
 
+func TestJSONNullRequiredNumbers(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
+	pid := createProject(t, mux, "P", start)
+	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(pid, 10)+`}`))
+	personID := createPerson(t, mux, "Ada")
+
+	personPath := "/api/v1/people/" + strconv.FormatInt(personID, 10)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, personPath, bytes.NewReader([]byte(`{"weekly_capacity":null}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "weekly capacity cannot be null", "")
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, personPath, nil))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`"weekly_capacity":40`)) {
+		t.Fatalf("null capacity changed stored person: %s", rr.Body.String())
+	}
+
+	weekPath := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10) + "/weeks/" + start.Format(time.DateOnly)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath, bytes.NewReader([]byte(`{"planned_hours":null,"progress":50}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "planned hours cannot be null", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, weekPath, bytes.NewReader([]byte(`{"spent_hours":null,"progress":50}`))))
+	assertAPIError(t, rr, http.StatusBadRequest, "spent hours cannot be null", "")
+	if _, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)}); err == nil {
+		t.Fatal("null hours persisted a week row")
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, personPath, bytes.NewReader([]byte(`{"weekly_capacity":0}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("zero capacity %d %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, personPath, nil))
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte(`"weekly_capacity":0`)) {
+		t.Fatalf("zero capacity not stored: %s", rr.Body.String())
+	}
+
+	putJSON(t, mux, weekPath, `{"planned_hours":0}`, http.StatusOK)
+	row, err := q.GetTaskWeek(t.Context(), db.GetTaskWeekParams{TaskID: taskID, WeekStart: start.Format(time.DateOnly)})
+	if err != nil || row.PlannedHours != 0 {
+		t.Fatalf("zero planned_hours not stored: %#v %v", row, err)
+	}
+}
+
 func TestJSONRejectsClearProgressUnknownField(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()

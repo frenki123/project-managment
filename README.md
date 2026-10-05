@@ -38,8 +38,11 @@ one S-curve per project.
 - **`pmctl` CLI**: operate on the REST API without direct database access. JSON is the only output
   format. `pmctl tasks list` returns all tasks by default; project
   filters are name- or ID-based, names win if both given. POST creates use empty values for
-  omitted fields; PUT is presence-driven — omitted fields preserved, `null` clears nullable
-  fields, zero sets numeric fields. Weekly updates set only the flags passed (`--planned-hours`,
+  omitted fields; PUT is presence-driven — omitted fields preserved; a value sets the field
+  (`0` sets a numeric to `0`, `""` clears text); `null` clears fields that can be unset
+  (text → empty, assignment → unset), while `null` on a non-nullable field (required number,
+  name, or date) is rejected with `400`.
+  Weekly updates set only the flags passed (`--planned-hours`,
   `--spent-hours`, `--progress <percent>`, `--progress null` clears stored progress); historical
   edits send `--unlock` on that one request. Project/subproject filters beat `--ideas`; use
   `--field null` to clear text or nullable assignments, `--ideas` clears both task assignments;

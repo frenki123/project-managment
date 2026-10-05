@@ -243,6 +243,9 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Project,
 }
 
 func applyPatch(current db.Project, patch Patch) (Input, error) {
+	if patch.TotalHours.IsNull() {
+		return Input{}, web.Invalid("total hours cannot be null")
+	}
 	in := Input{
 		Name:              patch.Name.Apply(current.Name),
 		PurchaseOrderName: patch.PurchaseOrderName.Apply(current.PurchaseOrderName),

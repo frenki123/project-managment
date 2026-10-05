@@ -92,28 +92,32 @@ func TestOptionalApply(t *testing.T) {
 	if got := nilOptional.Apply("current"); got != "current" {
 		t.Fatal(got)
 	}
+	var clearedFloat = Clear[float64]()
+	if got := clearedFloat.Apply(12.5); got != 0 {
+		t.Fatalf("null float apply = %v, want 0", got)
+	}
 }
 
-func TestOptionalValueHelpers(t *testing.T) {
+func TestOptionalIsNull(t *testing.T) {
 	var absent Optional[string]
+	if absent.IsNull() {
+		t.Fatal("absent must not be null")
+	}
 	if absent.HasValue() {
 		t.Fatal("absent must not have a value")
 	}
-	if got := absent.ValueOr("current"); got != "current" {
-		t.Fatalf("absent ValueOr = %q", got)
-	}
 	var cleared = Clear[string]()
+	if !cleared.IsNull() {
+		t.Fatal("present-null must be null")
+	}
 	if cleared.HasValue() {
 		t.Fatal("present-null must not have a value")
 	}
-	if got := cleared.ValueOr("current"); got != "current" {
-		t.Fatalf("present-null ValueOr = %q", got)
-	}
 	var present = Present("next")
+	if present.IsNull() {
+		t.Fatal("present value must not be null")
+	}
 	if !present.HasValue() {
 		t.Fatal("present value must have a value")
-	}
-	if got := present.ValueOr("current"); got != "next" {
-		t.Fatalf("present ValueOr = %q", got)
 	}
 }

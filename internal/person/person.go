@@ -93,6 +93,9 @@ func List(ctx context.Context, q *db.Queries) ([]Person, error) {
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Person, error) {
+	if patch.WeeklyCapacity.IsNull() {
+		return Person{}, web.Invalid("weekly capacity cannot be null")
+	}
 	var updated db.Person
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetPerson(ctx, id)

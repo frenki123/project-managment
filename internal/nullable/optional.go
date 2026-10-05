@@ -18,17 +18,12 @@ func (o Optional[T]) IsZero() bool { return !o.Present }
 // an explicit null).
 func (o Optional[T]) HasValue() bool { return o.Present && o.Value != nil }
 
-// ValueOr returns the concrete value, falling back to current when absent or
-// explicitly null.
-func (o Optional[T]) ValueOr(current T) T {
-	if o.HasValue() {
-		return *o.Value
-	}
-	return current
-}
+// IsNull reports whether the field was explicitly present as null.
+func (o Optional[T]) IsNull() bool { return o.Present && !o.HasValue() }
 
-// Apply merges the field into current. A nil receiver or an absent field is a
-// no-op; an explicit null resets current to T's zero value.
+// Apply merges the field into current: absent → current, null → T's zero value
+// ("no value": nil/""/0), present value → the value. A nil receiver or an
+// absent field is a no-op.
 func (o *Optional[T]) Apply(current T) T {
 	if o == nil || !o.Present {
 		return current

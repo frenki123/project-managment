@@ -79,6 +79,26 @@ func TestUpdateRejectsDatesOutsideWeeklyData(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsNullTotalHours(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := project.Create(ctx, q, project.Input{Name: "P", TotalHours: new(10.0), StartDate: "2026-09-07", EndDate: "2026-10-05"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = project.Update(ctx, q, p.ID, project.Patch{TotalHours: nullable.Clear[float64]()})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "total hours cannot be null" {
+		t.Fatalf("expected null total hours rejection, got %v", err)
+	}
+	got, err := project.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalHours != 10 {
+		t.Fatalf("rejected update changed total hours: %v", got.TotalHours)
+	}
+}
+
 func TestCreateRejectsNonFiniteHours(t *testing.T) {
 	ctx := t.Context()
 	q := testkit.Open(t)

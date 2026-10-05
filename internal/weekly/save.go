@@ -52,8 +52,8 @@ func Save(ctx context.Context, q *db.Queries, taskID int64, weekStart WeekStart,
 			return err
 		}
 
-		planned := patch.PlannedHours.ValueOr(contextRow.PlannedHours)
-		spent := patch.SpentHours.ValueOr(contextRow.SpentHours)
+		planned := patch.PlannedHours.Apply(contextRow.PlannedHours)
+		spent := patch.SpentHours.Apply(contextRow.SpentHours)
 		stored, store := resolveProgress(patch, contextRow)
 		_, err = txq.UpsertTaskWeek(ctx, db.UpsertTaskWeekParams{
 			TaskID: taskID, WeekStart: weekStart.String(), PlannedHours: planned, SpentHours: spent, Progress: stored,
@@ -93,6 +93,12 @@ func savedCell(taskID int64, weekStart WeekStart, planned, spent float64, stored
 }
 
 func validatePatch(patch Patch) error {
+	if patch.PlannedHours.IsNull() {
+		return web.Invalid("planned hours cannot be null")
+	}
+	if patch.SpentHours.IsNull() {
+		return web.Invalid("spent hours cannot be null")
+	}
 	if !patch.PlannedHours.HasValue() && !patch.SpentHours.HasValue() && !patch.Progress.Present {
 		return web.Invalid("at least one value is required")
 	}
