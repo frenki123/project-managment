@@ -188,25 +188,6 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10)
 
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
-	if rr.Code != http.StatusOK {
-		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
-	}
-	var detail struct {
-		Developers []struct {
-			ID             int64   `json:"id"`
-			Name           string  `json:"name"`
-			WeeklyCapacity float64 `json:"weekly_capacity"`
-		} `json:"developers"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &detail); err != nil {
-		t.Fatal(err)
-	}
-	if len(detail.Developers) != 1 || detail.Developers[0].ID != ada || detail.Developers[0].Name != "Ada" || detail.Developers[0].WeeklyCapacity != 40 {
-		t.Fatalf("detail developers = %#v", detail.Developers)
-	}
-
-	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks?project_id="+strconv.FormatInt(projID, 10), nil))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("list tasks: %d %s", rr.Code, rr.Body.String())

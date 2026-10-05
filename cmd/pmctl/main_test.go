@@ -235,7 +235,11 @@ func TestTaskCreateSendsDeveloperIDs(t *testing.T) {
 	if err := runCommand(t, server, "tasks", "create", "--name", "X", "--developer-id", "3", "--developer-id", "5"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(body, `"developer_ids":[3,5]`) {
+	var input task.Input
+	if err := json.Unmarshal([]byte(body), &input); err != nil {
+		t.Fatal(err)
+	}
+	if len(input.DeveloperIDs) != 2 || input.DeveloperIDs[0] != 3 || input.DeveloperIDs[1] != 5 {
 		t.Fatalf("unexpected task body: %s", body)
 	}
 }
