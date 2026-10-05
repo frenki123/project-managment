@@ -359,10 +359,7 @@ func TestClearProgressRestoresCarryForwardWithoutChangingHours(t *testing.T) {
 
 func TestSaveNoteWithLockRules(t *testing.T) {
 	ctx := t.Context()
-	q, pid, tkID := newProjectTask(t, 10.0, "2026-04-06", "2026-06-01")
-	if pid == 0 {
-		t.Fatal("expected a project ID")
-	}
+	q, _, tkID := newProjectTask(t, 10.0, "2026-04-06", "2026-06-01")
 	now := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 	locked := "2026-04-06"
 	_, err := weekly.Save(ctx, q, tkID, testkit.MustWeek(t, locked), weekly.Patch{Note: nullable.Present("blocked on drawings")}, now)
