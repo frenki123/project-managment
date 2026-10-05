@@ -14,7 +14,7 @@ type sqliteError interface {
 
 func UniqueViolation(err error, column string) bool {
 	sqliteErr, ok := errors.AsType[sqliteError](err)
-	if !ok || (sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE && sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY) {
+	if !ok || sqliteErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 		return false
 	}
 	const prefix = "UNIQUE constraint failed:"

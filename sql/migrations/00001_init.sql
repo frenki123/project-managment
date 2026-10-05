@@ -23,7 +23,6 @@ CREATE TABLE tasks (
     description TEXT NOT NULL DEFAULT '',
     implementation_notes TEXT NOT NULL DEFAULT '',
     department TEXT NOT NULL DEFAULT '',
-    developers TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT '',
     project_id INTEGER REFERENCES projects (id),
     subproject_id INTEGER REFERENCES subprojects (id),
@@ -32,19 +31,10 @@ CREATE TABLE tasks (
         REFERENCES subprojects (project_id, id)
 );
 
-CREATE TABLE task_weeks (
-    task_id INTEGER NOT NULL REFERENCES tasks (id),
-    week_start TEXT NOT NULL,
-    planned_hours REAL NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
-    spent_hours REAL NOT NULL DEFAULT 0 CHECK (spent_hours >= 0),
-    progress REAL CHECK (progress IS NULL OR (progress >= 0 AND progress <= 100)),
-    PRIMARY KEY (task_id, week_start)
-);
-
 CREATE TABLE people (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-    weekly_capacity REAL NOT NULL DEFAULT 40 CHECK (weekly_capacity >= 0)
+    weekly_capacity REAL NOT NULL CHECK (weekly_capacity >= 0)
 );
 
 CREATE TABLE task_developers (
@@ -54,7 +44,14 @@ CREATE TABLE task_developers (
 );
 CREATE INDEX idx_task_developers_person ON task_developers (person_id);
 
-ALTER TABLE tasks DROP COLUMN developers;
+CREATE TABLE task_weeks (
+    task_id INTEGER NOT NULL REFERENCES tasks (id),
+    week_start TEXT NOT NULL,
+    planned_hours REAL NOT NULL DEFAULT 0 CHECK (planned_hours >= 0),
+    spent_hours REAL NOT NULL DEFAULT 0 CHECK (spent_hours >= 0),
+    progress REAL CHECK (progress IS NULL OR (progress >= 0 AND progress <= 100)),
+    PRIMARY KEY (task_id, week_start)
+);
 
 CREATE INDEX idx_subprojects_project_name
     ON subprojects (project_id, name COLLATE NOCASE, id);

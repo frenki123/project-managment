@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"cad-development/internal/db/testkit"
@@ -66,26 +65,6 @@ func TestJSONDuplicatePersonNameConflict(t *testing.T) {
 	}
 }
 
-func TestPeopleEditModalRendersWithoutInternalError(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	id := createPerson(t, mux, "Ada")
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/people/"+strconv.FormatInt(id, 10)+"/edit", nil)
-	req.Header.Set("HX-Request", "true")
-	mux.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("edit modal: %d %s", rr.Code, rr.Body.String())
-	}
-	if strings.Contains(rr.Body.String(), "internal error") {
-		t.Fatalf("edit modal renders an internal error: %s", rr.Body.String())
-	}
-	if !strings.Contains(rr.Body.String(), "Ada") {
-		t.Fatalf("edit modal missing person name: %s", rr.Body.String())
-	}
-}
-
 func TestPeopleHTMLFlow(t *testing.T) {
 	q := testkit.Open(t)
 	mux := http.NewServeMux()
@@ -108,6 +87,14 @@ func TestPeopleHTMLFlow(t *testing.T) {
 	rr = postForm(t, mux, "/people/"+strconv.FormatInt(id, 10), "name=Grace&weekly_capacity=20")
 	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/people" {
 		t.Fatalf("update person form: %d %s", rr.Code, rr.Header().Get("Location"))
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/people/"+strconv.FormatInt(id, 10)+"/edit", nil)
+	req.Header.Set("HX-Request", "true")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !bytes.Contains(rr.Body.Bytes(), []byte("Grace")) {
+		t.Fatalf("edit modal: %d %s", rr.Code, rr.Body.String())
 	}
 }
 

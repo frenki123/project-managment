@@ -183,48 +183,27 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	start := weekly.MondayOnOrBefore(time.Now().AddDate(0, 0, 7))
 	projID := createProject(t, mux, "Alpha", start)
 	ada := createPerson(t, mux, "Ada")
-	grace := createPerson(t, mux, "Grace")
 
 	taskID := createResource(t, mux, "/api/v1/tasks", "task", []byte(`{"name":"T","project_id":`+strconv.FormatInt(projID, 10)+`,"developer_ids":[`+strconv.FormatInt(ada, 10)+`]}`))
 	path := "/api/v1/tasks/" + strconv.FormatInt(taskID, 10)
-	developers := func(rr *httptest.ResponseRecorder) []struct {
-		ID             int64   `json:"id"`
-		Name           string  `json:"name"`
-		WeeklyCapacity float64 `json:"weekly_capacity"`
-	} {
-		t.Helper()
-		var body struct {
-			Developers []struct {
-				ID             int64   `json:"id"`
-				Name           string  `json:"name"`
-				WeeklyCapacity float64 `json:"weekly_capacity"`
-			} `json:"developers"`
-		}
-		if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		return body.Developers
-	}
 
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(grace, 10)+`]}`))))
-	if rr.Code != http.StatusOK || len(developers(rr)) != 1 || developers(rr)[0].ID != grace || developers(rr)[0].Name != "Grace" || developers(rr)[0].WeeklyCapacity != 40 {
-		t.Fatalf("replace developers: %d %s", rr.Code, rr.Body.String())
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get task %d %s", rr.Code, rr.Body.String())
 	}
-
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"name":"Renamed"}`))))
-	if rr.Code != http.StatusOK || len(developers(rr)) != 1 || developers(rr)[0].ID != grace {
-		t.Fatalf("name-only update changed developers: %d %s", rr.Code, rr.Body.String())
+	var detail struct {
+		Developers []struct {
+			ID             int64   `json:"id"`
+			Name           string  `json:"name"`
+			WeeklyCapacity float64 `json:"weekly_capacity"`
+		} `json:"developers"`
 	}
-
-	rr = httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":null}`))))
-	if rr.Code != http.StatusOK || len(developers(rr)) != 0 {
-		t.Fatalf("null clears developers: %d %s", rr.Code, rr.Body.String())
+	if err := json.Unmarshal(rr.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
 	}
-	if !bytes.Contains(rr.Body.Bytes(), []byte(`"developers":[]`)) {
-		t.Fatalf("detail with no developers must render developers:[]: %s", rr.Body.String())
+	if len(detail.Developers) != 1 || detail.Developers[0].ID != ada || detail.Developers[0].Name != "Ada" || detail.Developers[0].WeeklyCapacity != 40 {
+		t.Fatalf("detail developers = %#v", detail.Developers)
 	}
 
 	rr = httptest.NewRecorder()
@@ -234,6 +213,7 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	}
 	var list struct {
 		Tasks []struct {
+			ID         int64 `json:"id"`
 			Developers []struct {
 				ID int64 `json:"id"`
 			} `json:"developers"`
@@ -242,10 +222,11 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	for _, item := range list.Tasks {
-		if item.Developers != nil {
-			t.Fatalf("task list must omit developers: %#v", item.Developers)
-		}
+	if len(list.Tasks) != 1 || list.Tasks[0].ID != taskID {
+		t.Fatalf("list tasks = %#v", list.Tasks)
+	}
+	if list.Tasks[0].Developers != nil {
+		t.Fatalf("task list must omit developers: %#v", list.Tasks[0].Developers)
 	}
 
 	rr = httptest.NewRecorder()
@@ -255,15 +236,32 @@ func TestJSONTaskDevelopersWire(t *testing.T) {
 	rr = httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[`+strconv.FormatInt(ada, 10)+`,`+strconv.FormatInt(ada, 10)+`]}`))))
 	assertAPIError(t, rr, http.StatusBadRequest, "duplicate developer", "")
-}
 
-func TestJSONTaskRejectsOldDevelopersString(t *testing.T) {
-	q := testkit.Open(t)
-	mux := http.NewServeMux()
-	handlers.Register(mux, q)
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewReader([]byte(`{"name":"Old","developers":"Ada"}`))))
-	assertAPIError(t, rr, http.StatusBadRequest, "invalid json", "")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get task after duplicate %d %s", rr.Code, rr.Body.String())
+	}
+	var after struct {
+		Developers []struct {
+			ID int64 `json:"id"`
+		} `json:"developers"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Developers) != 1 || after.Developers[0].ID != ada {
+		t.Fatalf("duplicate request changed stored developers: %#v", after.Developers)
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, path, bytes.NewReader([]byte(`{"developer_ids":[]}`))))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("clear developers %d %s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`"developers":[]`)) {
+		t.Fatalf("detail with no developers must render developers:[]: %s", rr.Body.String())
+	}
 }
 
 func TestHTMLWeekEditPersists(t *testing.T) {

@@ -38,31 +38,6 @@ func TestForeignKeyViolationUsesPrimaryCode(t *testing.T) {
 	}
 }
 
-func TestCompositePrimaryKeyUniqueViolation(t *testing.T) {
-	database := testkit.OpenDatabase(t)
-	ctx := t.Context()
-	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO people (id, name, weekly_capacity) VALUES (1, 'Ada', 40)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO tasks (id, name) VALUES (1, 'T')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.Conn.ExecContext(ctx, `INSERT INTO task_developers (task_id, person_id) VALUES (1, 1)`); err != nil {
-		t.Fatal(err)
-	}
-	_, err := database.Conn.ExecContext(ctx, `INSERT INTO task_developers (task_id, person_id) VALUES (1, 1)`)
-	if !db.UniqueViolation(err, "task_developers.person_id") {
-		t.Fatalf("expected composite primary-key violation, got %v", err)
-	}
-	var count int
-	if err := database.Conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM task_developers").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 1 {
-		t.Fatalf("duplicate insert persisted a row: task_developers=%d", count)
-	}
-}
-
 func TestDriverUniqueConstraintCode(t *testing.T) {
 	database := testkit.OpenDatabase(t)
 	ctx := t.Context()

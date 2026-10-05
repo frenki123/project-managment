@@ -1,13 +1,11 @@
 package task
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"slices"
 	"strings"
 
 	"cad-development/internal/db"
@@ -115,12 +113,6 @@ func fromGetRow(row db.GetTaskRow) (Task, error) {
 	if err := json.Unmarshal([]byte(row.Developers), &out.Developers); err != nil {
 		return Task{}, err
 	}
-	slices.SortFunc(out.Developers, func(a, b person.Person) int {
-		if c := cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ID, b.ID)
-	})
 	return out, nil
 }
 
@@ -180,8 +172,15 @@ func Create(ctx context.Context, q *db.Queries, in Input) (Task, error) {
 }
 
 func addTaskDevelopers(ctx context.Context, txq *db.Queries, taskID int64, ids []int64) error {
+	seen := make(map[int64]struct{}, len(ids))
 	for _, personID := range ids {
-		if _, err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: taskID, PersonID: personID}); err != nil {
+		if _, duplicate := seen[personID]; duplicate {
+			return web.Invalid("duplicate developer")
+		}
+		seen[personID] = struct{}{}
+	}
+	for _, personID := range ids {
+		if err := txq.AddTaskDeveloper(ctx, db.AddTaskDeveloperParams{TaskID: taskID, PersonID: personID}); err != nil {
 			return developerError(err)
 		}
 	}
@@ -189,11 +188,8 @@ func addTaskDevelopers(ctx context.Context, txq *db.Queries, taskID int64, ids [
 }
 
 func developerError(err error) error {
-	switch {
-	case db.ForeignKeyViolation(err):
+	if db.ForeignKeyViolation(err) {
 		return web.HTTPErrorFromReason(http.StatusNotFound, "person-not-found")
-	case db.UniqueViolation(err, "task_developers.person_id"):
-		return web.Invalid("duplicate developer")
 	}
 	return err
 }
@@ -323,7 +319,7 @@ func updateTaskWithDevelopers(ctx context.Context, txq *db.Queries, id int64, in
 	if !replaceDevelopers {
 		return nil
 	}
-	if err := txq.ReplaceTaskDevelopers(ctx, id); err != nil {
+	if err := txq.ClearTaskDevelopers(ctx, id); err != nil {
 		return err
 	}
 	return addTaskDevelopers(ctx, txq, id, in.DeveloperIDs)

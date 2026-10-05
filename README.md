@@ -25,7 +25,7 @@ one S-curve per project.
 - **Subprojects**: an extra label inside a project with its own total hours; their sum cannot exceed project hours.
 - **Ideas**: tasks without a project; they have no weekly columns and cannot be planned until a project is assigned.
 - **People**: named developers with a weekly capacity default (40 h). Tasks pick their developers
-  from people instead of free text.
+  from people instead of free text. The entity is `people`/`person`; the task relationship is `developer_ids` on write and `developers` on read.
 - **Progress rules**: effective progress is a running maximum and never decreases. An empty week
   carries the last value; storing below it stores nothing; raising a week clears later weeks below it.
 - **Historical editing**: weeks whose Monday falls in a past calendar month are locked by default;
