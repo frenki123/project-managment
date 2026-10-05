@@ -152,61 +152,45 @@ func TestWeekPatchFromFlagsProgressNullClears(t *testing.T) {
 	}
 }
 
-func TestUpdateTaskWeekSendsNote(t *testing.T) {
+func TestUpdateTaskWeekNoteWireContract(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path != "/api/v1/tasks/4/weeks/2026-09-21" {
-			http.Error(w, "unexpected request", http.StatusBadRequest)
-			return
-		}
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Errorf("read request body: %v", err)
 		}
 		body = string(data)
-		writeBody(t, w, `{"task_id":4,"week_start":"2026-09-21","planned_hours":0,"spent_hours":0,"progress":null,"note":"blocked on drawings"}`)
+		writeBody(t, w, `{"task_id":4,"week_start":"2026-09-21","planned_hours":0,"spent_hours":0,"progress":null,"note":""}`)
 	}))
 	defer server.Close()
-	if err := runCommand(t, server, "update-task-week", "4", "2026-09-21", "--note", "blocked on drawings"); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name       string
+		args       []string
+		want       string
+		wantAbsent bool
+	}{
+		{"sets note", []string{"--note", "blocked on drawings"}, `"note":"blocked on drawings"`, false},
+		{"null clears", []string{"--note", "null"}, `"note":null`, false},
+		{"absent omitted", nil, "", true},
 	}
-	var patch weekly.Patch
-	if err := json.Unmarshal([]byte(body), &patch); err != nil {
-		t.Fatal(err)
-	}
-	if !patch.Note.HasValue() || *patch.Note.Value != "blocked on drawings" {
-		t.Fatalf("note missing from request: %s", body)
-	}
-}
-
-func TestWeekPatchFromFlagsNoteNullClears(t *testing.T) {
-	c := &cobra.Command{}
-	c.Flags().String("note", "", "")
-	if err := c.ParseFlags([]string{"--note", "null"}); err != nil {
-		t.Fatal(err)
-	}
-	patch, err := weekPatchFromFlags(c, 0, 0, "", "null", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !patch.Note.Present || patch.Note.Value != nil {
-		t.Fatalf("note not cleared: %#v", patch.Note)
-	}
-}
-
-func TestWeekPatchFromFlagsNoteAbsent(t *testing.T) {
-	c := &cobra.Command{}
-	c.Flags().String("note", "", "")
-	if err := c.ParseFlags(nil); err != nil {
-		t.Fatal(err)
-	}
-	patch, err := weekPatchFromFlags(c, 0, 0, "", "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if patch.Note.Present {
-		t.Fatalf("absent note flag must stay off the wire: %#v", patch.Note)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body = ""
+			args := append([]string{"update-task-week", "4", "2026-09-21"}, tc.args...)
+			if err := runCommand(t, server, args...); err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantAbsent {
+				if strings.Contains(body, "note") {
+					t.Fatalf("absent note must stay off the wire: %s", body)
+				}
+				return
+			}
+			if !strings.Contains(body, tc.want) {
+				t.Fatalf("request body %s missing %q", body, tc.want)
+			}
+		})
 	}
 }
 

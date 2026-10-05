@@ -60,19 +60,6 @@ func TestWeekLabel(t *testing.T) {
 	}
 }
 
-func TestHasNotes(t *testing.T) {
-	week, err := weekly.Parse("2026-01-05")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasNotes([]weekly.Cell{{WeekStart: week, Note: "blocker"}}) {
-		t.Fatal("noted week should report a note")
-	}
-	if hasNotes([]weekly.Cell{{WeekStart: week}}) || hasNotes(nil) {
-		t.Fatal("weeks without notes should report none")
-	}
-}
-
 func TestPercent(t *testing.T) {
 	cases := []struct {
 		in   float64

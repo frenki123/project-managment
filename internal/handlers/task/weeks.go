@@ -109,12 +109,7 @@ func formWeekPatch(r *http.Request) (weekly.Patch, error) {
 		}
 	}
 	if r.Form.Has("note") || r.PostForm.Has("note") {
-		n := strings.TrimSpace(r.FormValue("note"))
-		if n == "" {
-			patch.Note = nullable.Clear[string]()
-		} else {
-			patch.Note = nullable.Present(n)
-		}
+		patch.Note = nullable.Present(r.FormValue("note"))
 	}
 	return patch, nil
 }
