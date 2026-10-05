@@ -288,12 +288,7 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Task, er
 			return web.Invalid("project cannot be cleared while subproject is assigned")
 		}
 		in := mergeInput(current, patch)
-		if patch.DeveloperIDs.Present {
-			in.DeveloperIDs = nil
-			if patch.DeveloperIDs.Value != nil {
-				in.DeveloperIDs = *patch.DeveloperIDs.Value
-			}
-		}
+		in.DeveloperIDs = patch.DeveloperIDs.Apply(in.DeveloperIDs)
 		in, err = resolveAssignment(ctx, txq, id, current, patch, in)
 		if err != nil {
 			return err

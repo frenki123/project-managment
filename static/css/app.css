@@ -155,7 +155,9 @@ body.modal-open { overflow: hidden; }
 .form-grid { display: grid; gap: 0 0.5rem; }
 .form-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-grid-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.resource-form label { margin-bottom: 0.35rem; font-size: 0.8rem; }
+.resource-form label,
+.resource-form legend { margin-bottom: 0.35rem; font-size: 0.8rem; }
+.resource-form fieldset { margin: 0; }
 .resource-form input,
 .resource-form select { min-height: 1.9rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }
 .resource-form textarea { min-height: 3.5rem; margin-bottom: 0.25rem; padding: 0.3rem 0.45rem; font-size: 0.85rem; }

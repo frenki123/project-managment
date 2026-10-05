@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"strings"
 
 	"cad-development/internal/db"
@@ -46,36 +47,26 @@ func validate(in Input) (Input, error) {
 	return in, nil
 }
 
+func nameConflictError(err error) error {
+	if db.UniqueViolation(err, "people.name") {
+		return web.HTTPErrorFromReason(http.StatusConflict, "person-name-taken")
+	}
+	return err
+}
+
 func Create(ctx context.Context, q *db.Queries, in Input) (Person, error) {
 	validated, err := validate(in)
 	if err != nil {
 		return Person{}, err
 	}
-	var id int64
-	err = q.InTx(ctx, func(txq *db.Queries) error {
-		conflict, err := txq.PersonNameConflict(ctx, db.PersonNameConflictParams{Name: validated.Name, ExceptID: 0})
-		if err != nil {
-			return err
-		}
-		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
-			return err
-		}
-		row, err := txq.CreatePerson(ctx, db.CreatePersonParams{
-			Name:           validated.Name,
-			WeeklyCapacity: nullable.Float64(validated.WeeklyCapacity),
-		})
-		if err == nil {
-			id = row.ID
-		}
-		return err
+	row, err := q.CreatePerson(ctx, db.CreatePersonParams{
+		Name:           validated.Name,
+		WeeklyCapacity: nullable.Float64(validated.WeeklyCapacity),
 	})
 	if err != nil {
-		if db.UniqueViolation(err, "people.name") {
-			return Person{}, web.Conflict("person name already exists")
-		}
-		return Person{}, err
+		return Person{}, nameConflictError(err)
 	}
-	return Get(ctx, q, id)
+	return FromDB(row), nil
 }
 
 func Get(ctx context.Context, q *db.Queries, id int64) (Person, error) {
@@ -102,6 +93,7 @@ func List(ctx context.Context, q *db.Queries) ([]Person, error) {
 }
 
 func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Person, error) {
+	var updated db.Person
 	err := q.InTx(ctx, func(txq *db.Queries) error {
 		current, err := txq.GetPerson(ctx, id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -118,28 +110,18 @@ func Update(ctx context.Context, q *db.Queries, id int64, patch Patch) (Person, 
 		if err != nil {
 			return err
 		}
-		conflict, err := txq.PersonNameConflict(ctx, db.PersonNameConflictParams{Name: validated.Name, ExceptID: id})
-		if err != nil {
-			return err
-		}
-		if err := web.HTTPErrorFromReason(int(conflict.Status), conflict.Reason); err != nil {
-			return err
-		}
-		_, err = txq.UpdatePerson(ctx, db.UpdatePersonParams{ // the returned row cannot replace the post-update Get; only the error is needed
+		updated, err = txq.UpdatePerson(ctx, db.UpdatePersonParams{
 			Name: validated.Name, WeeklyCapacity: *validated.WeeklyCapacity, ID: id,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return web.Missing("person not found")
 		}
-		if db.UniqueViolation(err, "people.name") {
-			return web.Conflict("person name already exists")
-		}
-		return err
+		return nameConflictError(err)
 	})
 	if err != nil {
 		return Person{}, err
 	}
-	return Get(ctx, q, id)
+	return FromDB(updated), nil
 }
 
 func Delete(ctx context.Context, q *db.Queries, id int64) error {

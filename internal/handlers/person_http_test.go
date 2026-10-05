@@ -98,6 +98,26 @@ func TestPeopleHTMLFlow(t *testing.T) {
 	}
 }
 
+func TestPeopleUpdateErrorKeepsSubmittedInput(t *testing.T) {
+	q := testkit.Open(t)
+	mux := http.NewServeMux()
+	handlers.Register(mux, q)
+	createPerson(t, mux, "Alpha")
+	beta := createPerson(t, mux, "Beta")
+
+	r := httptest.NewRequest(http.MethodPost, "/people/"+strconv.FormatInt(beta, 10), bytes.NewBufferString("name=alpha&weekly_capacity=99"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d %s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`value="alpha"`)) || !bytes.Contains(rr.Body.Bytes(), []byte(`value="99"`)) {
+		t.Fatalf("error form did not preserve submitted input: %s", rr.Body.String())
+	}
+}
+
 func createPerson(t *testing.T, mux *http.ServeMux, name string) int64 {
 	t.Helper()
 	return createResource(t, mux, "/api/v1/people", "person", []byte(`{"name":"`+name+`"}`))

@@ -78,27 +78,12 @@ func submittedFormValues(r *http.Request) views.PersonFormValues {
 	return views.PersonFormValues{Name: r.FormValue("name"), WeeklyCapacity: r.FormValue("weekly_capacity")}
 }
 
-func renderPersonForm(w http.ResponseWriter, r *http.Request, vals views.PersonFormValues, action, title string, err error) {
+func renderPersonForm(w http.ResponseWriter, r *http.Request, vals views.PersonFormValues, action, title, deleteAction string, err error) {
 	httpErr := web.HTTPErrorFrom(err)
 	data := views.PersonFormData{
-		Action: action, Title: title, Person: vals, Error: httpErr.Message,
+		Action: action, Title: title, Person: vals, Error: httpErr.Message, DeleteAction: deleteAction,
 	}
 	web.RenderFragment(w, r, httpErr.Status, views.PersonForm(data))
-}
-
-func renderEditPersonForm(w http.ResponseWriter, r *http.Request, q *db.Queries, id int64, err error) {
-	var httpErr web.HTTPError
-	if err != nil {
-		httpErr = web.HTTPErrorFrom(err)
-	} else {
-		httpErr.Status = http.StatusOK
-	}
-	p, getErr := person.Get(r.Context(), q, id)
-	if getErr != nil {
-		web.WriteFragmentError(w, r, getErr)
-		return
-	}
-	web.RenderFragment(w, r, httpErr.Status, views.PersonForm(personFormData(p, httpErr.Message)))
 }
 
 func personFormData(p person.Person, errMsg string) views.PersonFormData {
@@ -132,13 +117,18 @@ func editForm(q *db.Queries) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		renderEditPersonForm(w, r, q, id, nil)
+		p, err := person.Get(r.Context(), q, id)
+		if err != nil {
+			web.WriteFragmentError(w, r, err)
+			return
+		}
+		web.RenderFragment(w, r, http.StatusOK, views.PersonForm(personFormData(p, "")))
 	}
 }
 
 func createHTML(q *db.Queries) http.HandlerFunc {
 	return shared.CreateForm(q, formInput, person.Create, func(w http.ResponseWriter, r *http.Request, err error) {
-		renderPersonForm(w, r, submittedFormValues(r), "/people", "New person", err)
+		renderPersonForm(w, r, submittedFormValues(r), "/people", "New person", "", err)
 	}, func(person.Person) string {
 		return "/people"
 	})
@@ -146,7 +136,8 @@ func createHTML(q *db.Queries) http.HandlerFunc {
 
 func updateHTML(q *db.Queries) http.HandlerFunc {
 	return shared.UpdateForm(q, formPatch, person.Update, func(w http.ResponseWriter, r *http.Request, id int64, err error) {
-		renderEditPersonForm(w, r, q, id, err)
+		idStr := strconv.FormatInt(id, 10)
+		renderPersonForm(w, r, submittedFormValues(r), "/people/"+idStr, "Edit person", "/people/"+idStr+"/delete", err)
 	}, func(person.Person) string {
 		return "/people"
 	})
@@ -156,7 +147,7 @@ func deleteHTML(q *db.Queries) http.HandlerFunc {
 	return shared.DeleteForm(q, person.Get, person.Delete, func(w http.ResponseWriter, r *http.Request, p person.Person, err error) {
 		httpErr := web.HTTPErrorFrom(err)
 		web.SetToast(w, httpErr.Message)
-		renderEditPersonForm(w, r, q, p.ID, err)
+		web.RenderFragment(w, r, httpErr.Status, views.PersonForm(personFormData(p, httpErr.Message)))
 	}, func(person.Person) string {
 		return "/people"
 	})
