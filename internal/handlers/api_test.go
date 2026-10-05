@@ -204,7 +204,7 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 			Note      string `json:"note"`
 		} `json:"weeks"`
 	}
-	readTask := func() {
+	readNote := func() string {
 		t.Helper()
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+strconv.FormatInt(tk.ID, 10), nil))
@@ -214,12 +214,6 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 		if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
-			t.Fatalf("week edit not persisted: %#v", got)
-		}
-	}
-	noteForWeek := func() string {
-		t.Helper()
 		for _, week := range got.Weeks {
 			if week.WeekStart == start.Format(time.DateOnly) {
 				return week.Note
@@ -228,17 +222,18 @@ func TestHTMLWeekEditPersists(t *testing.T) {
 		t.Fatalf("task %d has no week %s: %#v", tk.ID, start.Format(time.DateOnly), got.Weeks)
 		return ""
 	}
-	readTask()
-	if note := noteForWeek(); note != "blocker" {
+	if note := readNote(); note != "blocker" {
 		t.Fatalf("week edit did not persist note: %q", note)
+	}
+	if got.TotalHours != 8 || got.SpentHours != 3 || got.Progress != 25 {
+		t.Fatalf("week edit not persisted: %#v", got)
 	}
 
 	clear := postForm(t, mux, "/tasks/"+strconv.FormatInt(tk.ID, 10)+"/weeks/"+start.Format(time.DateOnly), "note=&project="+strconv.FormatInt(projID, 10))
 	if clear.Code != http.StatusOK {
 		t.Fatalf("note clear %d %s", clear.Code, clear.Body.String())
 	}
-	readTask()
-	if note := noteForWeek(); note != "" {
+	if note := readNote(); note != "" {
 		t.Fatalf("note clear not persisted: %q", note)
 	}
 }
