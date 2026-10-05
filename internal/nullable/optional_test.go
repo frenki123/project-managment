@@ -96,6 +96,10 @@ func TestOptionalApply(t *testing.T) {
 	if got := clearedFloat.Apply(12.5); got != 0 {
 		t.Fatalf("null float apply = %v, want 0", got)
 	}
+	zeroFloat := Present(0.0)
+	if got := zeroFloat.Apply(12.5); got != 0 {
+		t.Fatalf("zero float apply = %v, want 0", got)
+	}
 }
 
 func TestOptionalIsNull(t *testing.T) {
@@ -119,5 +123,8 @@ func TestOptionalIsNull(t *testing.T) {
 	}
 	if !present.HasValue() {
 		t.Fatal("present value must have a value")
+	}
+	if Present(0.0).IsNull() {
+		t.Fatal("zero value must not be null")
 	}
 }

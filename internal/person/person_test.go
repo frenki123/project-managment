@@ -133,3 +133,23 @@ func TestUpdatePartialPatchPreservesCapacity(t *testing.T) {
 		t.Fatalf("partial update changed capacity: %#v", got)
 	}
 }
+
+func TestUpdateRejectsNullWeeklyCapacity(t *testing.T) {
+	ctx := t.Context()
+	q := testkit.Open(t)
+	p, err := person.Create(ctx, q, person.Input{Name: "Ada", WeeklyCapacity: new(32.0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = person.Update(ctx, q, p.ID, person.Patch{WeeklyCapacity: nullable.Clear[float64]()})
+	if httpErr, ok := errors.AsType[web.HTTPError](err); !ok || httpErr.Status != http.StatusBadRequest || httpErr.Message != "weekly capacity cannot be null" {
+		t.Fatalf("expected null capacity rejection, got %v", err)
+	}
+	got, err := person.Get(ctx, q, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.WeeklyCapacity != 32 {
+		t.Fatalf("rejected update changed capacity: %v", got.WeeklyCapacity)
+	}
+}
